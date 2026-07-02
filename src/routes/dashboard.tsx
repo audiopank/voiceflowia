@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { createFileRoute, useNavigate } from "@tanstack/react-router"
 import { supabase } from '../lib/supabase'
 import { useSubscription } from '../lib/useSubscription'
-import { Lock, Volume2, Settings } from 'lucide-react'
+import { Lock, Volume2, Settings, Rocket } from 'lucide-react'
 import { BackButton } from '../components/BackButton'
 import { ADMIN_EMAIL } from '../lib/plans'
 
@@ -142,6 +142,27 @@ function Dashboard() {
             >
               <Lock className="w-10 h-10" />
               Editor de Voz 🔒 - Upgrade para Crescimento
+            </button>
+          )}
+        </div>
+
+        {/* Super Agente - Destaque */}
+        <div className="mb-8">
+          {hasContentAgentFeature ? (
+            <button
+              onClick={() => navigate({ to: '/super-agente' })}
+              className="w-full bg-gradient-to-r from-[#8B5CF6] to-[#6D28D9] hover:from-[#7C3AED] hover:to-[#5B21B6] text-white font-bold py-6 px-8 rounded-xl text-2xl flex items-center justify-center gap-3 transition-all hover:scale-[1.02] shadow-lg shadow-[#8B5CF6]/30"
+            >
+              <Rocket className="w-9 h-9" />
+              Super Agente — Estratégia + Kit do Mês em 1 Clique 🚀
+            </button>
+          ) : (
+            <button
+              disabled
+              className="w-full bg-gray-800 text-gray-500 font-bold py-6 px-8 rounded-xl text-2xl flex items-center justify-center gap-3 cursor-not-allowed border border-gray-700"
+            >
+              <Lock className="w-9 h-9" />
+              Super Agente 🔒 - Upgrade para Crescimento
             </button>
           )}
         </div>

@@ -10,6 +10,7 @@ function apiDevBridge(): Plugin {
   const handlers: Record<string, string> = {
     '/api/gemini/text-to-speech': './api/gemini/text-to-speech.ts',
     '/api/gemini/generate-content': './api/gemini/generate-content.ts',
+    '/api/gemini/generate-strategy': './api/gemini/generate-strategy.ts',
     '/api/elevenlabs/text-to-speech': './api/elevenlabs/text-to-speech.ts',
   }
 

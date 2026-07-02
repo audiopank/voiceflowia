@@ -9,6 +9,7 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as SuperAgenteRouteImport } from './routes/super-agente'
 import { Route as PrecosRouteImport } from './routes/precos'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as EditorRouteImport } from './routes/editor'
@@ -18,6 +19,11 @@ import { Route as AgenteRouteImport } from './routes/agente'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as IndexRouteImport } from './routes/index'
 
+const SuperAgenteRoute = SuperAgenteRouteImport.update({
+  id: '/super-agente',
+  path: '/super-agente',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const PrecosRoute = PrecosRouteImport.update({
   id: '/precos',
   path: '/precos',
@@ -68,6 +74,7 @@ export interface FileRoutesByFullPath {
   '/editor': typeof EditorRoute
   '/login': typeof LoginRoute
   '/precos': typeof PrecosRoute
+  '/super-agente': typeof SuperAgenteRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -78,6 +85,7 @@ export interface FileRoutesByTo {
   '/editor': typeof EditorRoute
   '/login': typeof LoginRoute
   '/precos': typeof PrecosRoute
+  '/super-agente': typeof SuperAgenteRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -89,6 +97,7 @@ export interface FileRoutesById {
   '/editor': typeof EditorRoute
   '/login': typeof LoginRoute
   '/precos': typeof PrecosRoute
+  '/super-agente': typeof SuperAgenteRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -101,6 +110,7 @@ export interface FileRouteTypes {
     | '/editor'
     | '/login'
     | '/precos'
+    | '/super-agente'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -111,6 +121,7 @@ export interface FileRouteTypes {
     | '/editor'
     | '/login'
     | '/precos'
+    | '/super-agente'
   id:
     | '__root__'
     | '/'
@@ -121,6 +132,7 @@ export interface FileRouteTypes {
     | '/editor'
     | '/login'
     | '/precos'
+    | '/super-agente'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -132,10 +144,18 @@ export interface RootRouteChildren {
   EditorRoute: typeof EditorRoute
   LoginRoute: typeof LoginRoute
   PrecosRoute: typeof PrecosRoute
+  SuperAgenteRoute: typeof SuperAgenteRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/super-agente': {
+      id: '/super-agente'
+      path: '/super-agente'
+      fullPath: '/super-agente'
+      preLoaderRoute: typeof SuperAgenteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/precos': {
       id: '/precos'
       path: '/precos'
@@ -204,6 +224,7 @@ const rootRouteChildren: RootRouteChildren = {
   EditorRoute: EditorRoute,
   LoginRoute: LoginRoute,
   PrecosRoute: PrecosRoute,
+  SuperAgenteRoute: SuperAgenteRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
