@@ -23,7 +23,7 @@ export interface Plan {
 // Email do admin (quem pode abrir /admin). A seguranca real e feita pela RLS
 // do Supabase; isto controla apenas a exibicao da interface.
 export const ADMIN_EMAIL =
-  (import.meta.env.VITE_ADMIN_EMAIL as string) || 'pankilhas@gmail.com'
+  (import.meta.env.VITE_ADMIN_EMAIL as string) || 'novaaudiopank@gmail.com'
 
 // Fallback usado enquanto a tabela `plans` nao existe / esta vazia, para a
 // pagina de Precos nunca renderizar em branco (importante em demo).

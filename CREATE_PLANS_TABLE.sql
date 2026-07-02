@@ -23,12 +23,12 @@ DROP POLICY IF EXISTS "plans_public_read" ON plans;
 CREATE POLICY "plans_public_read" ON plans
   FOR SELECT USING (active = true);
 
--- Somente o admin (pankilhas@gmail.com) pode ler tudo e escrever
+-- Somente o admin (novaaudiopank@gmail.com) pode ler tudo e escrever
 DROP POLICY IF EXISTS "plans_admin_all" ON plans;
 CREATE POLICY "plans_admin_all" ON plans
   FOR ALL
-  USING ((auth.jwt() ->> 'email') = 'pankilhas@gmail.com')
-  WITH CHECK ((auth.jwt() ->> 'email') = 'pankilhas@gmail.com');
+  USING ((auth.jwt() ->> 'email') = 'novaaudiopank@gmail.com')
+  WITH CHECK ((auth.jwt() ->> 'email') = 'novaaudiopank@gmail.com');
 
 -- Seed com os 3 planos atuais (nao sobrescreve se ja existirem)
 INSERT INTO plans (slug, name, price, period, features, cta_label, badge, highlight, sort_order, active)
