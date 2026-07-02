@@ -4,6 +4,7 @@ import { Lock, Loader2, AlertCircle, Sparkles, Volume2, Download, Play } from 'l
 import { useSubscription } from '../lib/useSubscription'
 import { supabase } from '../lib/supabase'
 import { Button } from '../components/ui/button'
+import { BackButton } from '../components/BackButton'
 
 export const Route = createFileRoute('/agente')({
   component: Agente,
@@ -136,7 +137,8 @@ function Agente() {
 
   if (!hasAccess) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#0A0A0A]">
+      <div className="min-h-screen flex items-center justify-center bg-[#0A0A0A] relative">
+        <BackButton to="/dashboard" label="Voltar ao Painel" className="absolute top-6 left-6" />
         <div className="text-center p-8 bg-[#111111] border border-gray-800 rounded-2xl max-w-md">
           <Lock className="w-16 h-16 text-gray-600 mx-auto mb-4" />
           <h2 className="text-2xl font-bold text-white mb-2">Acesso Restrito</h2>
@@ -157,6 +159,7 @@ function Agente() {
   return (
     <div className="min-h-screen bg-[#0A0A0A] p-6">
       <div className="max-w-5xl mx-auto">
+        <BackButton to="/dashboard" label="Voltar ao Painel" className="mb-6" />
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-white mb-2 flex items-center gap-2">
             <Sparkles className="w-8 h-8 text-[#8B5CF6]" />

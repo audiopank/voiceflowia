@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { createFileRoute, useNavigate, useSearch } from "@tanstack/react-router"
 import { supabase } from '../lib/supabase'
+import { BackButton } from '../components/BackButton'
 
 export const Route = createFileRoute("/cadastro")({
   component: Cadastro,
@@ -34,7 +35,8 @@ function Cadastro() {
   }
 
   return (
-    <div className="min-h-screen bg-[#0A0A0A] flex items-center justify-center p-6">
+    <div className="min-h-screen bg-[#0A0A0A] flex items-center justify-center p-6 relative">
+      <BackButton to="/precos" className="absolute top-6 left-6" />
       <form onSubmit={handleSubmit} className="w-full max-w-md p-8 bg-[#111111] rounded-2xl shadow-lg space-y-6 border border-gray-800">
         <div className="text-center">
           <h1 className="text-3xl font-bold text-white mb-2">Crie sua Conta</h1>

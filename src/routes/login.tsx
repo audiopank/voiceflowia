@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { createFileRoute, useNavigate } from "@tanstack/react-router"
 import { supabase } from '../lib/supabase'
+import { BackButton } from '../components/BackButton'
 
 export const Route = createFileRoute("/login")({
   component: Login,
@@ -55,7 +56,8 @@ function Login() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[#0A0A0A]">
+    <div className="min-h-screen flex items-center justify-center bg-[#0A0A0A] relative">
+      <BackButton to="/precos" className="absolute top-6 left-6" />
       <form onSubmit={handleSubmit} className="w-full max-w-sm p-8 bg-[#111111] border border-gray-800 rounded-2xl shadow-lg space-y-4">
         <h1 className="text-2xl font-bold text-center text-white">VoiceFlow IA</h1>
         <input 

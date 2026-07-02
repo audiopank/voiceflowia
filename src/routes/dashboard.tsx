@@ -3,6 +3,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router"
 import { supabase } from '../lib/supabase'
 import { useSubscription } from '../lib/useSubscription'
 import { Lock, Volume2 } from 'lucide-react'
+import { BackButton } from '../components/BackButton'
 
 export const Route = createFileRoute("/dashboard")({
   component: Dashboard,
@@ -73,6 +74,7 @@ function Dashboard() {
   return (
     <div className="min-h-screen bg-[#0A0A0A] text-white">
       <div className="container mx-auto p-4 py-8">
+        <BackButton to="/precos" label="Voltar" className="mb-4" />
         <div className="flex justify-between items-center mb-6">
           <div>
             <h1 className="text-3xl font-bold">Dashboard - VoiceFlow IA</h1>
