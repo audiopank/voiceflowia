@@ -2,7 +2,7 @@ export const config = {
   runtime: 'edge'
 }
 
-function base64ToBytes(base64: string): Uint8Array {
+function base64ToBytes(base64: string): Uint8Array<ArrayBuffer> {
   const binary = atob(base64)
   const bytes = new Uint8Array(binary.length)
   for (let i = 0; i < binary.length; i++) {
@@ -31,7 +31,7 @@ function parseAudioMimeType(mimeType: string): { bitsPerSample: number; rate: nu
 
 // Áudio bruto da API Gemini (audio/L16;rate=24000, etc.) não é um WAV válido por si só —
 // precisa do cabeçalho RIFF/WAVE montado manualmente. https://soundfile.sapp.org/doc/WaveFormat/
-function toWav(pcmData: Uint8Array, mimeType: string): Uint8Array {
+function toWav(pcmData: Uint8Array<ArrayBuffer>, mimeType: string): Uint8Array<ArrayBuffer> {
   const { bitsPerSample, rate } = parseAudioMimeType(mimeType)
   const numChannels = 1
   const bytesPerSample = bitsPerSample / 8
