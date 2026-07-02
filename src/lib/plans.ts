@@ -1,0 +1,106 @@
+import { supabase } from './supabase'
+
+export interface PlanFeature {
+  text: string
+  included: boolean
+}
+
+export interface Plan {
+  id?: string
+  slug: string
+  name: string
+  price: string
+  period: string
+  features: PlanFeature[]
+  cta_label: string
+  kiwify_url: string | null
+  badge: string | null
+  highlight: boolean
+  sort_order: number
+  active: boolean
+}
+
+// Email do admin (quem pode abrir /admin). A seguranca real e feita pela RLS
+// do Supabase; isto controla apenas a exibicao da interface.
+export const ADMIN_EMAIL =
+  (import.meta.env.VITE_ADMIN_EMAIL as string) || 'pankilhas@gmail.com'
+
+// Fallback usado enquanto a tabela `plans` nao existe / esta vazia, para a
+// pagina de Precos nunca renderizar em branco (importante em demo).
+export const DEFAULT_PLANS: Plan[] = [
+  {
+    slug: 'inicial',
+    name: 'Plano Inicial',
+    price: 'R$ 97',
+    period: '/mês',
+    features: [
+      { text: 'Dashboard de Métricas Completo', included: true },
+      { text: '10 Projetos de Voz / mês', included: true },
+      { text: 'Sem Agente de Conteúdo IA', included: false },
+    ],
+    cta_label: 'Começar Agora',
+    kiwify_url: import.meta.env.VITE_KIWIFY_BARBEIRO_URL || null,
+    badge: null,
+    highlight: false,
+    sort_order: 1,
+    active: true,
+  },
+  {
+    slug: 'crescimento',
+    name: 'Plano Crescimento',
+    price: 'R$ 297',
+    period: '/mês',
+    features: [
+      { text: 'Tudo do Plano Inicial', included: true },
+      { text: 'Agente de Conteúdo IA 24h', included: true },
+      { text: '30 Projetos de Voz / mês', included: true },
+    ],
+    cta_label: 'Testar 7 Dias Grátis',
+    kiwify_url: import.meta.env.VITE_KIWIFY_CRESCIMENTO_URL || null,
+    badge: 'MAIS VENDIDO',
+    highlight: true,
+    sort_order: 2,
+    active: true,
+  },
+  {
+    slug: 'dominacao',
+    name: 'Plano Dominação',
+    price: 'R$ 497',
+    period: '/mês',
+    features: [
+      { text: 'Tudo do Plano Crescimento', included: true },
+      { text: 'Atendimento por Voz no WhatsApp', included: true },
+      { text: 'Estratégia 1x1 com o Mestre 2x/mês', included: true },
+      { text: 'Vagas Limitadas: 5 vagas', included: true },
+    ],
+    cta_label: 'Quero Dominar',
+    kiwify_url: import.meta.env.VITE_KIWIFY_DOMINACAO_URL || null,
+    badge: null,
+    highlight: false,
+    sort_order: 3,
+    active: true,
+  },
+]
+
+// Planos ativos para a pagina publica de Precos.
+export async function fetchActivePlans(): Promise<Plan[]> {
+  const { data, error } = await supabase
+    .from('plans')
+    .select('*')
+    .eq('active', true)
+    .order('sort_order', { ascending: true })
+
+  if (error || !data || data.length === 0) return DEFAULT_PLANS
+  return data as Plan[]
+}
+
+// Todos os planos (ativos e inativos) para o Painel Admin.
+export async function fetchAllPlans(): Promise<Plan[]> {
+  const { data, error } = await supabase
+    .from('plans')
+    .select('*')
+    .order('sort_order', { ascending: true })
+
+  if (error || !data) return []
+  return data as Plan[]
+}

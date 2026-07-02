@@ -2,8 +2,9 @@ import { useEffect, useState } from 'react'
 import { createFileRoute, useNavigate } from "@tanstack/react-router"
 import { supabase } from '../lib/supabase'
 import { useSubscription } from '../lib/useSubscription'
-import { Lock, Volume2 } from 'lucide-react'
+import { Lock, Volume2, Settings } from 'lucide-react'
 import { BackButton } from '../components/BackButton'
+import { ADMIN_EMAIL } from '../lib/plans'
 
 export const Route = createFileRoute("/dashboard")({
   component: Dashboard,
@@ -84,9 +85,20 @@ function Dashboard() {
               </p>
             )}
           </div>
-          <button onClick={handleLogout} className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700">
-            Sair
-          </button>
+          <div className="flex items-center gap-3">
+            {user?.email === ADMIN_EMAIL && (
+              <button
+                onClick={() => navigate({ to: '/admin' })}
+                className="bg-[#8B5CF6] text-white px-4 py-2 rounded-lg hover:bg-[#7C3AED] flex items-center gap-2"
+              >
+                <Settings className="w-4 h-4" />
+                Admin
+              </button>
+            )}
+            <button onClick={handleLogout} className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700">
+              Sair
+            </button>
+          </div>
         </div>
         
         {/* Métricas */}
