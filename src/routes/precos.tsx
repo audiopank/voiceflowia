@@ -21,7 +21,7 @@ function Precos() {
     <div className="min-h-screen bg-[#0A0A0A] text-white">
       {/* Header */}
       <header className="container mx-auto px-6 py-6 flex justify-between items-center">
-        <h1 className="text-2xl font-bold text-white">Locutores IA</h1>
+        <h1 className="text-2xl font-bold text-white">VoiceFlow IA</h1>
         <Button
           variant="outline"
           onClick={() => navigate({ to: "/login" })}
@@ -33,11 +33,11 @@ function Precos() {
       {/* Hero */}
       <section className="container mx-auto px-6 py-16 text-center">
         <h2 className="text-5xl md:text-6xl font-bold mb-6 leading-tight">
-          Pare de postar no escuro.<br />
-          <span className="text-[#8B5CF6]">Comece a vender no automático.</span>
+          Crie Vozes e Conteúdos com IA em 1 Clique.<br />
+          <span className="text-[#8B5CF6]">Para Marcas, Agências e Criadores.</span>
         </h2>
         <p className="text-xl text-gray-400 mb-10 max-w-2xl mx-auto">
-          A IA que gerencia o Instagram e o WhatsApp da sua barbearia enquanto você corta cabelo.
+          A IA que gerencia seus áudios, conteúdos e agentes para sua empresa.
         </p>
         <Button
           size="lg"
@@ -50,10 +50,10 @@ function Precos() {
       {/* Pricing Cards */}
       <section className="container mx-auto px-6 pb-20">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-6xl mx-auto">
-          {/* Plano Barbeiro */}
+          {/* Plano Inicial */}
           <Card className="bg-[#111111] border border-gray-800 rounded-xl overflow-hidden">
             <CardHeader className="pb-4">
-              <CardTitle className="text-xl font-bold">Plano Barbeiro</CardTitle>
+              <CardTitle className="text-xl font-bold">Plano Inicial</CardTitle>
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="space-y-2">
@@ -67,11 +67,11 @@ function Precos() {
                 </li>
                 <li className="flex items-start gap-3">
                   <Check className="w-5 h-5 text-[#22C55E] shrink-0 mt-0.5" />
-                  <span className="text-gray-300">10 Roteiros de Locutor IA / mês</span>
+                  <span className="text-gray-300">10 Projetos de Voz / mês</span>
                 </li>
                 <li className="flex items-start gap-3">
                   <X className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
-                  <span className="text-gray-500">Sem Agente de Vendas</span>
+                  <span className="text-gray-500">Sem Agente de Conteúdo IA</span>
                 </li>
               </ul>
             </CardContent>
@@ -102,15 +102,15 @@ function Precos() {
               <ul className="space-y-4">
                 <li className="flex items-start gap-3">
                   <Check className="w-5 h-5 text-[#22C55E] shrink-0 mt-0.5" />
-                  <span className="text-gray-300">Tudo do Plano Barbeiro</span>
+                  <span className="text-gray-300">Tudo do Plano Inicial</span>
                 </li>
                 <li className="flex items-start gap-3">
                   <Check className="w-5 h-5 text-[#22C55E] shrink-0 mt-0.5" />
-                  <span className="text-gray-300">Agente de Vendas no WhatsApp 24h</span>
+                  <span className="text-gray-300">Agente de Conteúdo IA 24h</span>
                 </li>
                 <li className="flex items-start gap-3">
                   <Check className="w-5 h-5 text-[#22C55E] shrink-0 mt-0.5" />
-                  <span className="text-gray-300">30 Posts para Instagram / mês</span>
+                  <span className="text-gray-300">30 Projetos de Voz / mês</span>
                 </li>
               </ul>
             </CardContent>
@@ -163,6 +163,39 @@ function Precos() {
                 Quero Dominar
               </Button>
             </CardFooter>
+          </Card>
+        </div>
+      </section>
+
+      {/* Para quem é? */}
+      <section className="container mx-auto px-6 pb-20">
+        <h3 className="text-3xl font-bold text-center mb-12">Para quem é?</h3>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-6xl mx-auto">
+          <Card className="bg-[#111111] border border-gray-800 rounded-xl overflow-hidden">
+            <CardHeader className="pb-4">
+              <CardTitle className="text-xl font-bold text-[#8B5CF6]">Agências de Marketing</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-gray-400">Gere 100 locuções/mês para seus clientes, crie conteúdos em massa e economize horas de trabalho.</p>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-[#111111] border border-gray-800 rounded-xl overflow-hidden">
+            <CardHeader className="pb-4">
+              <CardTitle className="text-xl font-bold text-[#22C55E]">Lojas e E-commerces</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-gray-400">Crie anúncios de áudio para Instagram, Rádio e YouTube Shorts. Converta mais com vozes humanas.</p>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-[#111111] border border-gray-800 rounded-xl overflow-hidden">
+            <CardHeader className="pb-4">
+              <CardTitle className="text-xl font-bold text-[#8B5CF6]">Criadores e Coaches</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-gray-400">Duble seus vídeos, crie audiobooks e produza conteúdos de voz para todas as plataformas.</p>
+            </CardContent>
           </Card>
         </div>
       </section>
