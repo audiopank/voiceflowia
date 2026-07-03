@@ -31,15 +31,17 @@ export const DEFAULT_PLANS: Plan[] = [
   {
     slug: 'inicial',
     name: 'Plano Inicial',
-    price: 'R$ 97',
+    price: 'R$ 49',
     period: '/mês',
     features: [
       { text: 'Dashboard de Métricas Completo', included: true },
-      { text: '10 Projetos de Voz / mês', included: true },
+      { text: '5 Gerações de Voz / mês — Sem Download MP3', included: true },
       { text: 'Sem Agente de Conteúdo IA', included: false },
     ],
     cta_label: 'Começar Agora',
-    kiwify_url: import.meta.env.VITE_KIWIFY_BARBEIRO_URL || null,
+    // ISCA DE ANCORAGEM: sem link proprio de proposito. O clique e funilado
+    // para o checkout do plano em destaque (R$197). Ninguem compra o R$49.
+    kiwify_url: null,
     badge: null,
     highlight: false,
     sort_order: 1,
@@ -48,7 +50,7 @@ export const DEFAULT_PLANS: Plan[] = [
   {
     slug: 'crescimento',
     name: 'Plano Crescimento',
-    price: 'R$ 297',
+    price: 'R$ 197',
     period: '/mês',
     features: [
       { text: 'Tudo do Plano Inicial', included: true },
@@ -65,7 +67,7 @@ export const DEFAULT_PLANS: Plan[] = [
   {
     slug: 'dominacao',
     name: 'Plano Dominação',
-    price: 'R$ 497',
+    price: 'R$ 297',
     period: '/mês',
     features: [
       { text: 'Tudo do Plano Crescimento', included: true },

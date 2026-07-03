@@ -34,17 +34,17 @@ CREATE POLICY "plans_admin_all" ON plans
 INSERT INTO plans (slug, name, price, period, features, cta_label, badge, highlight, sort_order, active)
 VALUES
   (
-    'inicial', 'Plano Inicial', 'R$ 97', '/mês',
-    '[{"text":"Dashboard de Métricas Completo","included":true},{"text":"10 Projetos de Voz / mês","included":true},{"text":"Sem Agente de Conteúdo IA","included":false}]'::jsonb,
+    'inicial', 'Plano Inicial', 'R$ 49', '/mês',
+    '[{"text":"Dashboard de Métricas Completo","included":true},{"text":"5 Gerações de Voz / mês — Sem Download MP3","included":true},{"text":"Sem Agente de Conteúdo IA","included":false}]'::jsonb,
     'Começar Agora', NULL, false, 1, true
   ),
   (
-    'crescimento', 'Plano Crescimento', 'R$ 297', '/mês',
+    'crescimento', 'Plano Crescimento', 'R$ 197', '/mês',
     '[{"text":"Tudo do Plano Inicial","included":true},{"text":"Agente de Conteúdo IA 24h","included":true},{"text":"30 Projetos de Voz / mês","included":true}]'::jsonb,
     'Testar 7 Dias Grátis', 'MAIS VENDIDO', true, 2, true
   ),
   (
-    'dominacao', 'Plano Dominação', 'R$ 497', '/mês',
+    'dominacao', 'Plano Dominação', 'R$ 297', '/mês',
     '[{"text":"Tudo do Plano Crescimento","included":true},{"text":"Atendimento por Voz no WhatsApp","included":true},{"text":"Estratégia 1x1 com o Mestre 2x/mês","included":true},{"text":"Vagas Limitadas: 5 vagas","included":true}]'::jsonb,
     'Quero Dominar', NULL, false, 3, true
   )

@@ -14,7 +14,10 @@ function openCheckout(url: string | null) {
   if (url) window.open(url, "_blank")
 }
 
-function PlanCard({ plan }: { plan: Plan }) {
+function PlanCard({ plan, fallbackUrl }: { plan: Plan; fallbackUrl: string | null }) {
+  // Plano-isca (sem link proprio, ex: R$49) nao abre checkout dele mesmo:
+  // o clique e funilado para o checkout do plano em destaque (R$197).
+  const checkoutUrl = plan.kiwify_url?.trim() || fallbackUrl
   return (
     <Card
       className={
@@ -53,7 +56,8 @@ function PlanCard({ plan }: { plan: Plan }) {
         <Button
           variant={plan.highlight ? "default" : "outline"}
           className="w-full"
-          onClick={() => openCheckout(plan.kiwify_url)}
+          disabled={!checkoutUrl}
+          onClick={() => openCheckout(checkoutUrl)}
         >
           {plan.cta_label}
         </Button>
@@ -71,6 +75,8 @@ function Precos() {
   }, [])
 
   const heroPlan = plans.find((p) => p.highlight) ?? plans[0]
+  // Checkout usado pela isca e pelo hero: sempre o plano em destaque (R$197).
+  const anchorUrl = heroPlan?.kiwify_url ?? null
 
   return (
     <div className="min-h-screen bg-[#0A0A0A] text-white">
@@ -102,7 +108,7 @@ function Precos() {
       <section className="container mx-auto px-6 pb-20">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-6xl mx-auto">
           {plans.map((plan) => (
-            <PlanCard key={plan.slug} plan={plan} />
+            <PlanCard key={plan.slug} plan={plan} fallbackUrl={anchorUrl} />
           ))}
         </div>
       </section>
