@@ -3,7 +3,7 @@ import { createFileRoute } from '@tanstack/react-router'
 import JSZip from 'jszip'
 import {
   Lock, Loader2, AlertCircle, Rocket, Volume2, Download, Play, Package,
-  Users, Target, Hash, Clock, Megaphone, CheckCircle2
+  Users, Target, Hash, Clock, Megaphone, CheckCircle2, Copy, Check
 } from 'lucide-react'
 import { useSubscription } from '../lib/useSubscription'
 import { supabase } from '../lib/supabase'
@@ -89,6 +89,9 @@ function SuperAgente() {
 
   // V1.6 Seletor de voz. '' = Automático (IA decide entre Zephyr/Puck).
   const [voz, setVoz] = useState('')
+
+  // Copiar texto (pedido de cliente): guarda a chave do campo copiado p/ feedback.
+  const [copied, setCopied] = useState('')
 
   const [estrategia, setEstrategia] = useState<Estrategia | null>(null)
   const [posts, setPosts] = useState<Post[] | null>(null)
@@ -192,6 +195,17 @@ function SuperAgente() {
     if (!blob) return
     const audio = new Audio(URL.createObjectURL(blob))
     audio.play()
+  }
+
+  // Copia o texto pro clipboard e mostra "Copiado!" por ~1.5s.
+  async function handleCopy(key: string, text: string) {
+    try {
+      await navigator.clipboard.writeText(text)
+      setCopied(key)
+      setTimeout(() => setCopied((k) => (k === key ? '' : k)), 1500)
+    } catch {
+      // navegador sem permissão de clipboard — ignora silenciosamente
+    }
   }
 
   async function handleDownloadKit() {
@@ -521,15 +535,15 @@ function SuperAgente() {
                   )}
                 </div>
                 <div>
-                  <p className="text-xs uppercase text-gray-500 mb-1">Hook (3s)</p>
+                  <FieldHeader label="Hook (3s)" copiedKey={copied} thisKey={`${post.dia}-hook`} onCopy={() => handleCopy(`${post.dia}-hook`, post.hook)} />
                   <p className="text-white font-medium">{post.hook}</p>
                 </div>
                 <div>
-                  <p className="text-xs uppercase text-gray-500 mb-1">Roteiro (20s)</p>
+                  <FieldHeader label="Roteiro (20s)" copiedKey={copied} thisKey={`${post.dia}-roteiro`} onCopy={() => handleCopy(`${post.dia}-roteiro`, post.roteiro)} />
                   <p className="text-gray-300 text-sm">{post.roteiro}</p>
                 </div>
                 <div>
-                  <p className="text-xs uppercase text-gray-500 mb-1">Legenda</p>
+                  <FieldHeader label="Legenda" copiedKey={copied} thisKey={`${post.dia}-legenda`} onCopy={() => handleCopy(`${post.dia}-legenda`, post.legenda)} />
                   <p className="text-gray-300 text-sm">{post.legenda}</p>
                 </div>
 
@@ -551,6 +565,23 @@ function SuperAgente() {
           </div>
         )}
       </div>
+    </div>
+  )
+}
+
+// Cabeçalho de cada texto do post: rótulo + botão de copiar com feedback.
+function FieldHeader({ label, copiedKey, thisKey, onCopy }: { label: string; copiedKey: string; thisKey: string; onCopy: () => void }) {
+  const isCopied = copiedKey === thisKey
+  return (
+    <div className="flex items-center justify-between mb-1">
+      <p className="text-xs uppercase text-gray-500">{label}</p>
+      <button
+        onClick={onCopy}
+        title="Copiar texto"
+        className={`flex items-center gap-1 text-xs transition-colors ${isCopied ? 'text-[#22C55E]' : 'text-gray-500 hover:text-[#8B5CF6]'}`}
+      >
+        {isCopied ? <><Check className="w-3.5 h-3.5" /> Copiado!</> : <><Copy className="w-3.5 h-3.5" /> Copiar</>}
+      </button>
     </div>
   )
 }
