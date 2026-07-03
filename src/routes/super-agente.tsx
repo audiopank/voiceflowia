@@ -81,6 +81,12 @@ function SuperAgente() {
   const [tom, setTom] = useState('Profissional')
   const [qtdPosts, setQtdPosts] = useState(7)
 
+  // V1.5 Estudo de Marca — opcionais. Vazios = gera igual hoje.
+  const [instagram, setInstagram] = useState('')
+  const [servicos, setServicos] = useState('')
+  const [tomMarca, setTomMarca] = useState('')
+  const [cta, setCta] = useState('')
+
   const [estrategia, setEstrategia] = useState<Estrategia | null>(null)
   const [posts, setPosts] = useState<Post[] | null>(null)
   const [isGenerating, setIsGenerating] = useState(false)
@@ -109,7 +115,7 @@ function SuperAgente() {
       const response = await fetch('/api/gemini/generate-strategy', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nicho, tom, qtdPosts })
+        body: JSON.stringify({ nicho, tom, qtdPosts, instagram, servicos, tomMarca, cta })
       })
 
       const data = await response.json()
@@ -301,6 +307,59 @@ function SuperAgente() {
                 onChange={(e) => setQtdPosts(Math.min(Math.max(Number(e.target.value) || 1, 1), 30))}
                 className="w-full p-3 bg-[#1A1A1A] border border-gray-700 rounded-lg text-white focus:outline-none focus:border-[#8B5CF6]"
               />
+            </div>
+          </div>
+
+          {/* V1.5 — Estudo de Marca (opcional). Deixa o output na cara do cliente. */}
+          <div className="border-t border-gray-800 pt-6">
+            <div className="flex items-center gap-2 mb-1">
+              <Target className="w-4 h-4 text-[#8B5CF6]" />
+              <h3 className="text-sm font-bold text-white">Estudo de Marca <span className="text-gray-500 font-normal">(opcional)</span></h3>
+            </div>
+            <p className="text-xs text-gray-500 mb-4">
+              Preencha olhando o Instagram do cliente. Quanto mais completo, mais os roteiros saem na cara da marca. Vazio = gera pelo nicho.
+            </p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">@ Instagram da Marca</label>
+                <input
+                  type="text"
+                  value={instagram}
+                  onChange={(e) => setInstagram(e.target.value)}
+                  placeholder="@clinicasim"
+                  className="w-full p-3 bg-[#1A1A1A] border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-[#8B5CF6]"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">Serviços Principais</label>
+                <input
+                  type="text"
+                  value={servicos}
+                  onChange={(e) => setServicos(e.target.value)}
+                  placeholder="Botox, Fios, Peelings"
+                  className="w-full p-3 bg-[#1A1A1A] border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-[#8B5CF6]"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">Tom da Marca</label>
+                <input
+                  type="text"
+                  value={tomMarca}
+                  onChange={(e) => setTomMarca(e.target.value)}
+                  placeholder="Autoridade médica, sofisticado"
+                  className="w-full p-3 bg-[#1A1A1A] border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-[#8B5CF6]"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">CTA Principal</label>
+                <input
+                  type="text"
+                  value={cta}
+                  onChange={(e) => setCta(e.target.value)}
+                  placeholder="Agende sua Avaliação"
+                  className="w-full p-3 bg-[#1A1A1A] border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-[#8B5CF6]"
+                />
+              </div>
             </div>
           </div>
 

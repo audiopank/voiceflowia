@@ -45,25 +45,49 @@ const RESPONSE_SCHEMA = {
   required: ['estrategia', 'posts']
 }
 
-function buildPrompt(nicho: string, tom: string, qtdPosts: number): string {
-  return `Você é um estrategista de marketing digital sênior brasileiro. Crie um plano de conteúdo COMPLETO para o nicho: "${nicho}". Tom de voz: ${tom}.
+interface Marca {
+  instagram: string
+  servicos: string
+  tomMarca: string
+  cta: string
+}
+
+function buildPrompt(nicho: string, tom: string, qtdPosts: number, marca: Marca): string {
+  // V1.5 Estudo de Marca: campos opcionais. Vazios = comportamento original.
+  const tomObrigatorio = marca.tomMarca || tom
+  const servicosLinha = marca.servicos || 'serviços típicos do nicho'
+  const ctaObrigatorio = marca.cta || 'Clique no link da bio'
+  const instaLinha = marca.instagram || 'não informado'
+
+  return `Você é um estrategista de marketing digital sênior brasileiro. Crie um plano de conteúdo COMPLETO para o nicho: "${nicho}".
+
+CONTEXTO DA MARCA (use para deixar TODO o conteúdo 100% na cara dessa marca específica):
+- Instagram de referência: ${instaLinha}
+- Serviços que devem aparecer nos posts: ${servicosLinha}
+- Tom de voz obrigatório: ${tomObrigatorio}
+- CTA que deve aparecer em 100% dos posts: ${ctaObrigatorio}
 
 Retorne um objeto JSON com dois campos: "estrategia" e "posts".
 
 1) "estrategia" deve conter:
-- resumo: um parágrafo curto com a estratégia geral do mês para esse nicho
+- resumo: um parágrafo curto com a estratégia geral do mês para essa marca
 - personas: 2 a 3 personas do público-alvo, cada uma com "nome" (um rótulo curto) e "descricao" (dores, desejos e como falar com ela)
-- pilares: 3 a 5 pilares de conteúdo (temas recorrentes)
+- pilares: 3 a 5 pilares de conteúdo (temas recorrentes), conectados aos serviços informados
 - hashtags: 8 a 15 hashtags relevantes (com #)
 - melhoresHorarios: 3 a 5 sugestões de dias/horários de postagem no Brasil
-- ctas: 4 a 6 ideias de call-to-action
+- ctas: 4 a 6 variações do call-to-action, girando em torno de "${ctaObrigatorio}"
 
 2) "posts": ${qtdPosts} roteiros de Reels, cada um com:
 - dia: número sequencial de 1 a ${qtdPosts}
 - hook: gancho de até 3 segundos para prender atenção
 - roteiro: narração de cerca de 20 segundos, pronta para ser lida em voz alta
-- legenda: legenda da postagem terminando com um call-to-action
+- legenda: legenda da postagem terminando com o CTA
 - vozSugerida: "Zephyr" ou "Puck", a que combinar melhor com o roteiro
+
+REGRAS OBRIGATÓRIAS para os posts:
+- Cada roteiro deve citar pelo menos 1 serviço da lista: ${servicosLinha}
+- A legenda de TODOS os posts deve terminar com o CTA: "${ctaObrigatorio}"
+- Mantenha o tom "${tomObrigatorio}" em 100% dos roteiros e legendas
 
 Responda apenas com o objeto JSON, sem texto adicional.`
 }
@@ -85,7 +109,7 @@ export default async function handler(request: Request): Promise<Response> {
       )
     }
 
-    const { nicho, tom, qtdPosts } = await request.json()
+    const { nicho, tom, qtdPosts, instagram, servicos, tomMarca, cta } = await request.json()
 
     if (!nicho || typeof nicho !== 'string') {
       return new Response(
@@ -97,6 +121,15 @@ export default async function handler(request: Request): Promise<Response> {
     const tomFinal = tom && typeof tom === 'string' ? tom : 'Profissional'
     const qtdFinal = Math.min(Math.max(Number(qtdPosts) || 30, 1), 30)
 
+    // V1.5 Estudo de Marca: campos opcionais, retrocompatível se vierem vazios.
+    const s = (v: unknown): string => (typeof v === 'string' ? v.trim() : '')
+    const marca: Marca = {
+      instagram: s(instagram),
+      servicos: s(servicos),
+      tomMarca: s(tomMarca),
+      cta: s(cta),
+    }
+
     const response = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
       {
@@ -105,7 +138,7 @@ export default async function handler(request: Request): Promise<Response> {
         body: JSON.stringify({
           contents: [
             {
-              parts: [{ text: buildPrompt(nicho, tomFinal, qtdFinal) }]
+              parts: [{ text: buildPrompt(nicho, tomFinal, qtdFinal, marca) }]
             }
           ],
           generationConfig: {
