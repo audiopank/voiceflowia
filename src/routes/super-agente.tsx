@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { createFileRoute } from '@tanstack/react-router'
 import JSZip from 'jszip'
+import { toPng } from 'html-to-image'
 import {
   Lock, Loader2, AlertCircle, Rocket, Volume2, Download, Play, Package,
   Users, Target, Hash, Clock, Megaphone, CheckCircle2, Copy, Check, ImagePlus, X
@@ -95,6 +96,13 @@ function SuperAgente() {
 
   // Imagem/logo do cliente por card (client-side, sem API). Entra no ZIP do kit.
   const [postImages, setPostImages] = useState<Record<number, { url: string; blob: Blob; ext: string }>>({})
+
+  // Logo da marca: enviada 1x, aplicada em TODOS os cards. base64 p/ embutir no PNG.
+  const [brandLogo, setBrandLogo] = useState<string | null>(null)
+  const [logoError, setLogoError] = useState('')
+  const [exportingDia, setExportingDia] = useState<number | null>(null)
+  // Refs dos cards p/ exportar como PNG (html-to-image).
+  const cardRefs = useRef<Record<number, HTMLDivElement | null>>({})
 
   const [estrategia, setEstrategia] = useState<Estrategia | null>(null)
   const [posts, setPosts] = useState<Post[] | null>(null)
@@ -228,6 +236,48 @@ function SuperAgente() {
       delete next[dia]
       return next
     })
+  }
+
+  // Logo enviada 1x: valida (png/jpg/svg, máx 2MB) e guarda em base64 p/ embutir no PNG.
+  function handleLogoUpload(file: File | undefined) {
+    setLogoError('')
+    if (!file) return
+    const ok = ['image/png', 'image/jpeg', 'image/jpg', 'image/svg+xml']
+    if (!ok.includes(file.type)) {
+      setLogoError('Formato inválido. Use PNG, JPG ou SVG.')
+      return
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      setLogoError('Logo muito grande (máx 2MB).')
+      return
+    }
+    const reader = new FileReader()
+    reader.onload = () => setBrandLogo(typeof reader.result === 'string' ? reader.result : null)
+    reader.readAsDataURL(file)
+  }
+
+  // Exporta um card como PNG com a logo embutida, sem os botões (chrome marcado com .no-export).
+  async function handleDownloadPng(dia: number) {
+    const node = cardRefs.current[dia]
+    if (!node) return
+    setExportingDia(dia)
+    try {
+      const dataUrl = await toPng(node, {
+        pixelRatio: 2,
+        backgroundColor: '#111111',
+        filter: (n) => !(n instanceof HTMLElement && n.classList.contains('no-export')),
+      })
+      const a = document.createElement('a')
+      a.href = dataUrl
+      a.download = `card-dia-${String(dia).padStart(2, '0')}.png`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+    } catch (err) {
+      console.error('Erro ao exportar PNG:', err)
+    } finally {
+      setExportingDia(null)
+    }
   }
 
   async function handleDownloadKit() {
@@ -420,6 +470,43 @@ function SuperAgente() {
             </div>
           </div>
 
+          {/* Logo da marca: envia 1x, aparece em todos os cards automaticamente. */}
+          <div className="border-t border-gray-800 pt-6">
+            <label className="block text-sm font-medium text-gray-300 mb-2">
+              Envie a Logo da sua Marca <span className="text-gray-500 font-normal">[PNG, JPG, SVG]</span>
+            </label>
+            {brandLogo ? (
+              <div className="flex items-center gap-3">
+                <img
+                  src={brandLogo}
+                  alt="Logo da marca"
+                  className="w-12 h-12 object-contain rounded-lg border border-gray-700 bg-white p-1"
+                />
+                <button
+                  onClick={() => { setBrandLogo(null); setLogoError('') }}
+                  className="flex items-center gap-1 text-sm text-gray-400 hover:text-red-400"
+                >
+                  <X className="w-4 h-4" /> Remover
+                </button>
+              </div>
+            ) : (
+              <label className="flex items-center justify-center gap-2 w-full md:w-auto md:inline-flex px-4 py-3 border border-dashed border-gray-700 rounded-lg text-gray-400 text-sm cursor-pointer hover:border-[#8B5CF6] hover:text-[#8B5CF6] transition-colors">
+                <ImagePlus className="w-4 h-4" />
+                Escolher logo
+                <input
+                  type="file"
+                  accept="image/png,image/jpeg,image/svg+xml"
+                  className="hidden"
+                  onChange={(e) => handleLogoUpload(e.target.files?.[0])}
+                />
+              </label>
+            )}
+            {logoError && <p className="text-xs text-red-400 mt-2">{logoError}</p>}
+            <p className="text-xs text-gray-600 mt-2">
+              Sua logo vai aparecer automaticamente em todos os cards. É só enviar 1 vez.
+            </p>
+          </div>
+
           <Button
             onClick={handleGenerate}
             disabled={isGenerating || !nicho.trim()}
@@ -546,7 +633,19 @@ function SuperAgente() {
         {posts && (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {posts.map((post) => (
-              <div key={post.dia} className="bg-[#111111] border border-gray-800 rounded-2xl p-5 space-y-3">
+              <div
+                key={post.dia}
+                ref={(el) => { cardRefs.current[post.dia] = el }}
+                className="relative bg-[#111111] border border-gray-800 rounded-2xl p-5 space-y-3"
+              >
+                {/* Logo da marca aplicada automaticamente (fallback: nada se não houver). */}
+                {brandLogo && (
+                  <img
+                    src={brandLogo}
+                    alt="Logo da marca"
+                    className="absolute top-4 right-4 w-20 h-20 object-contain bg-white rounded-lg p-2 shadow-lg z-10"
+                  />
+                )}
                 <div className="flex items-center justify-between">
                   <span className="text-[#8B5CF6] font-bold">Dia {post.dia}</span>
                   {audioBlobs[post.dia] ? (
@@ -585,13 +684,13 @@ function SuperAgente() {
                       <button
                         onClick={() => handleRemoveImage(post.dia)}
                         title="Remover imagem"
-                        className="absolute top-2 right-2 bg-black/70 hover:bg-red-600 text-white rounded-full p-1"
+                        className="no-export absolute top-2 right-2 bg-black/70 hover:bg-red-600 text-white rounded-full p-1"
                       >
                         <X className="w-4 h-4" />
                       </button>
                     </div>
                   ) : (
-                    <label className="flex items-center justify-center gap-2 w-full py-3 border border-dashed border-gray-700 rounded-lg text-gray-400 text-sm cursor-pointer hover:border-[#8B5CF6] hover:text-[#8B5CF6] transition-colors">
+                    <label className="no-export flex items-center justify-center gap-2 w-full py-3 border border-dashed border-gray-700 rounded-lg text-gray-400 text-sm cursor-pointer hover:border-[#8B5CF6] hover:text-[#8B5CF6] transition-colors">
                       <ImagePlus className="w-4 h-4" />
                       Subir imagem/logo
                       <input
@@ -608,15 +707,25 @@ function SuperAgente() {
                   <p className="text-yellow-500 text-xs">{audioErrors[post.dia]}</p>
                 )}
 
-                {audioBlobs[post.dia] && (
+                <div className="no-export flex gap-2">
+                  {audioBlobs[post.dia] && (
+                    <Button
+                      onClick={() => handlePlayAudio(post.dia)}
+                      className="flex-1 bg-[#1A1A1A] hover:bg-[#252525] flex items-center justify-center gap-2"
+                    >
+                      <Play className="w-4 h-4" />
+                      Ouvir
+                    </Button>
+                  )}
                   <Button
-                    onClick={() => handlePlayAudio(post.dia)}
-                    className="w-full bg-[#1A1A1A] hover:bg-[#252525] flex items-center justify-center gap-2"
+                    onClick={() => handleDownloadPng(post.dia)}
+                    disabled={exportingDia === post.dia}
+                    className="flex-1 bg-[#1A1A1A] hover:bg-[#252525] disabled:opacity-50 flex items-center justify-center gap-2"
                   >
-                    <Play className="w-4 h-4" />
-                    Ouvir
+                    {exportingDia === post.dia ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                    Baixar PNG
                   </Button>
-                )}
+                </div>
               </div>
             ))}
           </div>
@@ -635,7 +744,7 @@ function FieldHeader({ label, copiedKey, thisKey, onCopy }: { label: string; cop
       <button
         onClick={onCopy}
         title="Copiar texto"
-        className={`flex items-center gap-1 text-xs transition-colors ${isCopied ? 'text-[#22C55E]' : 'text-gray-500 hover:text-[#8B5CF6]'}`}
+        className={`no-export flex items-center gap-1 text-xs transition-colors ${isCopied ? 'text-[#22C55E]' : 'text-gray-500 hover:text-[#8B5CF6]'}`}
       >
         {isCopied ? <><Check className="w-3.5 h-3.5" /> Copiado!</> : <><Copy className="w-3.5 h-3.5" /> Copiar</>}
       </button>
