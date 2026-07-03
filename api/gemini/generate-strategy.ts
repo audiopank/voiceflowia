@@ -2,7 +2,13 @@ export const config = {
   runtime: 'edge'
 }
 
-const RESPONSE_SCHEMA = {
+// V1.6: vozes válidas do Gemini TTS que o seletor manual oferece.
+const VOZES_VALIDAS = ['Zephyr', 'Puck', 'Kore', 'Charon']
+
+// V1.6: schema virou builder. `vozes` = quais valores vozSugerida pode assumir.
+// Automático -> ['Zephyr','Puck'] (IA decide). Forçado -> [voz] (uma só).
+function buildResponseSchema(vozes: string[]) {
+  return {
   type: 'OBJECT',
   properties: {
     estrategia: {
@@ -36,13 +42,14 @@ const RESPONSE_SCHEMA = {
           hook: { type: 'STRING' },
           roteiro: { type: 'STRING' },
           legenda: { type: 'STRING' },
-          vozSugerida: { type: 'STRING', enum: ['Zephyr', 'Puck'] }
+          vozSugerida: { type: 'STRING', enum: vozes } // V1.6: dinâmico
         },
         required: ['dia', 'hook', 'roteiro', 'legenda', 'vozSugerida']
       }
     }
   },
   required: ['estrategia', 'posts']
+  }
 }
 
 interface Marca {
@@ -109,7 +116,7 @@ export default async function handler(request: Request): Promise<Response> {
       )
     }
 
-    const { nicho, tom, qtdPosts, instagram, servicos, tomMarca, cta } = await request.json()
+    const { nicho, tom, qtdPosts, instagram, servicos, tomMarca, cta, voz } = await request.json()
 
     if (!nicho || typeof nicho !== 'string') {
       return new Response(
@@ -130,6 +137,10 @@ export default async function handler(request: Request): Promise<Response> {
       cta: s(cta),
     }
 
+    // V1.6: voz forçada. Só aceita as vozes válidas; qualquer outra coisa = automático.
+    const vozForcada = VOZES_VALIDAS.includes(s(voz)) ? s(voz) : ''
+    const vozesPermitidas = vozForcada ? [vozForcada] : ['Zephyr', 'Puck']
+
     const response = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
       {
@@ -143,7 +154,7 @@ export default async function handler(request: Request): Promise<Response> {
           ],
           generationConfig: {
             responseMimeType: 'application/json',
-            responseSchema: RESPONSE_SCHEMA
+            responseSchema: buildResponseSchema(vozesPermitidas) // V1.6
           }
         })
       }
@@ -172,6 +183,11 @@ export default async function handler(request: Request): Promise<Response> {
     }
 
     const parsed = JSON.parse(textPart.text)
+
+    // V1.6: à prova de bala — se o usuário forçou uma voz, crava em todos os posts.
+    if (vozForcada && Array.isArray(parsed?.posts)) {
+      for (const post of parsed.posts) post.vozSugerida = vozForcada
+    }
 
     return new Response(JSON.stringify(parsed), {
       headers: { 'Content-Type': 'application/json' }

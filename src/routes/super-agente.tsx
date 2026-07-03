@@ -87,6 +87,9 @@ function SuperAgente() {
   const [tomMarca, setTomMarca] = useState('')
   const [cta, setCta] = useState('')
 
+  // V1.6 Seletor de voz. '' = Automático (IA decide entre Zephyr/Puck).
+  const [voz, setVoz] = useState('')
+
   const [estrategia, setEstrategia] = useState<Estrategia | null>(null)
   const [posts, setPosts] = useState<Post[] | null>(null)
   const [isGenerating, setIsGenerating] = useState(false)
@@ -115,7 +118,7 @@ function SuperAgente() {
       const response = await fetch('/api/gemini/generate-strategy', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nicho, tom, qtdPosts, instagram, servicos, tomMarca, cta })
+        body: JSON.stringify({ nicho, tom, qtdPosts, instagram, servicos, tomMarca, cta, voz }) // V1.6: voz forçada ('' = automático)
       })
 
       const data = await response.json()
@@ -295,6 +298,21 @@ function SuperAgente() {
                 <option value="Profissional">Profissional</option>
                 <option value="Divertido">Divertido</option>
                 <option value="Vendedor">Vendedor</option>
+              </select>
+            </div>
+            {/* V1.6 Seletor manual de voz. Automático = IA decide. */}
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">Voz da IA</label>
+              <select
+                value={voz}
+                onChange={(e) => setVoz(e.target.value)}
+                className="w-full p-3 bg-[#1A1A1A] border border-gray-700 rounded-lg text-white focus:outline-none focus:border-[#8B5CF6]"
+              >
+                <option value="">Automático [IA Decide]</option>
+                <option value="Zephyr">Zephyr [Firme/Autoridade]</option>
+                <option value="Puck">Puck [Leve/Animado]</option>
+                <option value="Kore">Kore [Feminina/Profissional]</option>
+                <option value="Charon">Charon [Masculino/Grave]</option>
               </select>
             </div>
             <div>
