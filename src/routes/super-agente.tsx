@@ -646,7 +646,7 @@ function SuperAgente() {
                     className="absolute top-4 right-4 w-20 h-20 object-contain bg-white rounded-lg p-2 shadow-lg z-10"
                   />
                 )}
-                <div className="flex items-center justify-between">
+                <div className={`flex items-center justify-between ${brandLogo ? 'pr-24' : ''}`}>
                   <span className="text-[#8B5CF6] font-bold">Dia {post.dia}</span>
                   {audioBlobs[post.dia] ? (
                     <span className="text-xs text-[#22C55E] flex items-center gap-1">
@@ -658,7 +658,7 @@ function SuperAgente() {
                     </span>
                   )}
                 </div>
-                <div>
+                <div className={brandLogo ? 'pr-24' : ''}>
                   <FieldHeader label="Hook (3s)" copiedKey={copied} thisKey={`${post.dia}-hook`} onCopy={() => handleCopy(`${post.dia}-hook`, post.hook)} />
                   <p className="text-white font-medium">{post.hook}</p>
                 </div>
