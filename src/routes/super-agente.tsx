@@ -298,6 +298,23 @@ function SuperAgente() {
         if (img) imagens?.file(`dia-${String(p.dia).padStart(2, '0')}.${img.ext}`, img.blob)
       })
 
+      // Renderiza cada card como PNG (com a logo, sem os botões) e inclui no ZIP.
+      const cards = zip.folder('cards')
+      for (const p of posts) {
+        const node = cardRefs.current[p.dia]
+        if (!node) continue
+        try {
+          const dataUrl = await toPng(node, {
+            pixelRatio: 2,
+            backgroundColor: '#111111',
+            filter: (n) => !(n instanceof HTMLElement && n.classList.contains('no-export')),
+          })
+          cards?.file(`dia-${String(p.dia).padStart(2, '0')}.png`, dataUrl.split(',')[1], { base64: true })
+        } catch (err) {
+          console.error(`Erro ao renderizar card PNG do dia ${p.dia}:`, err)
+        }
+      }
+
       const content = await zip.generateAsync({ type: 'blob' })
       const url = URL.createObjectURL(content)
       const a = document.createElement('a')
