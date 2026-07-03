@@ -3,7 +3,7 @@ import { createFileRoute } from '@tanstack/react-router'
 import JSZip from 'jszip'
 import {
   Lock, Loader2, AlertCircle, Rocket, Volume2, Download, Play, Package,
-  Users, Target, Hash, Clock, Megaphone, CheckCircle2, Copy, Check
+  Users, Target, Hash, Clock, Megaphone, CheckCircle2, Copy, Check, ImagePlus, X
 } from 'lucide-react'
 import { useSubscription } from '../lib/useSubscription'
 import { supabase } from '../lib/supabase'
@@ -92,6 +92,9 @@ function SuperAgente() {
 
   // Copiar texto (pedido de cliente): guarda a chave do campo copiado p/ feedback.
   const [copied, setCopied] = useState('')
+
+  // Imagem/logo do cliente por card (client-side, sem API). Entra no ZIP do kit.
+  const [postImages, setPostImages] = useState<Record<number, { url: string; blob: Blob; ext: string }>>({})
 
   const [estrategia, setEstrategia] = useState<Estrategia | null>(null)
   const [posts, setPosts] = useState<Post[] | null>(null)
@@ -208,6 +211,25 @@ function SuperAgente() {
     }
   }
 
+  // Sobe a imagem/logo do cliente pra um card (fica só no navegador até baixar o ZIP).
+  function handleImageUpload(dia: number, file: File | undefined) {
+    if (!file || !file.type.startsWith('image/')) return
+    const ext = file.name.split('.').pop()?.toLowerCase() || 'png'
+    setPostImages((prev) => {
+      if (prev[dia]) URL.revokeObjectURL(prev[dia].url)
+      return { ...prev, [dia]: { url: URL.createObjectURL(file), blob: file, ext } }
+    })
+  }
+
+  function handleRemoveImage(dia: number) {
+    setPostImages((prev) => {
+      const next = { ...prev }
+      if (next[dia]) URL.revokeObjectURL(next[dia].url)
+      delete next[dia]
+      return next
+    })
+  }
+
   async function handleDownloadKit() {
     if (!estrategia || !posts) return
     setIsZipping(true)
@@ -217,10 +239,13 @@ function SuperAgente() {
 
       const roteiros = zip.folder('roteiros')
       const audios = zip.folder('audios')
+      const imagens = zip.folder('imagens')
       posts.forEach((p) => {
         roteiros?.file(`dia-${String(p.dia).padStart(2, '0')}.txt`, buildPostText(p))
         const blob = audioBlobs[p.dia]
         if (blob) audios?.file(`dia-${String(p.dia).padStart(2, '0')}.wav`, blob)
+        const img = postImages[p.dia]
+        if (img) imagens?.file(`dia-${String(p.dia).padStart(2, '0')}.${img.ext}`, img.blob)
       })
 
       const content = await zip.generateAsync({ type: 'blob' })
@@ -545,6 +570,38 @@ function SuperAgente() {
                 <div>
                   <FieldHeader label="Legenda" copiedKey={copied} thisKey={`${post.dia}-legenda`} onCopy={() => handleCopy(`${post.dia}-legenda`, post.legenda)} />
                   <p className="text-gray-300 text-sm">{post.legenda}</p>
+                </div>
+
+                {/* Upload de imagem/logo do cliente por card (client-side, entra no ZIP). */}
+                <div>
+                  <p className="text-xs uppercase text-gray-500 mb-1">Imagem / Logo</p>
+                  {postImages[post.dia] ? (
+                    <div className="relative">
+                      <img
+                        src={postImages[post.dia].url}
+                        alt={`Imagem do dia ${post.dia}`}
+                        className="w-full max-h-40 object-contain rounded-lg border border-gray-700 bg-[#0A0A0A]"
+                      />
+                      <button
+                        onClick={() => handleRemoveImage(post.dia)}
+                        title="Remover imagem"
+                        className="absolute top-2 right-2 bg-black/70 hover:bg-red-600 text-white rounded-full p-1"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ) : (
+                    <label className="flex items-center justify-center gap-2 w-full py-3 border border-dashed border-gray-700 rounded-lg text-gray-400 text-sm cursor-pointer hover:border-[#8B5CF6] hover:text-[#8B5CF6] transition-colors">
+                      <ImagePlus className="w-4 h-4" />
+                      Subir imagem/logo
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={(e) => handleImageUpload(post.dia, e.target.files?.[0])}
+                      />
+                    </label>
+                  )}
                 </div>
 
                 {audioErrors[post.dia] && (
