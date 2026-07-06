@@ -2,6 +2,7 @@ import { useState } from 'react'
 import {
   Bot, Sparkles, Loader2, ChevronRight, ChevronLeft, Minus, Check, Lightbulb, Copy
 } from 'lucide-react'
+import { fetchWithRetry } from '../lib/apiRetry'
 
 interface Suggestions {
   servicos: string[]
@@ -95,14 +96,19 @@ export function SuperAgenteGuia({ nicho, servicos, onAppendServico, onSetTomMarc
     setLoadingSug(true)
     setSugError('')
     try {
-      const res = await fetch('/api/gemini/suggest-brand', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nicho: nicho.trim() }),
-      })
+      const res = await fetchWithRetry(
+        '/api/gemini/suggest-brand',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ nicho: nicho.trim() }),
+        },
+        { onWait: (s) => setSugError(`⏳ Limite temporário. Tentando de novo em ${s}s...`) },
+      )
       const data = await res.json()
       if (!res.ok) throw new Error(data?.error || `Erro ${res.status}`)
       setSuggestions(data.suggestions)
+      setSugError('')
     } catch (err) {
       setSugError(err instanceof Error ? err.message : 'Erro ao gerar sugestões')
     } finally {
@@ -118,14 +124,19 @@ export function SuperAgenteGuia({ nicho, servicos, onAppendServico, onSetTomMarc
     setLoadingHooks(true)
     setHooksError('')
     try {
-      const res = await fetch('/api/gemini/generate-hooks', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nicho: nicho.trim(), objetivo: objetivo.trim() }),
-      })
+      const res = await fetchWithRetry(
+        '/api/gemini/generate-hooks',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ nicho: nicho.trim(), objetivo: objetivo.trim() }),
+        },
+        { onWait: (s) => setHooksError(`⏳ Limite temporário. Tentando de novo em ${s}s...`) },
+      )
       const data = await res.json()
       if (!res.ok) throw new Error(data?.error || `Erro ${res.status}`)
       setHooks(data.hooks)
+      setHooksError('')
     } catch (err) {
       setHooksError(err instanceof Error ? err.message : 'Erro ao gerar ideias')
     } finally {

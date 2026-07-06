@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { createFileRoute } from "@tanstack/react-router"
 import { Lock, Download, Volume2, Loader2, AlertCircle } from 'lucide-react'
 import { useSubscription } from '../lib/useSubscription'
+import { fetchWithRetry } from '../lib/apiRetry'
 import { Button } from '../components/ui/button'
 import { BackButton } from '../components/BackButton'
 
@@ -56,6 +57,7 @@ function Editor() {
   const [isGenerating, setIsGenerating] = useState(false)
   const [audioReady, setAudioReady] = useState(false)
   const [error, setError] = useState('')
+  const [rateNotice, setRateNotice] = useState('')
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null)
   const [loadingVoices, setLoadingVoices] = useState(true)
 
@@ -90,11 +92,16 @@ function Editor() {
           ? { text, voiceId: selectedVoice }
           : { text, voiceName: selectedVoice }
 
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body)
-      })
+      const response = await fetchWithRetry(
+        endpoint,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
+        },
+        { onWait: (s) => setRateNotice(`⏳ Limite temporário da API. Aguardando ${s}s e tentando de novo...`) },
+      )
+      setRateNotice('')
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => null)
@@ -179,6 +186,13 @@ function Editor() {
           <div className="mb-6 p-4 bg-red-900/30 border border-red-700 rounded-xl flex items-center gap-3">
             <AlertCircle className="w-5 h-5 text-red-400" />
             <span className="text-red-300">{error}</span>
+          </div>
+        )}
+
+        {rateNotice && (
+          <div className="mb-6 p-4 bg-yellow-900/20 border border-yellow-700/50 rounded-xl flex items-center gap-3">
+            <AlertCircle className="w-5 h-5 text-yellow-400 shrink-0 animate-pulse" />
+            <span className="text-yellow-300">{rateNotice}</span>
           </div>
         )}
 

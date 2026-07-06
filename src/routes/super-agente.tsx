@@ -8,9 +8,13 @@ import {
 } from 'lucide-react'
 import { useSubscription } from '../lib/useSubscription'
 import { supabase } from '../lib/supabase'
+import { fetchWithRetry, sleep } from '../lib/apiRetry'
 import { Button } from '../components/ui/button'
 import { BackButton } from '../components/BackButton'
 import { SuperAgenteGuia } from '../components/SuperAgenteGuia'
+
+// Espaça as gerações de voz para não estourar o limite/minuto do free tier.
+const VOICE_THROTTLE_MS = 3500
 
 export const Route = createFileRoute('/super-agente')({
   component: SuperAgente,
@@ -115,6 +119,8 @@ function SuperAgente() {
   const [generatingAll, setGeneratingAll] = useState(false)
   const [audioProgress, setAudioProgress] = useState({ done: 0, total: 0 })
   const [isZipping, setIsZipping] = useState(false)
+  // Aviso amigável quando bate o limite da API e o app espera/re-tenta sozinho.
+  const [rateNotice, setRateNotice] = useState('')
 
   async function handleGenerate() {
     if (!nicho.trim()) return
@@ -138,11 +144,16 @@ function SuperAgente() {
     setAudioProgress({ done: 0, total: 0 })
 
     try {
-      const response = await fetch('/api/gemini/generate-strategy', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nicho, tom, qtdPosts, instagram, servicos, tomMarca, cta, voz }) // V1.6: voz forçada ('' = automático)
-      })
+      const response = await fetchWithRetry(
+        '/api/gemini/generate-strategy',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ nicho, tom, qtdPosts, instagram, servicos, tomMarca, cta, voz }) // V1.6: voz forçada ('' = automático)
+        },
+        { onWait: (s) => setRateNotice(`⏳ Limite temporário da API. Aguardando ${s}s e tentando de novo...`) },
+      )
+      setRateNotice('')
 
       const data = await response.json()
       if (!response.ok) {
@@ -173,11 +184,15 @@ function SuperAgente() {
   }
 
   async function generateAudioFor(post: Post): Promise<Blob> {
-    const response = await fetch('/api/gemini/text-to-speech', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text: `${post.hook} ${post.roteiro}`, voiceName: post.vozSugerida })
-    })
+    const response = await fetchWithRetry(
+      '/api/gemini/text-to-speech',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: `${post.hook} ${post.roteiro}`, voiceName: post.vozSugerida })
+      },
+      { onWait: (s) => setRateNotice(`⏳ Limite temporário da API. Aguardando ${s}s e tentando de novo...`) },
+    )
     if (!response.ok) {
       const data = await response.json().catch(() => null)
       throw new Error(data?.error || `Erro na API: ${response.status}`)
@@ -189,6 +204,7 @@ function SuperAgente() {
     if (!posts) return
     setGeneratingAll(true)
     setAudioErrors({})
+    setRateNotice('')
     setAudioProgress({ done: 0, total: posts.length })
 
     const blobs: Record<number, Blob> = { ...audioBlobs }
@@ -203,13 +219,17 @@ function SuperAgente() {
       try {
         blobs[post.dia] = await generateAudioFor(post)
         setAudioBlobs({ ...blobs })
+        setRateNotice('')
       } catch (err) {
         errs[post.dia] = err instanceof Error ? err.message : 'Erro ao gerar áudio'
         setAudioErrors({ ...errs })
       }
       setAudioProgress({ done: i + 1, total: posts.length })
+      // Throttle: espaça as chamadas p/ não estourar o limite/min (exceto na última).
+      if (i < posts.length - 1) await sleep(VOICE_THROTTLE_MS)
     }
 
+    setRateNotice('')
     setGeneratingAll(false)
   }
 
@@ -402,6 +422,13 @@ function SuperAgente() {
           <div className="mb-6 p-4 bg-red-900/30 border border-red-700 rounded-xl flex items-center gap-3">
             <AlertCircle className="w-5 h-5 text-red-400 shrink-0" />
             <span className="text-red-300">{error}</span>
+          </div>
+        )}
+
+        {rateNotice && (
+          <div className="mb-6 p-4 bg-yellow-900/20 border border-yellow-700/50 rounded-xl flex items-center gap-3">
+            <Loader2 className="w-5 h-5 text-yellow-400 shrink-0 animate-spin" />
+            <span className="text-yellow-300">{rateNotice}</span>
           </div>
         )}
 
@@ -663,6 +690,7 @@ function SuperAgente() {
                 />
               </div>
             )}
+            {rateNotice && <p className="text-xs text-yellow-400">{rateNotice}</p>}
             <p className="text-xs text-gray-600">
               Observação: o plano gratuito das APIs de voz limita a quantidade de áudios por dia. Se alguns falharem,
               habilite o faturamento no Google/ElevenLabs para gerar todos.
