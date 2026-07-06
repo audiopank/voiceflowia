@@ -10,6 +10,7 @@ import { useSubscription } from '../lib/useSubscription'
 import { supabase } from '../lib/supabase'
 import { Button } from '../components/ui/button'
 import { BackButton } from '../components/BackButton'
+import { SuperAgenteGuia } from '../components/SuperAgenteGuia'
 
 export const Route = createFileRoute('/super-agente')({
   component: SuperAgente,
@@ -206,6 +207,18 @@ function SuperAgente() {
     if (!blob) return
     const audio = new Audio(URL.createObjectURL(blob))
     audio.play()
+  }
+
+  // Agente Guia: adiciona um serviço à lista (campo é uma lista separada por vírgula),
+  // sem duplicar. Deixa o cliente ir "montando" a partir das sugestões da IA.
+  function appendServico(servico: string) {
+    const novo = servico.trim()
+    if (!novo) return
+    setServicos((prev) => {
+      const parts = prev.split(',').map((s) => s.trim()).filter(Boolean)
+      if (parts.some((p) => p.toLowerCase() === novo.toLowerCase())) return prev
+      return [...parts, novo].join(', ')
+    })
   }
 
   // Copia o texto pro clipboard e mostra "Copiado!" por ~1.5s.
@@ -748,6 +761,15 @@ function SuperAgente() {
           </div>
         )}
       </div>
+
+      {/* Agente Guia flutuante: ensina o passo a passo e sugere frases pela IA. */}
+      <SuperAgenteGuia
+        nicho={nicho}
+        servicos={servicos}
+        onAppendServico={appendServico}
+        onSetTomMarca={setTomMarca}
+        onSetCta={setCta}
+      />
     </div>
   )
 }

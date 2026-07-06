@@ -11,6 +11,8 @@ function apiDevBridge(): Plugin {
     '/api/gemini/text-to-speech': './api/gemini/text-to-speech.ts',
     '/api/gemini/generate-content': './api/gemini/generate-content.ts',
     '/api/gemini/generate-strategy': './api/gemini/generate-strategy.ts',
+    '/api/gemini/suggest-brand': './api/gemini/suggest-brand.ts',
+    '/api/gemini/generate-hooks': './api/gemini/generate-hooks.ts',
     '/api/elevenlabs/text-to-speech': './api/elevenlabs/text-to-speech.ts',
   }
 

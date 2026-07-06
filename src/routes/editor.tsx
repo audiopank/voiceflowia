@@ -48,7 +48,9 @@ const GEMINI_VOICES: Voice[] = [
 function Editor() {
   const { plan, loading: loadingSubscription } = useSubscription()
   const [text, setText] = useState('Olá, isso é um teste de voz.')
-  const [provider, setProvider] = useState<Provider>('elevenlabs')
+  // Padrao Gemini: as vozes da ElevenLabs sao de biblioteca e retornam 402
+  // (paid_plan_required) em contas free. Gemini (Zephyr/Puck/...) funciona no free.
+  const [provider, setProvider] = useState<Provider>('gemini')
   const [voices, setVoices] = useState<Voice[]>([])
   const [selectedVoice, setSelectedVoice] = useState('')
   const [isGenerating, setIsGenerating] = useState(false)
@@ -191,20 +193,6 @@ function Editor() {
               <button
                 type="button"
                 onClick={() => {
-                  setProvider('elevenlabs')
-                  setAudioReady(false)
-                }}
-                className={`p-3 rounded-lg border text-sm font-bold transition-colors ${
-                  provider === 'elevenlabs'
-                    ? 'bg-[#8B5CF6] border-[#8B5CF6] text-white'
-                    : 'bg-[#1A1A1A] border-gray-700 text-gray-300 hover:border-gray-500'
-                }`}
-              >
-                ElevenLabs
-              </button>
-              <button
-                type="button"
-                onClick={() => {
                   setProvider('gemini')
                   setAudioReady(false)
                 }}
@@ -215,6 +203,19 @@ function Editor() {
                 }`}
               >
                 Gemini
+              </button>
+              {/* ElevenLabs desabilitado: as vozes disponiveis sao de biblioteca e
+                  exigem plano pago (402). Reabilitar quando houver assinatura. */}
+              <button
+                type="button"
+                disabled
+                title="Requer plano pago da ElevenLabs"
+                className="p-3 rounded-lg border text-sm font-bold bg-[#1A1A1A] border-gray-800 text-gray-600 cursor-not-allowed"
+              >
+                ElevenLabs
+                <span className="block text-[10px] font-normal text-gray-500">
+                  requer plano pago
+                </span>
               </button>
             </div>
           </div>
