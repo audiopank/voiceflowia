@@ -19,7 +19,7 @@ interface Post {
 }
 
 function Agente() {
-  const { plan, loading: loadingSubscription } = useSubscription()
+  const { hasAccess, loading: loadingSubscription, trial, refresh } = useSubscription()
   const [nicho, setNicho] = useState('')
   const [tom, setTom] = useState('Profissional')
   const [qtdPosts, setQtdPosts] = useState(30)
@@ -31,10 +31,18 @@ function Agente() {
   const [audioErrors, setAudioErrors] = useState<Record<number, string>>({})
   const [generatingAudioFor, setGeneratingAudioFor] = useState<number | null>(null)
 
-  const hasAccess = plan === 'crescimento' || plan === 'dominacao'
-
   async function handleGenerateContent() {
     if (!nicho.trim()) return
+
+    // Trial: consome 1 geração (o servidor valida os 7 dias + limite de 10).
+    if (trial.isTrial) {
+      const { error: trialErr } = await supabase.rpc('use_trial_generation')
+      if (trialErr) {
+        await refresh()
+        setError('Seu trial acabou. Assine para continuar gerando.')
+        return
+      }
+    }
 
     setIsGenerating(true)
     setError('')
@@ -66,6 +74,9 @@ function Agente() {
           console.error('Erro ao salvar conteúdo no Supabase:', insertError)
         }
       }
+
+      // Atualiza a contagem do trial no banner do topo.
+      if (trial.isTrial) void refresh()
     } catch (err) {
       console.error('=== ERRO ao gerar conteúdo ===', err)
       setError(err instanceof Error ? err.message : 'Erro ao gerar conteúdo')

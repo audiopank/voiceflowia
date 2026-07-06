@@ -17,7 +17,7 @@ function Dashboard() {
   const subscription = useSubscription()
   const navigate = useNavigate()
 
-  const hasContentAgentFeature = subscription.plan === 'crescimento' || subscription.plan === 'dominacao'
+  const hasContentAgentFeature = subscription.hasContentAgentFeature
   const subscriptionActive = subscription.status === 'active'
 
   useEffect(() => {

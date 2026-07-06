@@ -46,7 +46,7 @@ const GEMINI_VOICES: Voice[] = [
 ]
 
 function Editor() {
-  const { plan, loading: loadingSubscription } = useSubscription()
+  const { hasAccess, loading: loadingSubscription } = useSubscription()
   const [text, setText] = useState('Olá, isso é um teste de voz.')
   // Padrao Gemini: as vozes da ElevenLabs sao de biblioteca e retornam 402
   // (paid_plan_required) em contas free. Gemini (Zephyr/Puck/...) funciona no free.
@@ -59,7 +59,6 @@ function Editor() {
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null)
   const [loadingVoices, setLoadingVoices] = useState(true)
 
-  const hasAccess = plan === 'crescimento' || plan === 'dominacao'
 
   // Carregar vozes do provedor selecionado
   useEffect(() => {

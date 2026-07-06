@@ -97,11 +97,21 @@ function Precos() {
         <p className="text-xl text-gray-400 mb-10 max-w-2xl mx-auto">
           A IA que gerencia seus áudios, conteúdos e agentes para sua empresa.
         </p>
-        {heroPlan && (
-          <Button size="lg" onClick={() => openCheckout(heroPlan.kiwify_url)}>
-            {heroPlan.cta_label}
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+          <Button
+            size="lg"
+            className="bg-[#22C55E] hover:bg-[#16A34A]"
+            onClick={() => navigate({ to: '/cadastro', search: { trial: '1' } })}
+          >
+            Testar Grátis por 7 Dias 🚀
           </Button>
-        )}
+          {heroPlan && (
+            <Button size="lg" variant="outline" onClick={() => openCheckout(heroPlan.kiwify_url)}>
+              {heroPlan.cta_label}
+            </Button>
+          )}
+        </div>
+        <p className="text-sm text-gray-500 mt-4">Sem cartão. 10 gerações grátis para sentir o valor.</p>
       </section>
 
       {/* Pricing Cards */}
