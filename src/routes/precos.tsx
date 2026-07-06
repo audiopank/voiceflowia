@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { fetchActivePlans, DEFAULT_PLANS, type Plan } from "../lib/plans"
+import { Logo } from "../components/Logo"
 
 export const Route = createFileRoute("/precos")({
   component: Precos,
@@ -82,7 +83,7 @@ function Precos() {
     <div className="min-h-screen bg-[#0A0A0A] text-white">
       {/* Header */}
       <header className="container mx-auto px-6 py-6 flex justify-between items-center">
-        <h1 className="text-2xl font-bold text-white">VoiceFlow IA</h1>
+        <Logo />
         <Button variant="outline" onClick={() => navigate({ to: "/login" })}>
           Entrar
         </Button>
