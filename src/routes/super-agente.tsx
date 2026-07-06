@@ -92,6 +92,7 @@ function SuperAgente() {
   const [servicos, setServicos] = useState('')
   const [tomMarca, setTomMarca] = useState('')
   const [cta, setCta] = useState('')
+  const [diferenciais, setDiferenciais] = useState('')
 
   // V1.6 Seletor de voz. '' = Automático (IA decide entre Zephyr/Puck).
   const [voz, setVoz] = useState('')
@@ -149,7 +150,7 @@ function SuperAgente() {
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ nicho, tom, qtdPosts, instagram, servicos, tomMarca, cta, voz }) // V1.6: voz forçada ('' = automático)
+          body: JSON.stringify({ nicho, tom, qtdPosts, instagram, servicos, tomMarca, cta, diferenciais, voz }) // V1.6: voz forçada ('' = automático)
         },
         { onWait: (s) => setRateNotice(`⏳ Limite temporário da API. Aguardando ${s}s e tentando de novo...`) },
       )
@@ -535,6 +536,23 @@ function SuperAgente() {
                   className="w-full p-3 bg-[#1A1A1A] border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-[#8B5CF6]"
                 />
               </div>
+            </div>
+
+            {/* Texto livre p/ diferenciais/regras do negócio (a IA usa fiel ao escrito). */}
+            <div className="mt-4">
+              <label className="block text-sm font-medium text-gray-300 mb-2">
+                Diferenciais / Informações importantes <span className="text-gray-500 font-normal">(opcional)</span>
+              </label>
+              <textarea
+                value={diferenciais}
+                onChange={(e) => setDiferenciais(e.target.value)}
+                rows={3}
+                placeholder="Ex: Acompanhamento com fonoaudióloga no pós-venda. Retornos de consulta gratuitos para quem comprou o aparelho. O agendamento é feito pela própria empresa."
+                className="w-full p-3 bg-[#1A1A1A] border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-[#8B5CF6] resize-none"
+              />
+              <p className="text-xs text-gray-600 mt-1">
+                Regras, garantias, pós-venda, condições... A IA inclui isso nos roteiros, fiel ao que você escrever.
+              </p>
             </div>
           </div>
 

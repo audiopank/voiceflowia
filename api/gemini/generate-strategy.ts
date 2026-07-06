@@ -57,6 +57,7 @@ interface Marca {
   servicos: string
   tomMarca: string
   cta: string
+  diferenciais: string
 }
 
 function buildPrompt(nicho: string, tom: string, qtdPosts: number, marca: Marca): string {
@@ -65,6 +66,12 @@ function buildPrompt(nicho: string, tom: string, qtdPosts: number, marca: Marca)
   const servicosLinha = marca.servicos || 'serviços típicos do nicho'
   const ctaObrigatorio = marca.cta || 'Clique no link da bio'
   const instaLinha = marca.instagram || 'não informado'
+  const diferenciaisContexto = marca.diferenciais
+    ? `\n- Diferenciais e informações importantes (destaque isto no conteúdo, SEM inventar nada além do que está escrito aqui): ${marca.diferenciais}`
+    : ''
+  const diferenciaisRegra = marca.diferenciais
+    ? '\n- Quando fizer sentido, destaque os diferenciais informados nos roteiros e legendas, fiel ao que foi dito (não invente benefícios nem regras).'
+    : ''
 
   return `Você é um estrategista de marketing digital sênior brasileiro. Crie um plano de conteúdo COMPLETO para o nicho: "${nicho}".
 
@@ -72,7 +79,7 @@ CONTEXTO DA MARCA (use para deixar TODO o conteúdo 100% na cara dessa marca esp
 - Instagram de referência: ${instaLinha}
 - Serviços que devem aparecer nos posts: ${servicosLinha}
 - Tom de voz obrigatório: ${tomObrigatorio}
-- CTA que deve aparecer em 100% dos posts: ${ctaObrigatorio}
+- CTA que deve aparecer em 100% dos posts: ${ctaObrigatorio}${diferenciaisContexto}
 
 Retorne um objeto JSON com dois campos: "estrategia" e "posts".
 
@@ -94,7 +101,7 @@ Retorne um objeto JSON com dois campos: "estrategia" e "posts".
 REGRAS OBRIGATÓRIAS para os posts:
 - Cada roteiro deve citar pelo menos 1 serviço da lista: ${servicosLinha}
 - A legenda de TODOS os posts deve terminar com o CTA: "${ctaObrigatorio}"
-- Mantenha o tom "${tomObrigatorio}" em 100% dos roteiros e legendas
+- Mantenha o tom "${tomObrigatorio}" em 100% dos roteiros e legendas${diferenciaisRegra}
 
 Responda apenas com o objeto JSON, sem texto adicional.`
 }
@@ -116,7 +123,7 @@ export default async function handler(request: Request): Promise<Response> {
       )
     }
 
-    const { nicho, tom, qtdPosts, instagram, servicos, tomMarca, cta, voz } = await request.json()
+    const { nicho, tom, qtdPosts, instagram, servicos, tomMarca, cta, diferenciais, voz } = await request.json()
 
     if (!nicho || typeof nicho !== 'string') {
       return new Response(
@@ -135,6 +142,7 @@ export default async function handler(request: Request): Promise<Response> {
       servicos: s(servicos),
       tomMarca: s(tomMarca),
       cta: s(cta),
+      diferenciais: s(diferenciais),
     }
 
     // V1.6: voz forçada. Só aceita as vozes válidas; qualquer outra coisa = automático.
