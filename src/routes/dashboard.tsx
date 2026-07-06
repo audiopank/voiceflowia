@@ -5,20 +5,44 @@ import { useSubscription } from '../lib/useSubscription'
 import { Lock, Volume2, Settings, Rocket } from 'lucide-react'
 import { BackButton } from '../components/BackButton'
 import { ADMIN_EMAIL } from '../lib/plans'
+import { TRIAL_GENERATIONS } from '../lib/trial'
 
 export const Route = createFileRoute("/dashboard")({
   component: Dashboard,
 })
 
+// Nome amigável do plano (o slug do trial é feio para exibir).
+function planLabel(plan: string | null): string {
+  switch (plan) {
+    case 'User_7_dias_Free': return 'Trial 7 dias'
+    case 'crescimento': return 'Crescimento'
+    case 'dominacao': return 'Dominação'
+    case 'inicial': return 'Inicial'
+    default: return plan || 'Sem plano'
+  }
+}
+
+// Mês atual calculado (ex: "Julho de 2026"), sem depender de dado mockado.
+function mesAtual(): string {
+  const s = new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })
+  return s.charAt(0).toUpperCase() + s.slice(1)
+}
+
 function Dashboard() {
   const [user, setUser] = useState<any>(null)
-  const [data, setData] = useState<any>(null)
+  const [stats, setStats] = useState({ projetos: 0, posts: 0 })
   const [loading, setLoading] = useState(true)
   const subscription = useSubscription()
   const navigate = useNavigate()
 
   const hasContentAgentFeature = subscription.hasContentAgentFeature
   const subscriptionActive = subscription.status === 'active'
+
+  // Trial mostra o que sobra das 10; pago é ilimitado; sem acesso mostra "—".
+  const trial = subscription.trial
+  const geracoesRestantes = trial.isTrial
+    ? `${trial.generationsLeft} de ${TRIAL_GENERATIONS}`
+    : hasContentAgentFeature ? 'Ilimitado' : '—'
 
   useEffect(() => {
     checkUser()
@@ -35,24 +59,21 @@ function Dashboard() {
   }
 
   async function fetchData(user: any) {
-    console.log('Buscando dados para usuário:', user)
-    
-    // Primeiro tenta por user_id
-    let { data, error } = await supabase.from('Locutores IA Painel').select('*').eq('user_id', user.id)
-    
-    // Se não encontrar, tenta por cliente_email
-    if ((!data || data.length === 0) && !error) {
-      console.log('Nenhum dado por user_id, tentando por cliente_email:', user.email)
-      const result = await supabase.from('Locutores IA Painel').select('*').eq('cliente_email', user.email)
-      data = result.data
-      error = result.error
-    }
-    
+    // Dado REAL: conteúdos gerados pelo próprio usuário (tabela contents).
+    const { data, error } = await supabase
+      .from('contents')
+      .select('posts_json')
+      .eq('user_id', user.id)
+
     if (error) {
-      console.error('Erro ao buscar dados:', error)
-    } else {
-      console.log('Dados encontrados:', data)
-      setData(data && data.length > 0 ? data[0] : null)
+      console.error('Erro ao buscar conteúdos:', error)
+    } else if (data) {
+      const projetos = data.length
+      const posts = data.reduce(
+        (sum, row) => sum + (Array.isArray(row.posts_json) ? row.posts_json.length : 0),
+        0,
+      )
+      setStats({ projetos, posts })
     }
     setLoading(false)
   }
@@ -81,7 +102,7 @@ function Dashboard() {
             <h1 className="text-3xl font-bold">Dashboard - VoiceFlow IA</h1>
             {subscription.plan && (
               <p className="text-[#8B5CF6] mt-1">
-                Plano: {subscription.plan.charAt(0).toUpperCase() + subscription.plan.slice(1)} {subscriptionActive ? '✅' : '(Inativo)'}
+                Plano: {planLabel(subscription.plan)} {subscriptionActive ? '✅' : '(Inativo)'}
               </p>
             )}
           </div>
@@ -101,27 +122,27 @@ function Dashboard() {
           </div>
         </div>
         
-        {/* Métricas */}
+        {/* Métricas — todas reais (contents + trial). */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 mb-8">
           <div className="bg-[#111111] border border-gray-800 rounded-lg p-6 shadow-sm">
             <h3 className="text-sm font-medium text-gray-400 mb-1">Mês</h3>
-            <p className="text-2xl font-bold">{data?.mes || 'Julho 2025'}</p>
+            <p className="text-2xl font-bold">{mesAtual()}</p>
           </div>
           <div className="bg-[#111111] border border-gray-800 rounded-lg p-6 shadow-sm">
             <h3 className="text-sm font-medium text-gray-400 mb-1">Projetos Criados</h3>
-            <p className="text-2xl font-bold">{data?.seguidores ? (data.seguidores / 100).toFixed(0) : '12'}</p>
+            <p className="text-2xl font-bold">{stats.projetos}</p>
           </div>
           <div className="bg-[#111111] border border-gray-800 rounded-lg p-6 shadow-sm">
-            <h3 className="text-sm font-medium text-gray-400 mb-1">Minutos Gerados</h3>
-            <p className="text-2xl font-bold">{data?.alcance ? (data.alcance / 1000).toFixed(0) : '45'}</p>
+            <h3 className="text-sm font-medium text-gray-400 mb-1">Posts Gerados</h3>
+            <p className="text-2xl font-bold">{stats.posts}</p>
           </div>
           <div className="bg-[#111111] border border-gray-800 rounded-lg p-6 shadow-sm">
-            <h3 className="text-sm font-medium text-gray-400 mb-1">Créditos Restantes</h3>
-            <p className="text-2xl font-bold">{data?.receita ? Math.floor(data.receita / 10) : '180'}</p>
+            <h3 className="text-sm font-medium text-gray-400 mb-1">Gerações Restantes</h3>
+            <p className="text-2xl font-bold">{geracoesRestantes}</p>
           </div>
           <div className="bg-[#111111] border border-gray-800 rounded-lg p-6 shadow-sm">
             <h3 className="text-sm font-medium text-gray-400 mb-1">Plano Atual</h3>
-            <p className="text-2xl font-bold text-[#8B5CF6]">{subscription.plan ? subscription.plan.charAt(0).toUpperCase() + subscription.plan.slice(1) : 'Inicial'}</p>
+            <p className="text-2xl font-bold text-[#8B5CF6]">{planLabel(subscription.plan)}</p>
           </div>
         </div>
 
