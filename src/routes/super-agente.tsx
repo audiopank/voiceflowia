@@ -4,7 +4,7 @@ import JSZip from 'jszip'
 import { toPng } from 'html-to-image'
 import {
   Lock, Loader2, AlertCircle, Rocket, Volume2, Download, Play, Package,
-  Users, Target, Hash, Clock, Megaphone, CheckCircle2, Copy, Check, ImagePlus, X
+  Users, Target, Hash, Clock, Megaphone, CheckCircle2, Copy, Check, ImagePlus, X, Pencil
 } from 'lucide-react'
 import { useSubscription } from '../lib/useSubscription'
 import { supabase } from '../lib/supabase'
@@ -262,6 +262,13 @@ function SuperAgente() {
     } catch {
       // navegador sem permissão de clipboard — ignora silenciosamente
     }
+  }
+
+  // Edição inline dos textos gerados (pedido de cliente): atualiza um campo do post.
+  function updatePostField(dia: number, field: 'hook' | 'roteiro' | 'legenda', value: string) {
+    setPosts((prev) =>
+      prev ? prev.map((p) => (p.dia === dia ? { ...p, [field]: value } : p)) : prev
+    )
   }
 
   // Sobe a imagem/logo do cliente pra um card (fica só no navegador até baixar o ZIP).
@@ -746,16 +753,37 @@ function SuperAgente() {
                   )}
                 </div>
                 <div className={brandLogo ? 'pr-24' : ''}>
-                  <FieldHeader label="Hook (3s)" copiedKey={copied} thisKey={`${post.dia}-hook`} onCopy={() => handleCopy(`${post.dia}-hook`, post.hook)} />
-                  <p className="text-white font-medium">{post.hook}</p>
+                  <PostField
+                    label="Hook (3s)"
+                    value={post.hook}
+                    copyKey={`${post.dia}-hook`}
+                    copiedKey={copied}
+                    onCopy={() => handleCopy(`${post.dia}-hook`, post.hook)}
+                    onSave={(v) => updatePostField(post.dia, 'hook', v)}
+                    displayClassName="text-white font-medium"
+                  />
                 </div>
                 <div>
-                  <FieldHeader label="Roteiro (20s)" copiedKey={copied} thisKey={`${post.dia}-roteiro`} onCopy={() => handleCopy(`${post.dia}-roteiro`, post.roteiro)} />
-                  <p className="text-gray-300 text-sm">{post.roteiro}</p>
+                  <PostField
+                    label="Roteiro (20s)"
+                    value={post.roteiro}
+                    copyKey={`${post.dia}-roteiro`}
+                    copiedKey={copied}
+                    onCopy={() => handleCopy(`${post.dia}-roteiro`, post.roteiro)}
+                    onSave={(v) => updatePostField(post.dia, 'roteiro', v)}
+                    displayClassName="text-gray-300 text-sm"
+                  />
                 </div>
                 <div>
-                  <FieldHeader label="Legenda" copiedKey={copied} thisKey={`${post.dia}-legenda`} onCopy={() => handleCopy(`${post.dia}-legenda`, post.legenda)} />
-                  <p className="text-gray-300 text-sm">{post.legenda}</p>
+                  <PostField
+                    label="Legenda"
+                    value={post.legenda}
+                    copyKey={`${post.dia}-legenda`}
+                    copiedKey={copied}
+                    onCopy={() => handleCopy(`${post.dia}-legenda`, post.legenda)}
+                    onSave={(v) => updatePostField(post.dia, 'legenda', v)}
+                    displayClassName="text-gray-300 text-sm"
+                  />
                 </div>
 
                 {/* Upload de imagem/logo do cliente por card (client-side, entra no ZIP). */}
@@ -831,19 +859,118 @@ function SuperAgente() {
   )
 }
 
-// Cabeçalho de cada texto do post: rótulo + botão de copiar com feedback.
-function FieldHeader({ label, copiedKey, thisKey, onCopy }: { label: string; copiedKey: string; thisKey: string; onCopy: () => void }) {
-  const isCopied = copiedKey === thisKey
+// Texto de um post: rótulo + Copiar + Editar (lápis) e edição inline.
+// O textarea de edição é `no-export` p/ não vazar na exportação PNG do card.
+function PostField({
+  label,
+  value,
+  copyKey,
+  copiedKey,
+  onCopy,
+  onSave,
+  displayClassName,
+}: {
+  label: string
+  value: string
+  copyKey: string
+  copiedKey: string
+  onCopy: () => void
+  onSave: (next: string) => void
+  displayClassName: string
+}) {
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState(value)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const isCopied = copiedKey === copyKey
+
+  function autoGrow(el: HTMLTextAreaElement) {
+    el.style.height = 'auto'
+    el.style.height = `${el.scrollHeight}px`
+  }
+
+  function startEditing() {
+    setDraft(value)
+    setEditing(true)
+    // Foca e ajusta a altura no próximo tick, quando o textarea já existe.
+    requestAnimationFrame(() => {
+      const el = textareaRef.current
+      if (el) {
+        el.focus()
+        autoGrow(el)
+        el.setSelectionRange(el.value.length, el.value.length)
+      }
+    })
+  }
+
+  function save() {
+    onSave(draft.trim())
+    setEditing(false)
+  }
+
+  function cancel() {
+    setDraft(value)
+    setEditing(false)
+  }
+
   return (
-    <div className="flex items-center justify-between mb-1">
-      <p className="text-xs uppercase text-gray-500">{label}</p>
-      <button
-        onClick={onCopy}
-        title="Copiar texto"
-        className={`no-export flex items-center gap-1 text-xs transition-colors ${isCopied ? 'text-[#22C55E]' : 'text-gray-500 hover:text-[#8B5CF6]'}`}
-      >
-        {isCopied ? <><Check className="w-3.5 h-3.5" /> Copiado!</> : <><Copy className="w-3.5 h-3.5" /> Copiar</>}
-      </button>
+    <div>
+      <div className="flex items-center justify-between mb-1">
+        <p className="text-xs uppercase text-gray-500">{label}</p>
+        {!editing && (
+          <div className="no-export flex items-center gap-3">
+            <button
+              onClick={startEditing}
+              title="Editar texto"
+              aria-label={`Editar ${label}`}
+              className="flex items-center gap-1 text-xs text-gray-500 hover:text-[#8B5CF6] transition-colors"
+            >
+              <Pencil className="w-3.5 h-3.5" /> Editar
+            </button>
+            <button
+              onClick={onCopy}
+              title="Copiar texto"
+              className={`flex items-center gap-1 text-xs transition-colors ${isCopied ? 'text-[#22C55E]' : 'text-gray-500 hover:text-[#8B5CF6]'}`}
+            >
+              {isCopied ? <><Check className="w-3.5 h-3.5" /> Copiado!</> : <><Copy className="w-3.5 h-3.5" /> Copiar</>}
+            </button>
+          </div>
+        )}
+      </div>
+
+      {editing ? (
+        <div className="space-y-2">
+          <textarea
+            ref={textareaRef}
+            value={draft}
+            onChange={(e) => {
+              setDraft(e.target.value)
+              autoGrow(e.target)
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) save()
+              if (e.key === 'Escape') cancel()
+            }}
+            rows={2}
+            className="no-export w-full p-2 bg-[#1A1A1A] border border-[#8B5CF6] rounded-lg text-white text-sm leading-relaxed focus:outline-none resize-none overflow-hidden"
+          />
+          <div className="no-export flex gap-2">
+            <button
+              onClick={save}
+              className="flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg bg-[#22C55E] hover:bg-[#16A34A] text-white font-medium transition-colors"
+            >
+              <Check className="w-3.5 h-3.5" /> Salvar
+            </button>
+            <button
+              onClick={cancel}
+              className="flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg bg-[#1A1A1A] border border-gray-700 hover:bg-[#252525] text-gray-300 transition-colors"
+            >
+              <X className="w-3.5 h-3.5" /> Cancelar
+            </button>
+          </div>
+        </div>
+      ) : (
+        <p className={displayClassName}>{value}</p>
+      )}
     </div>
   )
 }

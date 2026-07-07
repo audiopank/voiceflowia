@@ -6,6 +6,7 @@ import { supabase } from '../lib/supabase'
 import { fetchWithRetry } from '../lib/apiRetry'
 import { Button } from '../components/ui/button'
 import { BackButton } from '../components/BackButton'
+import { EditableText } from '../components/EditableText'
 
 export const Route = createFileRoute('/agente')({
   component: Agente,
@@ -127,6 +128,12 @@ function Agente() {
     } finally {
       setGeneratingAudioFor(null)
     }
+  }
+
+  function updatePostField(dia: number, field: 'hook' | 'roteiro' | 'legenda', value: string) {
+    setPosts((prev) =>
+      prev ? prev.map((p) => (p.dia === dia ? { ...p, [field]: value } : p)) : prev
+    )
   }
 
   function handlePlayAudio(dia: number) {
@@ -268,18 +275,22 @@ function Agente() {
                     Voz: {post.vozSugerida}
                   </span>
                 </div>
-                <div>
-                  <p className="text-xs uppercase text-gray-500 mb-1">Hook (3s)</p>
-                  <p className="text-white font-medium">{post.hook}</p>
-                </div>
-                <div>
-                  <p className="text-xs uppercase text-gray-500 mb-1">Roteiro (20s)</p>
-                  <p className="text-gray-300 text-sm">{post.roteiro}</p>
-                </div>
-                <div>
-                  <p className="text-xs uppercase text-gray-500 mb-1">Legenda</p>
-                  <p className="text-gray-300 text-sm">{post.legenda}</p>
-                </div>
+                <EditableText
+                  label="Hook (3s)"
+                  value={post.hook}
+                  onChange={(v) => updatePostField(post.dia, 'hook', v)}
+                  displayClassName="text-white font-medium"
+                />
+                <EditableText
+                  label="Roteiro (20s)"
+                  value={post.roteiro}
+                  onChange={(v) => updatePostField(post.dia, 'roteiro', v)}
+                />
+                <EditableText
+                  label="Legenda"
+                  value={post.legenda}
+                  onChange={(v) => updatePostField(post.dia, 'legenda', v)}
+                />
 
                 {audioErrors[post.dia] && (
                   <p className="text-red-400 text-xs">{audioErrors[post.dia]}</p>

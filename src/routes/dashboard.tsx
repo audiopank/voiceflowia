@@ -213,9 +213,26 @@ function Dashboard() {
             )}
           </div>
           
-          <div className="bg-[#111111] border border-gray-800 rounded-lg p-6 shadow-sm">
-            <h3 className="text-xl font-semibold mb-3">Biblioteca de Vozes</h3>
-            <p className="text-gray-400">Gerenciar vozes disponíveis para seus projetos</p>
+          <div className={`border rounded-lg p-6 shadow-sm ${hasContentAgentFeature ? 'bg-[#111111] border-gray-800 hover:border-[#8B5CF6] cursor-pointer' : 'bg-gray-900/50 border-gray-800/50'}`}
+               onClick={() => hasContentAgentFeature && navigate({ to: '/biblioteca' })}>
+            <div className="flex items-center gap-2 mb-3">
+              <Volume2 className="w-6 h-6 text-[#8B5CF6]" />
+              <h3 className="text-xl font-semibold">Biblioteca de Vozes</h3>
+              {!hasContentAgentFeature && <Lock className="w-4 h-4 text-gray-500" />}
+            </div>
+            {hasContentAgentFeature ? (
+              <p className="text-gray-400">Ouça, compare e favorite as vozes dos seus projetos</p>
+            ) : (
+              <div className="text-center">
+                <p className="text-gray-500 mb-3">Funcionalidade disponível apenas nos planos Crescimento e Dominação</p>
+                <button
+                  onClick={(e) => { e.stopPropagation(); navigate({ to: '/precos' }); }}
+                  className="bg-[#8B5CF6] text-white px-4 py-2 rounded-lg hover:bg-[#7C3AED] text-sm"
+                >
+                  Ver Planos
+                </button>
+              </div>
+            )}
           </div>
           
           {/* Agente de Conteúdo - Protegido */}

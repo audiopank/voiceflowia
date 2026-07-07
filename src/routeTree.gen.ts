@@ -15,6 +15,7 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as EditorRouteImport } from './routes/editor'
 import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as CadastroRouteImport } from './routes/cadastro'
+import { Route as BibliotecaRouteImport } from './routes/biblioteca'
 import { Route as AgenteRouteImport } from './routes/agente'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as IndexRouteImport } from './routes/index'
@@ -49,6 +50,11 @@ const CadastroRoute = CadastroRouteImport.update({
   path: '/cadastro',
   getParentRoute: () => rootRouteImport,
 } as any)
+const BibliotecaRoute = BibliotecaRouteImport.update({
+  id: '/biblioteca',
+  path: '/biblioteca',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AgenteRoute = AgenteRouteImport.update({
   id: '/agente',
   path: '/agente',
@@ -69,6 +75,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/admin': typeof AdminRoute
   '/agente': typeof AgenteRoute
+  '/biblioteca': typeof BibliotecaRoute
   '/cadastro': typeof CadastroRoute
   '/dashboard': typeof DashboardRoute
   '/editor': typeof EditorRoute
@@ -80,6 +87,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/admin': typeof AdminRoute
   '/agente': typeof AgenteRoute
+  '/biblioteca': typeof BibliotecaRoute
   '/cadastro': typeof CadastroRoute
   '/dashboard': typeof DashboardRoute
   '/editor': typeof EditorRoute
@@ -92,6 +100,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/admin': typeof AdminRoute
   '/agente': typeof AgenteRoute
+  '/biblioteca': typeof BibliotecaRoute
   '/cadastro': typeof CadastroRoute
   '/dashboard': typeof DashboardRoute
   '/editor': typeof EditorRoute
@@ -105,6 +114,7 @@ export interface FileRouteTypes {
     | '/'
     | '/admin'
     | '/agente'
+    | '/biblioteca'
     | '/cadastro'
     | '/dashboard'
     | '/editor'
@@ -116,6 +126,7 @@ export interface FileRouteTypes {
     | '/'
     | '/admin'
     | '/agente'
+    | '/biblioteca'
     | '/cadastro'
     | '/dashboard'
     | '/editor'
@@ -127,6 +138,7 @@ export interface FileRouteTypes {
     | '/'
     | '/admin'
     | '/agente'
+    | '/biblioteca'
     | '/cadastro'
     | '/dashboard'
     | '/editor'
@@ -139,6 +151,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AdminRoute: typeof AdminRoute
   AgenteRoute: typeof AgenteRoute
+  BibliotecaRoute: typeof BibliotecaRoute
   CadastroRoute: typeof CadastroRoute
   DashboardRoute: typeof DashboardRoute
   EditorRoute: typeof EditorRoute
@@ -191,6 +204,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof CadastroRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/biblioteca': {
+      id: '/biblioteca'
+      path: '/biblioteca'
+      fullPath: '/biblioteca'
+      preLoaderRoute: typeof BibliotecaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/agente': {
       id: '/agente'
       path: '/agente'
@@ -219,6 +239,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AdminRoute: AdminRoute,
   AgenteRoute: AgenteRoute,
+  BibliotecaRoute: BibliotecaRoute,
   CadastroRoute: CadastroRoute,
   DashboardRoute: DashboardRoute,
   EditorRoute: EditorRoute,

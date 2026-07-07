@@ -5,46 +5,11 @@ import { useSubscription } from '../lib/useSubscription'
 import { fetchWithRetry } from '../lib/apiRetry'
 import { Button } from '../components/ui/button'
 import { BackButton } from '../components/BackButton'
+import { ELEVENLABS_VOICES, GEMINI_VOICES, type Voice, type Provider } from '../lib/voices'
 
 export const Route = createFileRoute("/editor")({
   component: Editor,
 })
-
-interface Voice {
-  voice_id: string
-  name: string
-}
-
-type Provider = 'elevenlabs' | 'gemini'
-
-// IDs conferidos contra GET /v1/voices desta conta — os IDs "clássicos" dos
-// exemplos da ElevenLabs (Rachel, Domi, Bella...) são vozes de biblioteca e
-// retornam 402 (payment_required) em contas free via API.
-const ELEVENLABS_VOICES: Voice[] = [
-  { voice_id: 'HOfBIVLhom4mc9WvXfyH', name: 'Andrea Lot - Feminino (PT-BR)' },
-  { voice_id: '4za2kOXGgUd57HRSQ1fn', name: 'Lendário - Masculino (PT-BR)' },
-  { voice_id: 'CwhRBWXzGAHq8TQ4Fs17', name: 'Roger - Masculino (Americano)' },
-  { voice_id: 'EXAVITQu4vr4xnSDxMaL', name: 'Sarah - Feminino (Americano)' },
-  { voice_id: 'FGY2WhTYpPnrIDTdsKH5', name: 'Laura - Feminino (Americano)' },
-  { voice_id: 'IKne3meq5aSn9XLyUdCD', name: 'Charlie - Masculino (Australiano)' },
-  { voice_id: 'JBFqnCBsd6RMkjVDRZzb', name: 'George - Masculino (Britânico)' },
-  { voice_id: 'Xb7hH8MSUJpSbSDYk0k2', name: 'Alice - Feminino (Britânico)' },
-  { voice_id: 'XrExE9yKIg1WjnnlVkGX', name: 'Matilda - Feminino (Americano)' },
-  { voice_id: 'onwK4e9ZLuTAKqWW03F9', name: 'Daniel - Masculino (Britânico)' },
-  { voice_id: 'pFZP5JQG7iQjIQuC4Bku', name: 'Lily - Feminino (Britânico)' },
-  { voice_id: 'pNInz6obpgDQGcFmaJgB', name: 'Adam - Masculino (Americano)' }
-]
-
-const GEMINI_VOICES: Voice[] = [
-  { voice_id: 'Zephyr', name: 'Zephyr' },
-  { voice_id: 'Puck', name: 'Puck' },
-  { voice_id: 'Charon', name: 'Charon' },
-  { voice_id: 'Kore', name: 'Kore' },
-  { voice_id: 'Fenrir', name: 'Fenrir' },
-  { voice_id: 'Leda', name: 'Leda' },
-  { voice_id: 'Orus', name: 'Orus' },
-  { voice_id: 'Aoede', name: 'Aoede' }
-]
 
 function Editor() {
   const { hasAccess, loading: loadingSubscription } = useSubscription()

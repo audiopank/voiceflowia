@@ -36,3 +36,8 @@ dist-ssr
 *.sw?
 
 .vercel
+
+# TypeScript build artifacts (tsc -b compila vite.config.ts/tsconfig)
+*.tsbuildinfo
+vite.config.js
+vite.config.d.ts
