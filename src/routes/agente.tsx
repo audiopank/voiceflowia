@@ -93,9 +93,12 @@ function Agente() {
     }
   }
 
-  async function handleGenerateAudio(post: Post) {
-    setGeneratingAudioFor(post.dia)
-    setAudioErrors((prev) => ({ ...prev, [post.dia]: '' }))
+  // Chaveado pela posição na lista (index), não por post.dia: a IA às vezes não numera os
+  // dias de forma única/sequencial (comum em respostas maiores), e dois posts com o mesmo
+  // "dia" passavam a compartilhar o mesmo áudio/estado de botão entre si.
+  async function handleGenerateAudio(post: Post, index: number) {
+    setGeneratingAudioFor(index)
+    setAudioErrors((prev) => ({ ...prev, [index]: '' }))
 
     try {
       const response = await fetchWithRetry(
@@ -118,34 +121,34 @@ function Agente() {
       }
 
       const blob = await response.blob()
-      setAudioBlobs((prev) => ({ ...prev, [post.dia]: blob }))
+      setAudioBlobs((prev) => ({ ...prev, [index]: blob }))
     } catch (err) {
       console.error('=== ERRO ao gerar áudio ===', err)
       setAudioErrors((prev) => ({
         ...prev,
-        [post.dia]: err instanceof Error ? err.message : 'Erro ao gerar áudio'
+        [index]: err instanceof Error ? err.message : 'Erro ao gerar áudio'
       }))
     } finally {
       setGeneratingAudioFor(null)
     }
   }
 
-  function updatePostField(dia: number, field: 'hook' | 'roteiro' | 'legenda', value: string) {
+  function updatePostField(index: number, field: 'hook' | 'roteiro' | 'legenda', value: string) {
     setPosts((prev) =>
-      prev ? prev.map((p) => (p.dia === dia ? { ...p, [field]: value } : p)) : prev
+      prev ? prev.map((p, i) => (i === index ? { ...p, [field]: value } : p)) : prev
     )
   }
 
-  function handlePlayAudio(dia: number) {
-    const blob = audioBlobs[dia]
+  function handlePlayAudio(index: number) {
+    const blob = audioBlobs[index]
     if (!blob) return
     const url = URL.createObjectURL(blob)
     const audio = new Audio(url)
     audio.play()
   }
 
-  function handleDownloadAudio(dia: number) {
-    const blob = audioBlobs[dia]
+  function handleDownloadAudio(index: number, dia: number) {
+    const blob = audioBlobs[index]
     if (!blob) return
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
@@ -267,8 +270,8 @@ function Agente() {
 
         {posts && (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {posts.map((post) => (
-              <div key={post.dia} className="bg-[#111111] border border-gray-800 rounded-2xl p-5 space-y-3">
+            {posts.map((post, index) => (
+              <div key={index} className="bg-[#111111] border border-gray-800 rounded-2xl p-5 space-y-3">
                 <div className="flex items-center justify-between">
                   <span className="text-[#8B5CF6] font-bold">Dia {post.dia}</span>
                   <span className="text-xs px-2 py-1 rounded-full bg-[#1A1A1A] border border-gray-700 text-gray-400">
@@ -278,35 +281,35 @@ function Agente() {
                 <EditableText
                   label="Hook (3s)"
                   value={post.hook}
-                  onChange={(v) => updatePostField(post.dia, 'hook', v)}
+                  onChange={(v) => updatePostField(index, 'hook', v)}
                   displayClassName="text-white font-medium"
                 />
                 <EditableText
                   label="Roteiro (20s)"
                   value={post.roteiro}
-                  onChange={(v) => updatePostField(post.dia, 'roteiro', v)}
+                  onChange={(v) => updatePostField(index, 'roteiro', v)}
                 />
                 <EditableText
                   label="Legenda"
                   value={post.legenda}
-                  onChange={(v) => updatePostField(post.dia, 'legenda', v)}
+                  onChange={(v) => updatePostField(index, 'legenda', v)}
                 />
 
-                {audioErrors[post.dia] && (
-                  <p className="text-red-400 text-xs">{audioErrors[post.dia]}</p>
+                {audioErrors[index] && (
+                  <p className="text-red-400 text-xs">{audioErrors[index]}</p>
                 )}
 
-                {audioBlobs[post.dia] ? (
+                {audioBlobs[index] ? (
                   <div className="flex gap-2">
                     <Button
-                      onClick={() => handlePlayAudio(post.dia)}
+                      onClick={() => handlePlayAudio(index)}
                       className="flex-1 bg-[#1A1A1A] hover:bg-[#252525] flex items-center justify-center gap-2"
                     >
                       <Play className="w-4 h-4" />
                       Ouvir
                     </Button>
                     <Button
-                      onClick={() => handleDownloadAudio(post.dia)}
+                      onClick={() => handleDownloadAudio(index, post.dia)}
                       className="flex-1 bg-[#8B5CF6] hover:bg-[#7C3AED] flex items-center justify-center gap-2"
                     >
                       <Download className="w-4 h-4" />
@@ -315,11 +318,11 @@ function Agente() {
                   </div>
                 ) : (
                   <Button
-                    onClick={() => handleGenerateAudio(post)}
-                    disabled={generatingAudioFor === post.dia}
+                    onClick={() => handleGenerateAudio(post, index)}
+                    disabled={generatingAudioFor === index}
                     className="w-full bg-[#22C55E] hover:bg-[#16A34A] disabled:opacity-50 flex items-center justify-center gap-2"
                   >
-                    {generatingAudioFor === post.dia ? (
+                    {generatingAudioFor === index ? (
                       <>
                         <Loader2 className="w-4 h-4 animate-spin" />
                         Gerando Áudio...

@@ -1,10 +1,11 @@
-import { useRef, useState } from 'react'
+import { Fragment, useRef, useState } from 'react'
 import { createFileRoute } from '@tanstack/react-router'
 import JSZip from 'jszip'
 import { toPng } from 'html-to-image'
 import {
   Lock, Loader2, AlertCircle, Rocket, Volume2, Download, Play, Package,
-  Users, Target, Hash, Clock, Megaphone, CheckCircle2, Copy, Check, ImagePlus, X, Pencil
+  Users, Target, Hash, Clock, Megaphone, CheckCircle2, Copy, Check, ImagePlus, X, Pencil,
+  ChevronDown, ChevronUp
 } from 'lucide-react'
 import { useSubscription } from '../lib/useSubscription'
 import { supabase } from '../lib/supabase'
@@ -81,6 +82,90 @@ ${post.legenda}
 `
 }
 
+// Auto-ajuste simples de fonte pros slides do carrossel (1080x1350 cada, um bloco por slide):
+// texto longo = fonte menor, pra caber sem cortar no canvas fixo.
+function hookFontSize(hook: string): number {
+  if (hook.length > 140) return 30
+  if (hook.length > 90) return 38
+  if (hook.length > 50) return 46
+  return 54
+}
+
+// Roteiro e legenda usam a mesma régua — cada um sozinho no próprio slide, tem bem mais espaço
+// do que quando dividiam card com o resto.
+function bodyFontSize(text: string): number {
+  if (text.length > 500) return 20
+  if (text.length > 350) return 24
+  if (text.length > 220) return 28
+  return 32
+}
+
+type SlideKey = 'hook' | 'roteiro' | 'legenda' | 'imagem'
+const SLIDE_LABEL: Record<SlideKey, string> = {
+  hook: 'HOOK',
+  roteiro: 'ROTEIRO (20s)',
+  legenda: 'LEGENDA',
+  imagem: 'IMAGEM',
+}
+
+// Tamanho fixo dos slides do carrossel: 1080x1350 (4:5), o retrato mais alto que o Instagram
+// aceita sem cortar/recomprimir no feed.
+const EXPORT_W = 540
+const EXPORT_H = 675
+
+// Um slide do carrossel — chrome comum (dia, contador, logo, rótulo do bloco) + conteúdo
+// específico do bloco. Fica oculto (height:0/overflow:hidden na wrapper) até ser exportado.
+// "dia" aqui é só de exibição (rótulo "Dia N"); a chave de estado é sempre a posição na lista.
+function ExportSlide({
+  innerRef, dia, slide, index, total, brandLogo, children,
+}: {
+  innerRef: (el: HTMLDivElement | null) => void
+  dia: number
+  slide: SlideKey
+  index: number
+  total: number
+  brandLogo: string | null
+  children: React.ReactNode
+}) {
+  return (
+    <div style={{ height: 0, overflow: 'hidden' }}>
+      <div
+        ref={innerRef}
+        style={{
+          width: EXPORT_W,
+          height: EXPORT_H,
+          background: '#111111',
+          color: '#FFFFFF',
+          boxSizing: 'border-box',
+          padding: 36,
+          display: 'flex',
+          flexDirection: 'column',
+        }}
+      >
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+          <span style={{ color: '#8B5CF6', fontWeight: 700, fontSize: 18 }}>Dia {dia}</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span style={{ fontSize: 13, color: '#6B7280', fontWeight: 600 }}>{index}/{total}</span>
+            {brandLogo && (
+              <img
+                src={brandLogo}
+                alt=""
+                style={{ width: 40, height: 40, objectFit: 'contain', background: '#FFFFFF', borderRadius: 8, padding: 4 }}
+              />
+            )}
+          </div>
+        </div>
+        <p style={{ margin: '16px 0 0', fontSize: 13, letterSpacing: 1, color: '#8B5CF6', fontWeight: 700 }}>
+          {SLIDE_LABEL[slide]}
+        </p>
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', marginTop: 8 }}>
+          {children}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function SuperAgente() {
   const { hasAccess, loading: loadingSubscription, trial, refresh } = useSubscription()
   const [nicho, setNicho] = useState('')
@@ -106,9 +191,17 @@ function SuperAgente() {
   // Logo da marca: enviada 1x, aplicada em TODOS os cards. base64 p/ embutir no PNG.
   const [brandLogo, setBrandLogo] = useState<string | null>(null)
   const [logoError, setLogoError] = useState('')
-  const [exportingDia, setExportingDia] = useState<number | null>(null)
-  // Refs dos cards p/ exportar como PNG (html-to-image).
-  const cardRefs = useRef<Record<number, HTMLDivElement | null>>({})
+  const [exportingIndex, setExportingIndex] = useState<number | null>(null)
+  // Cada dia vira um carrossel de até 4 slides (Hook, Roteiro, Legenda, Imagem — pedido de
+  // cliente: um card por bloco, não um card só tentando encaixar tudo). Chave do ref:
+  // "<index>:<slide>" — pela posição na lista, não pelo número "dia" que a IA devolve (ela
+  // não garante unicidade/sequência, sobretudo em respostas maiores; duas posições com o
+  // mesmo "dia" já causaram cards compartilhando áudio/imagem entre si).
+  const exportRefs = useRef<Record<string, HTMLDivElement | null>>({})
+  const slideRefKey = (index: number, slide: SlideKey) => `${index}:${slide}`
+
+  // Estratégia vem recolhida (pedido de cliente): mostra só o resumo, detalhes sob demanda.
+  const [estrategiaAberta, setEstrategiaAberta] = useState(false)
 
   const [estrategia, setEstrategia] = useState<Estrategia | null>(null)
   const [posts, setPosts] = useState<Post[] | null>(null)
@@ -139,6 +232,7 @@ function SuperAgente() {
     setIsGenerating(true)
     setError('')
     setEstrategia(null)
+    setEstrategiaAberta(false)
     setPosts(null)
     setAudioBlobs({})
     setAudioErrors({})
@@ -213,16 +307,16 @@ function SuperAgente() {
 
     for (let i = 0; i < posts.length; i++) {
       const post = posts[i]
-      if (blobs[post.dia]) {
+      if (blobs[i]) {
         setAudioProgress({ done: i + 1, total: posts.length })
         continue
       }
       try {
-        blobs[post.dia] = await generateAudioFor(post)
+        blobs[i] = await generateAudioFor(post)
         setAudioBlobs({ ...blobs })
         setRateNotice('')
       } catch (err) {
-        errs[post.dia] = err instanceof Error ? err.message : 'Erro ao gerar áudio'
+        errs[i] = err instanceof Error ? err.message : 'Erro ao gerar áudio'
         setAudioErrors({ ...errs })
       }
       setAudioProgress({ done: i + 1, total: posts.length })
@@ -234,8 +328,8 @@ function SuperAgente() {
     setGeneratingAll(false)
   }
 
-  function handlePlayAudio(dia: number) {
-    const blob = audioBlobs[dia]
+  function handlePlayAudio(index: number) {
+    const blob = audioBlobs[index]
     if (!blob) return
     const audio = new Audio(URL.createObjectURL(blob))
     audio.play()
@@ -265,27 +359,27 @@ function SuperAgente() {
   }
 
   // Edição inline dos textos gerados (pedido de cliente): atualiza um campo do post.
-  function updatePostField(dia: number, field: 'hook' | 'roteiro' | 'legenda', value: string) {
+  function updatePostField(index: number, field: 'hook' | 'roteiro' | 'legenda', value: string) {
     setPosts((prev) =>
-      prev ? prev.map((p) => (p.dia === dia ? { ...p, [field]: value } : p)) : prev
+      prev ? prev.map((p, i) => (i === index ? { ...p, [field]: value } : p)) : prev
     )
   }
 
   // Sobe a imagem/logo do cliente pra um card (fica só no navegador até baixar o ZIP).
-  function handleImageUpload(dia: number, file: File | undefined) {
+  function handleImageUpload(index: number, file: File | undefined) {
     if (!file || !file.type.startsWith('image/')) return
     const ext = file.name.split('.').pop()?.toLowerCase() || 'png'
     setPostImages((prev) => {
-      if (prev[dia]) URL.revokeObjectURL(prev[dia].url)
-      return { ...prev, [dia]: { url: URL.createObjectURL(file), blob: file, ext } }
+      if (prev[index]) URL.revokeObjectURL(prev[index].url)
+      return { ...prev, [index]: { url: URL.createObjectURL(file), blob: file, ext } }
     })
   }
 
-  function handleRemoveImage(dia: number) {
+  function handleRemoveImage(index: number) {
     setPostImages((prev) => {
       const next = { ...prev }
-      if (next[dia]) URL.revokeObjectURL(next[dia].url)
-      delete next[dia]
+      if (next[index]) URL.revokeObjectURL(next[index].url)
+      delete next[index]
       return next
     })
   }
@@ -308,27 +402,42 @@ function SuperAgente() {
     reader.readAsDataURL(file)
   }
 
-  // Exporta um card como PNG com a logo embutida, sem os botões (chrome marcado com .no-export).
-  async function handleDownloadPng(dia: number) {
-    const node = cardRefs.current[dia]
-    if (!node) return
-    setExportingDia(dia)
+  function slidesFor(index: number): SlideKey[] {
+    const slides: SlideKey[] = ['hook', 'roteiro', 'legenda']
+    if (postImages[index]) slides.push('imagem')
+    return slides
+  }
+
+  // Exporta os templates ocultos (1080x1350 fixo cada) — um PNG por bloco (Hook, Roteiro,
+  // Legenda, Imagem), prontos pra virar um carrossel no Instagram. Nunca o card da tela,
+  // que tem altura variável e é o que causava o corte ao publicar.
+  async function handleDownloadPng(index: number, dia: number) {
+    const slides = slidesFor(index)
+    setExportingIndex(index)
     try {
-      const dataUrl = await toPng(node, {
-        pixelRatio: 2,
-        backgroundColor: '#111111',
-        filter: (n) => !(n instanceof HTMLElement && n.classList.contains('no-export')),
-      })
-      const a = document.createElement('a')
-      a.href = dataUrl
-      a.download = `card-dia-${String(dia).padStart(2, '0')}.png`
-      document.body.appendChild(a)
-      a.click()
-      document.body.removeChild(a)
+      for (let i = 0; i < slides.length; i++) {
+        const slide = slides[i]
+        const node = exportRefs.current[slideRefKey(index, slide)]
+        if (!node) continue
+        const dataUrl = await toPng(node, {
+          pixelRatio: 2,
+          width: EXPORT_W,
+          height: EXPORT_H,
+          backgroundColor: '#111111',
+        })
+        const a = document.createElement('a')
+        a.href = dataUrl
+        a.download = `card-dia-${String(dia).padStart(2, '0')}-${i + 1}-${slide}.png`
+        document.body.appendChild(a)
+        a.click()
+        document.body.removeChild(a)
+        // Pequeno intervalo entre downloads pro navegador não engasgar com vários de uma vez.
+        if (i < slides.length - 1) await sleep(200)
+      }
     } catch (err) {
       console.error('Erro ao exportar PNG:', err)
     } finally {
-      setExportingDia(null)
+      setExportingIndex(null)
     }
   }
 
@@ -342,28 +451,34 @@ function SuperAgente() {
       const roteiros = zip.folder('roteiros')
       const audios = zip.folder('audios')
       const imagens = zip.folder('imagens')
-      posts.forEach((p) => {
+      posts.forEach((p, index) => {
         roteiros?.file(`dia-${String(p.dia).padStart(2, '0')}.txt`, buildPostText(p))
-        const blob = audioBlobs[p.dia]
+        const blob = audioBlobs[index]
         if (blob) audios?.file(`dia-${String(p.dia).padStart(2, '0')}.wav`, blob)
-        const img = postImages[p.dia]
+        const img = postImages[index]
         if (img) imagens?.file(`dia-${String(p.dia).padStart(2, '0')}.${img.ext}`, img.blob)
       })
 
-      // Renderiza cada card como PNG (com a logo, sem os botões) e inclui no ZIP.
+      // Renderiza os 4 slides (Hook/Roteiro/Legenda/Imagem) de cada dia e inclui no ZIP.
       const cards = zip.folder('cards')
-      for (const p of posts) {
-        const node = cardRefs.current[p.dia]
-        if (!node) continue
-        try {
-          const dataUrl = await toPng(node, {
-            pixelRatio: 2,
-            backgroundColor: '#111111',
-            filter: (n) => !(n instanceof HTMLElement && n.classList.contains('no-export')),
-          })
-          cards?.file(`dia-${String(p.dia).padStart(2, '0')}.png`, dataUrl.split(',')[1], { base64: true })
-        } catch (err) {
-          console.error(`Erro ao renderizar card PNG do dia ${p.dia}:`, err)
+      for (let index = 0; index < posts.length; index++) {
+        const p = posts[index]
+        const slides = slidesFor(index)
+        for (let i = 0; i < slides.length; i++) {
+          const slide = slides[i]
+          const node = exportRefs.current[slideRefKey(index, slide)]
+          if (!node) continue
+          try {
+            const dataUrl = await toPng(node, {
+              pixelRatio: 2,
+              width: EXPORT_W,
+              height: EXPORT_H,
+              backgroundColor: '#111111',
+            })
+            cards?.file(`dia-${String(p.dia).padStart(2, '0')}-${i + 1}-${slide}.png`, dataUrl.split(',')[1], { base64: true })
+          } catch (err) {
+            console.error(`Erro ao renderizar slide ${slide} do dia ${p.dia}:`, err)
+          }
         }
       }
 
@@ -522,6 +637,7 @@ function SuperAgente() {
                   placeholder="Botox, Fios, Peelings"
                   className="w-full p-3 bg-[#1A1A1A] border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-[#8B5CF6]"
                 />
+                <p className="text-xs text-gray-600 mt-1">Só os nomes, separados por vírgula. Não cole texto de descrição aqui.</p>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">Tom da Marca</label>
@@ -532,6 +648,7 @@ function SuperAgente() {
                   placeholder="Autoridade médica, sofisticado"
                   className="w-full p-3 bg-[#1A1A1A] border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-[#8B5CF6]"
                 />
+                <p className="text-xs text-gray-600 mt-1">Duas ou três palavras de estilo (ex: "descontraído", "técnico"). Descrição da empresa vai no campo Diferenciais abaixo.</p>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">CTA Principal</label>
@@ -616,16 +733,25 @@ function SuperAgente() {
           </Button>
         </div>
 
-        {/* Estratégia */}
+        {/* Estratégia — vem recolhida: cliente vê o resumo e abre os detalhes só se quiser. */}
         {estrategia && (
-          <div className="bg-[#111111] border border-[#8B5CF6]/40 rounded-2xl p-6 mb-8 space-y-6">
+          <div className="bg-[#111111] border border-[#8B5CF6]/40 rounded-2xl p-6 mb-8 space-y-4">
             <h2 className="text-2xl font-bold text-white flex items-center gap-2">
               <Target className="w-6 h-6 text-[#8B5CF6]" />
               Estratégia do Mês
             </h2>
             <p className="text-gray-300">{estrategia.resumo}</p>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <button
+              onClick={() => setEstrategiaAberta((v) => !v)}
+              className="flex items-center gap-2 text-sm font-medium text-[#8B5CF6] hover:text-[#A78BFA] transition-colors"
+            >
+              {estrategiaAberta ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+              {estrategiaAberta ? 'Ocultar detalhes' : 'Ver detalhes completos (personas, pilares, hashtags...)'}
+            </button>
+
+            {estrategiaAberta && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
               <StrategyBlock icon={<Users className="w-5 h-5" />} title="Personas">
                 <ul className="space-y-2">
                   {estrategia.personas.map((p, i) => (
@@ -665,6 +791,7 @@ function SuperAgente() {
                 </ul>
               </StrategyBlock>
             </div>
+            )}
           </div>
         )}
 
@@ -726,10 +853,9 @@ function SuperAgente() {
         {/* Posts */}
         {posts && (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {posts.map((post) => (
+            {posts.map((post, index) => (
+              <Fragment key={index}>
               <div
-                key={post.dia}
-                ref={(el) => { cardRefs.current[post.dia] = el }}
                 className="relative bg-[#111111] border border-gray-800 rounded-2xl p-5 space-y-3"
               >
                 {/* Logo da marca aplicada automaticamente (fallback: nada se não houver). */}
@@ -742,7 +868,7 @@ function SuperAgente() {
                 )}
                 <div className={`flex items-center justify-between ${brandLogo ? 'pr-24' : ''}`}>
                   <span className="text-[#8B5CF6] font-bold">Dia {post.dia}</span>
-                  {audioBlobs[post.dia] ? (
+                  {audioBlobs[index] ? (
                     <span className="text-xs text-[#22C55E] flex items-center gap-1">
                       <CheckCircle2 className="w-3 h-3" /> áudio pronto
                     </span>
@@ -756,10 +882,10 @@ function SuperAgente() {
                   <PostField
                     label="Hook (3s)"
                     value={post.hook}
-                    copyKey={`${post.dia}-hook`}
+                    copyKey={`${index}-hook`}
                     copiedKey={copied}
-                    onCopy={() => handleCopy(`${post.dia}-hook`, post.hook)}
-                    onSave={(v) => updatePostField(post.dia, 'hook', v)}
+                    onCopy={() => handleCopy(`${index}-hook`, post.hook)}
+                    onSave={(v) => updatePostField(index, 'hook', v)}
                     displayClassName="text-white font-medium"
                   />
                 </div>
@@ -767,10 +893,10 @@ function SuperAgente() {
                   <PostField
                     label="Roteiro (20s)"
                     value={post.roteiro}
-                    copyKey={`${post.dia}-roteiro`}
+                    copyKey={`${index}-roteiro`}
                     copiedKey={copied}
-                    onCopy={() => handleCopy(`${post.dia}-roteiro`, post.roteiro)}
-                    onSave={(v) => updatePostField(post.dia, 'roteiro', v)}
+                    onCopy={() => handleCopy(`${index}-roteiro`, post.roteiro)}
+                    onSave={(v) => updatePostField(index, 'roteiro', v)}
                     displayClassName="text-gray-300 text-sm"
                   />
                 </div>
@@ -778,10 +904,10 @@ function SuperAgente() {
                   <PostField
                     label="Legenda"
                     value={post.legenda}
-                    copyKey={`${post.dia}-legenda`}
+                    copyKey={`${index}-legenda`}
                     copiedKey={copied}
-                    onCopy={() => handleCopy(`${post.dia}-legenda`, post.legenda)}
-                    onSave={(v) => updatePostField(post.dia, 'legenda', v)}
+                    onCopy={() => handleCopy(`${index}-legenda`, post.legenda)}
+                    onSave={(v) => updatePostField(index, 'legenda', v)}
                     displayClassName="text-gray-300 text-sm"
                   />
                 </div>
@@ -789,15 +915,15 @@ function SuperAgente() {
                 {/* Upload de imagem/logo do cliente por card (client-side, entra no ZIP). */}
                 <div>
                   <p className="text-xs uppercase text-gray-500 mb-1">Imagem / Logo</p>
-                  {postImages[post.dia] ? (
+                  {postImages[index] ? (
                     <div className="relative">
                       <img
-                        src={postImages[post.dia].url}
+                        src={postImages[index].url}
                         alt={`Imagem do dia ${post.dia}`}
                         className="w-full max-h-40 object-contain rounded-lg border border-gray-700 bg-[#0A0A0A]"
                       />
                       <button
-                        onClick={() => handleRemoveImage(post.dia)}
+                        onClick={() => handleRemoveImage(index)}
                         title="Remover imagem"
                         className="no-export absolute top-2 right-2 bg-black/70 hover:bg-red-600 text-white rounded-full p-1"
                       >
@@ -812,20 +938,20 @@ function SuperAgente() {
                         type="file"
                         accept="image/*"
                         className="hidden"
-                        onChange={(e) => handleImageUpload(post.dia, e.target.files?.[0])}
+                        onChange={(e) => handleImageUpload(index, e.target.files?.[0])}
                       />
                     </label>
                   )}
                 </div>
 
-                {audioErrors[post.dia] && (
-                  <p className="text-yellow-500 text-xs">{audioErrors[post.dia]}</p>
+                {audioErrors[index] && (
+                  <p className="text-yellow-500 text-xs">{audioErrors[index]}</p>
                 )}
 
                 <div className="no-export flex gap-2">
-                  {audioBlobs[post.dia] && (
+                  {audioBlobs[index] && (
                     <Button
-                      onClick={() => handlePlayAudio(post.dia)}
+                      onClick={() => handlePlayAudio(index)}
                       className="flex-1 bg-[#1A1A1A] hover:bg-[#252525] flex items-center justify-center gap-2"
                     >
                       <Play className="w-4 h-4" />
@@ -833,15 +959,53 @@ function SuperAgente() {
                     </Button>
                   )}
                   <Button
-                    onClick={() => handleDownloadPng(post.dia)}
-                    disabled={exportingDia === post.dia}
+                    onClick={() => handleDownloadPng(index, post.dia)}
+                    disabled={exportingIndex === index}
                     className="flex-1 bg-[#1A1A1A] hover:bg-[#252525] disabled:opacity-50 flex items-center justify-center gap-2"
                   >
-                    {exportingDia === post.dia ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-                    Baixar PNG
+                    {exportingIndex === index ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                    Baixar Cards ({slidesFor(index).length})
                   </Button>
                 </div>
               </div>
+
+              {/* Um slide oculto por bloco (Hook, Roteiro, Legenda, Imagem) — o que de fato vira
+                  PNG, pronto pra publicar como carrossel no Instagram. */}
+              {slidesFor(index).map((slide, i, arr) => (
+                <ExportSlide
+                  key={slide}
+                  innerRef={(el) => { exportRefs.current[slideRefKey(index, slide)] = el }}
+                  dia={post.dia}
+                  slide={slide}
+                  index={i + 1}
+                  total={arr.length}
+                  brandLogo={brandLogo}
+                >
+                  {slide === 'hook' && (
+                    <p style={{ margin: 0, fontWeight: 700, lineHeight: 1.25, fontSize: hookFontSize(post.hook) }}>
+                      {post.hook}
+                    </p>
+                  )}
+                  {slide === 'roteiro' && (
+                    <p style={{ margin: 0, lineHeight: 1.45, fontSize: bodyFontSize(post.roteiro) }}>
+                      {post.roteiro}
+                    </p>
+                  )}
+                  {slide === 'legenda' && (
+                    <p style={{ margin: 0, lineHeight: 1.45, fontSize: bodyFontSize(post.legenda) }}>
+                      {post.legenda}
+                    </p>
+                  )}
+                  {slide === 'imagem' && postImages[index] && (
+                    <img
+                      src={postImages[index].url}
+                      alt=""
+                      style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 16 }}
+                    />
+                  )}
+                </ExportSlide>
+              ))}
+              </Fragment>
             ))}
           </div>
         )}

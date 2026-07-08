@@ -70,15 +70,15 @@ function buildPrompt(nicho: string, tom: string, qtdPosts: number, marca: Marca)
     ? `\n- Diferenciais e informações importantes (destaque isto no conteúdo, SEM inventar nada além do que está escrito aqui): ${marca.diferenciais}`
     : ''
   const diferenciaisRegra = marca.diferenciais
-    ? '\n- Quando fizer sentido, destaque os diferenciais informados nos roteiros e legendas, fiel ao que foi dito (não invente benefícios nem regras).'
+    ? '\n- Quando fizer sentido, destaque os diferenciais informados nos roteiros e legendas, fiel ao que foi dito (não invente benefícios nem regras), mas com palavras diferentes a cada vez — não repita a mesma frase.'
     : ''
 
   return `Você é um estrategista de marketing digital sênior brasileiro. Crie um plano de conteúdo COMPLETO para o nicho: "${nicho}".
 
-CONTEXTO DA MARCA (use para deixar TODO o conteúdo 100% na cara dessa marca específica):
+CONTEXTO DA MARCA (use como REFERÊNCIA para deixar o conteúdo na cara dessa marca — NUNCA copie estes textos literalmente nos posts, apenas escreva no mesmo espírito, com palavras próprias):
 - Instagram de referência: ${instaLinha}
 - Serviços que devem aparecer nos posts: ${servicosLinha}
-- Tom de voz obrigatório: ${tomObrigatorio}
+- Tom de voz obrigatório (estilo/personalidade, não um texto pra repetir): ${tomObrigatorio}
 - CTA que deve aparecer em 100% dos posts: ${ctaObrigatorio}${diferenciaisContexto}
 
 Retorne um objeto JSON com dois campos: "estrategia" e "posts".
@@ -102,6 +102,7 @@ REGRAS OBRIGATÓRIAS para os posts:
 - Cada roteiro deve citar pelo menos 1 serviço da lista: ${servicosLinha}
 - A legenda de TODOS os posts deve terminar com o CTA: "${ctaObrigatorio}"
 - Mantenha o tom "${tomObrigatorio}" em 100% dos roteiros e legendas${diferenciaisRegra}
+- VARIE A REDAÇÃO: nunca repita a mesma frase, expressão ou construção entre hook/roteiro/legenda do mesmo dia, nem entre dias diferentes. Cada texto deve soar único, mesmo falando do mesmo serviço ou tom.
 
 Responda apenas com o objeto JSON, sem texto adicional.`
 }
