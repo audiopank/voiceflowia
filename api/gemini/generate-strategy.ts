@@ -82,7 +82,7 @@ CONTEXTO DA MARCA (use como REFERÊNCIA para deixar o conteúdo na cara dessa ma
 - Instagram de referência: ${instaLinha}
 - Serviços que devem aparecer nos posts: ${servicosLinha}
 - Tom de voz obrigatório (estilo/personalidade, não um texto pra repetir): ${tomObrigatorio}
-- CTA que deve aparecer em 100% dos posts: ${ctaObrigatorio}${diferenciaisContexto}
+- CTA de venda (só entra nos posts de Tarde — ver regras abaixo): ${ctaObrigatorio}${diferenciaisContexto}
 
 Retorne um objeto JSON com dois campos: "estrategia" e "posts".
 
@@ -100,12 +100,15 @@ outro para Tarde (${qtdDias * 2} roteiros no total), cada um com:
 - periodo: "Manhã" ou "Tarde"
 - hook: gancho de até 3 segundos para prender atenção
 - roteiro: narração de cerca de 20 segundos, pronta para ser lida em voz alta
-- legenda: legenda da postagem terminando com o CTA
+- legenda: legenda da postagem, com o CTA certo pro período (ver regras abaixo)
 - vozSugerida: "Zephyr" ou "Puck", a que combinar melhor com o roteiro
 
 REGRAS OBRIGATÓRIAS para os posts:
 - Cada roteiro deve citar pelo menos 1 serviço da lista: ${servicosLinha}
-- A legenda de TODOS os posts deve terminar com o CTA: "${ctaObrigatorio}"
+- CTA automático por período (Manhã = educativo, Tarde = venda):
+  - Posts de TARDE: a legenda deve terminar com o CTA de venda "${ctaObrigatorio}".
+  - Posts de MANHÃ: a legenda NUNCA usa o CTA de venda. Feche com um CTA leve de engajamento
+    (comentar, salvar, compartilhar, marcar um amigo), variando a frase a cada dia.
 - Mantenha o tom "${tomObrigatorio}" em 100% dos roteiros e legendas${diferenciaisRegra}
 - O post da Manhã e o da Tarde do mesmo dia devem abordar ângulos diferentes, não o mesmo gancho reescrito.
 - VARIE A REDAÇÃO: nunca repita a mesma frase, expressão ou construção entre hook/roteiro/legenda do mesmo dia, nem entre dias/períodos diferentes. Cada texto deve soar único, mesmo falando do mesmo serviço ou tom.

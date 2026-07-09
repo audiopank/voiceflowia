@@ -30,11 +30,14 @@ Para cada roteiro, retorne um objeto com:
 - periodo: "Manhã" ou "Tarde"
 - hook: gancho de até 3 segundos para prender atenção logo no início
 - roteiro: roteiro de narração de cerca de 20 segundos, pronto para ser lido em voz alta
-- legenda: legenda para a postagem, terminando com uma call-to-action
+- legenda: legenda para a postagem, com o CTA certo pro período (ver regras abaixo)
 - vozSugerida: "Zephyr" ou "Puck", a que combinar melhor com o tom do roteiro
 
 REGRAS:
 - O post da Manhã e o da Tarde do mesmo dia devem ser sobre ângulos diferentes (não repita o mesmo gancho/roteiro só mudando palavras).
+- CTA automático por período:
+  - Posts de TARDE: legenda fecha com um CTA de conversão forte (chamar no WhatsApp, agendar, comprar/agendar agora), adaptado ao nicho.
+  - Posts de MANHÃ: legenda fecha com um CTA leve de engajamento (comentar, salvar, compartilhar, marcar um amigo) — nada de venda direta de manhã.
 - Varie a redação entre todos os roteiros do calendário — nunca repita a mesma frase entre dias ou períodos diferentes.
 
 Responda apenas com o array JSON, sem texto adicional.`
