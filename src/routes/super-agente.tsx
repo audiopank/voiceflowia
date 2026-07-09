@@ -914,10 +914,11 @@ function SuperAgente() {
 
         {/* Posts */}
         {posts && (
+          <Fragment>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {posts.map((post, index) => (
-              <Fragment key={index}>
               <div
+                key={index}
                 className="relative bg-[#111111] border border-gray-800 rounded-2xl p-5 space-y-3"
               >
                 {/* Logo da marca aplicada automaticamente (fallback: nada se não houver). */}
@@ -1038,9 +1039,14 @@ function SuperAgente() {
                   </Button>
                 </div>
               </div>
+            ))}
+          </div>
 
-              {/* Um slide oculto por bloco (Hook, Roteiro, Legenda, Imagem) — o que de fato vira
-                  PNG, pronto pra publicar como carrossel no Instagram. */}
+          {/* Slides ocultos de exportação (um por bloco: Hook, Roteiro, Legenda, Imagem) — o que de
+              fato vira PNG, pronto pra publicar como carrossel no Instagram. Ficam fora do grid pra
+              não entrar no auto-placement do CSS Grid e empurrar os cards visíveis. */}
+          {posts.map((post, index) => (
+            <Fragment key={index}>
               {slidesFor(index).map((slide, i, arr) => (
                 <ExportSlide
                   key={slide}
@@ -1077,9 +1083,9 @@ function SuperAgente() {
                   )}
                 </ExportSlide>
               ))}
-              </Fragment>
-            ))}
-          </div>
+            </Fragment>
+          ))}
+          </Fragment>
         )}
       </div>
 
