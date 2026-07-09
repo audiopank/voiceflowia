@@ -5,7 +5,7 @@ import { toPng } from 'html-to-image'
 import {
   Lock, Loader2, AlertCircle, Rocket, Volume2, Download, Play, Package,
   Users, Target, Hash, Clock, Megaphone, CheckCircle2, Copy, Check, ImagePlus, X, Pencil,
-  ChevronDown, ChevronUp
+  ChevronDown, ChevronUp, CalendarDays
 } from 'lucide-react'
 import { useSubscription } from '../lib/useSubscription'
 import { supabase } from '../lib/supabase'
@@ -13,9 +13,16 @@ import { fetchWithRetry, sleep } from '../lib/apiRetry'
 import { Button } from '../components/ui/button'
 import { BackButton } from '../components/BackButton'
 import { SuperAgenteGuia } from '../components/SuperAgenteGuia'
+import { buildIcsCalendar, downloadIcsFile, postDateTime } from '../lib/ics'
 
 // Espaça as gerações de voz para não estourar o limite/minuto do free tier.
 const VOICE_THROTTLE_MS = 3500
+
+// Data de hoje em yyyy-mm-dd, pro input type="date" (padrão: "Dia 1" = hoje).
+function todayIso(): string {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
 
 export const Route = createFileRoute('/super-agente')({
   component: SuperAgente,
@@ -191,6 +198,8 @@ function SuperAgente() {
   // Fluxo de 2 posts/dia (Manhã + Tarde): este campo é quantidade de DIAS, não de posts —
   // o total de cards gerados é o dobro.
   const [qtdDias, setQtdDias] = useState(4)
+  // Data em que "Dia 1" cai de verdade — pro export do Google Agenda. Padrão: hoje.
+  const [dataInicio, setDataInicio] = useState(todayIso)
 
   // V1.5 Estudo de Marca — opcionais. Vazios = gera igual hoje.
   const [instagram, setInstagram] = useState('')
@@ -516,6 +525,22 @@ function SuperAgente() {
     }
   }
 
+  // Exporta todo o calendário gerado como .ics — abre no Google Agenda (ou qualquer app de
+  // calendário) já com data e horário certos pra cada post, um evento de 15min por post.
+  function handleExportGoogleAgenda() {
+    if (!posts) return
+    const start = new Date(`${dataInicio}T00:00:00`)
+    const events = posts.map((post, index) => ({
+      uid: `voiceflowia-${dataInicio}-dia${post.dia}-${post.periodo}-${index}@voiceflowia.app`,
+      start: postDateTime(start, post.dia, post.horario),
+      durationMinutes: 15,
+      summary: `VoiceFlow IA - Dia ${post.dia} · ${post.periodo} - ${post.hook}`,
+      description: `HOOK: ${post.hook}\n\nROTEIRO: ${post.roteiro}\n\nLEGENDA: ${post.legenda}`,
+    }))
+    const ics = buildIcsCalendar(events)
+    downloadIcsFile(`calendario-${nicho.trim().toLowerCase().replace(/\s+/g, '-') || 'conteudo'}.ics`, ics)
+  }
+
   const audioCount = Object.keys(audioBlobs).length
   const errorCount = Object.keys(audioErrors).length
 
@@ -626,6 +651,16 @@ function SuperAgente() {
                 className="w-full p-3 bg-[#1A1A1A] border border-gray-700 rounded-lg text-white focus:outline-none focus:border-[#8B5CF6]"
               />
               <p className="text-xs text-gray-600 mt-1">Cada dia gera 2 cards: Manhã + Tarde. A IA já sugere o melhor horário pra postar de cada um.</p>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">Data de Início</label>
+              <input
+                type="date"
+                value={dataInicio}
+                onChange={(e) => setDataInicio(e.target.value)}
+                className="w-full p-3 bg-[#1A1A1A] border border-gray-700 rounded-lg text-white focus:outline-none focus:border-[#8B5CF6]"
+              />
+              <p className="text-xs text-gray-600 mt-1">Em que dia "Dia 1" cai de verdade — usado no export pro Google Agenda.</p>
             </div>
           </div>
 
@@ -852,6 +887,13 @@ function SuperAgente() {
                 >
                   {isZipping ? <Loader2 className="w-4 h-4 animate-spin" /> : <Package className="w-4 h-4" />}
                   Baixar Kit (ZIP)
+                </Button>
+                <Button
+                  onClick={handleExportGoogleAgenda}
+                  className="bg-[#22C55E] hover:bg-[#16A34A] flex items-center gap-2"
+                >
+                  <CalendarDays className="w-4 h-4" />
+                  Exportar para Google Agenda
                 </Button>
               </div>
             </div>
