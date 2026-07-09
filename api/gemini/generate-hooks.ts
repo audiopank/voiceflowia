@@ -2,6 +2,8 @@ export const config = {
   runtime: 'edge'
 }
 
+export const maxDuration = 60
+
 // V1.7 "Ideias Desta Semana": a partir do nicho + objetivo, devolve 3 hooks
 // (ganchos de 3s) prontos, cada um com um ângulo psicológico diferente.
 // O cliente vê os 3 como cards e copia o que mais gostar.

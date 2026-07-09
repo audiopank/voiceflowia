@@ -3,6 +3,10 @@ export const config = {
   runtime: 'edge'
 }
 
+// Ver mesmo ajuste em api/gemini/text-to-speech.ts: texto longo pode passar do limite
+// padrão de execução (~25s) e virar "Erro na API: 504" (timeout do gateway).
+export const maxDuration = 60
+
 export default async function handler(request: Request): Promise<Response> {
   if (request.method !== 'POST') {
     return new Response(JSON.stringify({ error: 'Método não permitido' }), {

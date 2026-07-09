@@ -2,6 +2,8 @@ export const config = {
   runtime: 'edge'
 }
 
+export const maxDuration = 60
+
 // Sugestões sob medida para o "Agente Guia" do Super Agente: a partir do nicho,
 // devolve chips prontos para o cliente se inspirar e preencher o Estudo de Marca.
 const RESPONSE_SCHEMA = {

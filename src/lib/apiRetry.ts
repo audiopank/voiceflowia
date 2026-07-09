@@ -25,8 +25,13 @@ interface RetryOpts {
   onWait?: (secondsLeft: number, attempt: number) => void
 }
 
-// fetch que re-tenta sozinho quando a API responde 429 (limite atingido).
-// Retorna a Response final (ok ou o último erro) — o chamador trata como antes.
+// Gateway/timeout transitórios (ex: síntese de voz demorou mais que o limite de execução
+// da function) — sem "retry-in-Xs" no corpo, então usa uma espera curta fixa.
+const GATEWAY_ERROR_STATUSES = [502, 503, 504]
+
+// fetch que re-tenta sozinho quando a API responde 429 (limite atingido) ou um erro
+// transitório de gateway (502/503/504). Retorna a Response final (ok ou o último erro) —
+// o chamador trata como antes.
 export async function fetchWithRetry(
   input: RequestInfo,
   init: RequestInit,
@@ -34,15 +39,26 @@ export async function fetchWithRetry(
 ): Promise<Response> {
   for (let attempt = 1; ; attempt++) {
     const res = await fetch(input, init)
-    if (res.status !== 429 || attempt > retries) return res
+    if (attempt > retries) return res
 
-    let ms = 30000
-    try {
-      ms = parseRetryMs(await res.clone().text())
-    } catch {
-      // corpo ilegível — usa fallback
+    if (res.status === 429) {
+      let ms = 30000
+      try {
+        ms = parseRetryMs(await res.clone().text())
+      } catch {
+        // corpo ilegível — usa fallback
+      }
+      onWait?.(Math.ceil(ms / 1000), attempt)
+      await sleep(ms + 500)
+      continue
     }
-    onWait?.(Math.ceil(ms / 1000), attempt)
-    await sleep(ms + 500)
+
+    if (GATEWAY_ERROR_STATUSES.includes(res.status)) {
+      onWait?.(3, attempt)
+      await sleep(3000)
+      continue
+    }
+
+    return res
   }
 }

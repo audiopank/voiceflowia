@@ -2,6 +2,10 @@ export const config = {
   runtime: 'edge'
 }
 
+// Calendários maiores (mais dias = mais posts) podem passar do limite padrão de
+// execução (~25s) e virar "Erro na API: 504" (timeout do gateway, ver text-to-speech.ts).
+export const maxDuration = 60
+
 const RESPONSE_SCHEMA = {
   type: 'ARRAY',
   items: {

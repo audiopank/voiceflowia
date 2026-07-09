@@ -2,6 +2,11 @@ export const config = {
   runtime: 'edge'
 }
 
+// Textos mais longos fazem a síntese do Gemini TTS passar do limite padrão de execução
+// (~25s), o que a Vercel devolve pro cliente como "Erro na API: 504" (timeout do gateway,
+// não erro da aplicação). Aumenta o teto pra dar tempo de sintetizar textos maiores.
+export const maxDuration = 60
+
 function base64ToBytes(base64: string): Uint8Array<ArrayBuffer> {
   const binary = atob(base64)
   const bytes = new Uint8Array(binary.length)
