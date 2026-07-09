@@ -9,7 +9,7 @@ import {
 } from 'lucide-react'
 import { useSubscription } from '../lib/useSubscription'
 import { supabase } from '../lib/supabase'
-import { fetchWithRetry, sleep } from '../lib/apiRetry'
+import { fetchWithRetry, sleep, safeJson } from '../lib/apiRetry'
 import { Button } from '../components/ui/button'
 import { BackButton } from '../components/BackButton'
 import { SuperAgenteGuia } from '../components/SuperAgenteGuia'
@@ -280,7 +280,7 @@ function SuperAgente() {
       )
       setRateNotice('')
 
-      const data = await response.json()
+      const data = await safeJson(response)
       if (!response.ok) {
         throw new Error(data?.error || `Erro na API: ${response.status}`)
       }

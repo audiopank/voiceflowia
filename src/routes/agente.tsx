@@ -3,7 +3,7 @@ import { createFileRoute } from '@tanstack/react-router'
 import { Lock, Loader2, AlertCircle, Sparkles, Volume2, Download, Play, CalendarDays } from 'lucide-react'
 import { useSubscription } from '../lib/useSubscription'
 import { supabase } from '../lib/supabase'
-import { fetchWithRetry } from '../lib/apiRetry'
+import { fetchWithRetry, safeJson } from '../lib/apiRetry'
 import { Button } from '../components/ui/button'
 import { BackButton } from '../components/BackButton'
 import { EditableText } from '../components/EditableText'
@@ -80,7 +80,7 @@ function Agente() {
       )
       setRateNotice('')
 
-      const data = await response.json()
+      const data = await safeJson(response)
 
       if (!response.ok) {
         throw new Error(data?.error || `Erro na API: ${response.status}`)

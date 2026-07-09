@@ -2,7 +2,7 @@ import { useState } from 'react'
 import {
   Bot, Sparkles, Loader2, ChevronRight, ChevronLeft, Minus, Check, Lightbulb, Copy
 } from 'lucide-react'
-import { fetchWithRetry } from '../lib/apiRetry'
+import { fetchWithRetry, safeJson } from '../lib/apiRetry'
 
 interface Suggestions {
   servicos: string[]
@@ -105,7 +105,7 @@ export function SuperAgenteGuia({ nicho, servicos, onAppendServico, onSetTomMarc
         },
         { onWait: (s) => setSugError(`⏳ Limite temporário. Tentando de novo em ${s}s...`) },
       )
-      const data = await res.json()
+      const data = await safeJson(res)
       if (!res.ok) throw new Error(data?.error || `Erro ${res.status}`)
       setSuggestions(data.suggestions)
       setSugError('')
@@ -133,7 +133,7 @@ export function SuperAgenteGuia({ nicho, servicos, onAppendServico, onSetTomMarc
         },
         { onWait: (s) => setHooksError(`⏳ Limite temporário. Tentando de novo em ${s}s...`) },
       )
-      const data = await res.json()
+      const data = await safeJson(res)
       if (!res.ok) throw new Error(data?.error || `Erro ${res.status}`)
       setHooks(data.hooks)
       setHooksError('')

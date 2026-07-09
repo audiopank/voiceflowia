@@ -62,3 +62,20 @@ export async function fetchWithRetry(
     return res
   }
 }
+
+// Lê a Response como JSON com fallback: se o corpo não for JSON válido (ex: página de erro
+// de plataforma da Vercel tipo "An error occurred with your deployment", devolvida em
+// texto/HTML e não em JSON), gera uma mensagem de erro amigável em vez de vazar o
+// SyntaxError do JSON.parse pro usuário.
+export async function safeJson(res: Response): Promise<any> {
+  const text = await res.text()
+  try {
+    return JSON.parse(text)
+  } catch {
+    throw new Error(
+      res.ok
+        ? 'Resposta inválida do servidor. Tente novamente.'
+        : `Erro na API: ${res.status}`
+    )
+  }
+}
