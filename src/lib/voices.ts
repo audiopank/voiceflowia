@@ -49,6 +49,16 @@ export const GEMINI_VOICES: CatalogVoice[] = [
   { voice_id: 'Aoede', name: 'Aoede', provider: 'gemini', vibe: 'Descontraída' },
 ]
 
+// Subconjunto comprovadamente rápido pra texto LONGO (roteiro/legenda real, não amostra
+// curta) com o modelo de TTS atual — é o que o Agente de Conteúdo IA e o Super Agente já
+// usam. As outras 5 vozes (Charon, Fenrir, Leda, Orus, Aoede) são bem mais lentas pra
+// sintetizar e, com texto longo, passam até de um maxDuration de 60s e viram 504 — únicas
+// seguras pro Editor de Voz, que aceita texto livre e mais extenso que a amostra da
+// Biblioteca de Vozes.
+export const GEMINI_VOICES_TEXTO_LONGO: CatalogVoice[] = GEMINI_VOICES.filter((v) =>
+  ['Zephyr', 'Puck', 'Kore'].includes(v.voice_id)
+)
+
 // Todas as vozes, na ordem: as que tocam na hora (Gemini) primeiro.
 export const ALL_VOICES: CatalogVoice[] = [...GEMINI_VOICES, ...ELEVENLABS_VOICES]
 

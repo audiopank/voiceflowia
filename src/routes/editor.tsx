@@ -5,7 +5,7 @@ import { useSubscription } from '../lib/useSubscription'
 import { fetchWithRetry } from '../lib/apiRetry'
 import { Button } from '../components/ui/button'
 import { BackButton } from '../components/BackButton'
-import { ELEVENLABS_VOICES, GEMINI_VOICES, type Voice, type Provider } from '../lib/voices'
+import { ELEVENLABS_VOICES, GEMINI_VOICES_TEXTO_LONGO, type Voice, type Provider } from '../lib/voices'
 
 export const Route = createFileRoute("/editor")({
   component: Editor,
@@ -27,12 +27,15 @@ function Editor() {
   const [loadingVoices, setLoadingVoices] = useState(true)
 
 
-  // Carregar vozes do provedor selecionado
+  // Carregar vozes do provedor selecionado.
+  // Gemini: só o trio rápido (Zephyr/Puck/Kore) — as outras 5 vozes do catálogo são bem
+  // mais lentas pra sintetizar e, com o texto livre/longo daqui, passavam até do limite de
+  // execução e voltavam como "Erro na API: 504" (bug real reportado por cliente).
   useEffect(() => {
     if (!hasAccess) return
 
     setLoadingVoices(true)
-    const providerVoices = provider === 'elevenlabs' ? ELEVENLABS_VOICES : GEMINI_VOICES
+    const providerVoices = provider === 'elevenlabs' ? ELEVENLABS_VOICES : GEMINI_VOICES_TEXTO_LONGO
     setVoices(providerVoices)
     setSelectedVoice(providerVoices[0].voice_id)
     setLoadingVoices(false)
