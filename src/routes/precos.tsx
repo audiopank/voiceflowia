@@ -133,7 +133,7 @@ function Precos() {
               <CardTitle className="text-xl font-bold text-[#8B5CF6]">Agências de Marketing</CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-gray-400">Gere 100 locuções/mês para seus clientes, crie conteúdos em massa e economize horas de trabalho.</p>
+              <p className="text-gray-400">Gere 100 roteiros + legendas + áudios (locuções) com IA por mês para seus clientes. Em 10 minutos você tem o mês inteiro pronto pra gravar. Economize horas de roteirização.</p>
             </CardContent>
           </Card>
 
@@ -142,7 +142,7 @@ function Precos() {
               <CardTitle className="text-xl font-bold text-[#22C55E]">Lojas e E-commerces</CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-gray-400">Crie anúncios de áudio para Instagram, Rádio e YouTube Shorts. Converta mais com vozes humanas.</p>
+              <p className="text-gray-400">Crie anúncios de áudio para Instagram, WhatsApp e YouTube Shorts. Receba roteiro + legenda + voz narrada pela IA. É só gravar por cima e postar. Converta mais com voz humana.</p>
             </CardContent>
           </Card>
 
@@ -151,7 +151,7 @@ function Precos() {
               <CardTitle className="text-xl font-bold text-[#8B5CF6]">Criadores e Coaches</CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-gray-400">Duble seus vídeos, crie audiobooks e produza conteúdos de voz para todas as plataformas.</p>
+              <p className="text-gray-400">Crie 30 dias de roteiros e áudios (locuções) com IA em segundos — gancho, legenda com CTA e narração prontos. Tenha autoridade sem passar horas escrevendo.</p>
             </CardContent>
           </Card>
         </div>

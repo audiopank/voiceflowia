@@ -237,7 +237,8 @@ function Agente() {
             <Sparkles className="w-8 h-8 text-[#8B5CF6]" />
             Agente de Conteúdo IA
           </h1>
-          <p className="text-gray-400">Gere o mês inteiro de Reels em segundos, com roteiro, legenda e voz prontos.</p>
+          <p className="text-gray-400">Gere o mês inteiro de roteiros e áudios (locuções) com IA em segundos. Legenda e narração prontas — é só gravar por cima.</p>
+          <p className="text-sm text-gray-500 mt-1">Você só precisa gravar 15s lendo o roteiro. Sem editar. Sem Canva. O áudio já vem pronto para WhatsApp.</p>
         </div>
 
         {error && (
