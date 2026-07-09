@@ -3,7 +3,7 @@ export const config = {
 }
 
 // V1.6: vozes válidas do Gemini TTS que o seletor manual oferece.
-const VOZES_VALIDAS = ['Zephyr', 'Puck', 'Kore', 'Charon']
+const VOZES_VALIDAS = ['Zephyr', 'Puck', 'Kore']
 
 // V1.6: schema virou builder. `vozes` = quais valores vozSugerida pode assumir.
 // Automático -> ['Zephyr','Puck'] (IA decide). Forçado -> [voz] (uma só).

@@ -637,7 +637,6 @@ function SuperAgente() {
                 <option value="Zephyr">Zephyr [Firme/Autoridade]</option>
                 <option value="Puck">Puck [Leve/Animado]</option>
                 <option value="Kore">Kore [Feminina/Profissional]</option>
-                <option value="Charon">Charon [Masculino/Grave]</option>
               </select>
             </div>
             <div>

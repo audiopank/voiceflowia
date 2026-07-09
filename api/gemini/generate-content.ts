@@ -13,7 +13,7 @@ const RESPONSE_SCHEMA = {
       hook: { type: 'STRING' },
       roteiro: { type: 'STRING' },
       legenda: { type: 'STRING' },
-      vozSugerida: { type: 'STRING', enum: ['Zephyr', 'Puck'] }
+      vozSugerida: { type: 'STRING', enum: ['Zephyr', 'Puck', 'Kore'] }
     },
     required: ['dia', 'periodo', 'horario', 'hook', 'roteiro', 'legenda', 'vozSugerida']
   }
@@ -33,7 +33,7 @@ Para cada roteiro, retorne um objeto com:
 - hook: gancho de até 3 segundos para prender atenção logo no início
 - roteiro: roteiro de narração de cerca de 20 segundos, pronto para ser lido em voz alta
 - legenda: legenda para a postagem, com o CTA certo pro período (ver regras abaixo)
-- vozSugerida: "Zephyr" ou "Puck", a que combinar melhor com o tom do roteiro
+- vozSugerida: "Zephyr", "Puck" ou "Kore", a que combinar melhor com o tom do roteiro
 
 REGRAS:
 - O post da Manhã e o da Tarde do mesmo dia devem ser sobre ângulos diferentes (não repita o mesmo gancho/roteiro só mudando palavras).
