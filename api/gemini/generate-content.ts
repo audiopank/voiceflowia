@@ -9,12 +9,13 @@ const RESPONSE_SCHEMA = {
     properties: {
       dia: { type: 'INTEGER' },
       periodo: { type: 'STRING', enum: ['Manhã', 'Tarde'] },
+      horario: { type: 'STRING' },
       hook: { type: 'STRING' },
       roteiro: { type: 'STRING' },
       legenda: { type: 'STRING' },
       vozSugerida: { type: 'STRING', enum: ['Zephyr', 'Puck'] }
     },
-    required: ['dia', 'periodo', 'hook', 'roteiro', 'legenda', 'vozSugerida']
+    required: ['dia', 'periodo', 'horario', 'hook', 'roteiro', 'legenda', 'vozSugerida']
   }
 }
 
@@ -28,6 +29,7 @@ Cada dia tem 2 roteiros: um para postar de Manhã e outro para postar à Tarde �
 Para cada roteiro, retorne um objeto com:
 - dia: número sequencial de 1 a ${qtdDias} (Manhã e Tarde do mesmo dia usam o MESMO número)
 - periodo: "Manhã" ou "Tarde"
+- horario: horário sugerido de postagem, formato "HH:MM" (ver regras abaixo)
 - hook: gancho de até 3 segundos para prender atenção logo no início
 - roteiro: roteiro de narração de cerca de 20 segundos, pronto para ser lido em voz alta
 - legenda: legenda para a postagem, com o CTA certo pro período (ver regras abaixo)
@@ -38,6 +40,10 @@ REGRAS:
 - CTA automático por período:
   - Posts de TARDE: legenda fecha com um CTA de conversão forte (chamar no WhatsApp, agendar, comprar/agendar agora), adaptado ao nicho.
   - Posts de MANHÃ: legenda fecha com um CTA leve de engajamento (comentar, salvar, compartilhar, marcar um amigo) — nada de venda direta de manhã.
+- Horário sugerido, baseado no nicho "${nicho}" e no período:
+  - MANHÃ: escolha um horário entre 07:00 e 11:00 (horários com mais engajamento: 09:15, 10:30).
+  - TARDE: escolha um horário entre 17:00 e 21:00 (horários com mais engajamento: 18:40, 20:15).
+  - Ajuste pelo nicho quando fizer sentido: Restaurante/gastronomia prioriza 11:30 e 19:00; Loja/E-commerce prioriza 09:00 e 18:00; Serviço/Agência prioriza 10:00 e 20:00.
 - Varie a redação entre todos os roteiros do calendário — nunca repita a mesma frase entre dias ou períodos diferentes.
 
 Responda apenas com o array JSON, sem texto adicional.`

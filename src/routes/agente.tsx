@@ -15,6 +15,7 @@ export const Route = createFileRoute('/agente')({
 interface Post {
   dia: number
   periodo: 'Manhã' | 'Tarde'
+  horario: string
   hook: string
   roteiro: string
   legenda: string
@@ -252,7 +253,7 @@ function Agente() {
                 onChange={(e) => setQtdDias(Math.min(Math.max(Number(e.target.value) || 1, 1), 30))}
                 className="w-full p-3 bg-[#1A1A1A] border border-gray-700 rounded-lg text-white focus:outline-none focus:border-[#8B5CF6]"
               />
-              <p className="text-xs text-gray-600 mt-1">Cada dia gera 2 posts: Manhã + Tarde.</p>
+              <p className="text-xs text-gray-600 mt-1">Cada dia gera 2 posts: Manhã + Tarde. A IA já sugere o melhor horário pra postar de cada um.</p>
             </div>
           </div>
 
@@ -282,6 +283,11 @@ function Agente() {
                     Voz: {post.vozSugerida}
                   </span>
                 </div>
+                {post.horario && (
+                  <span className="inline-block text-xs px-2 py-1 rounded-full bg-gray-700/50 text-gray-300">
+                    📅 Melhor horário: {post.horario}
+                  </span>
+                )}
                 <EditableText
                   label="Hook (3s)"
                   value={post.hook}
@@ -298,6 +304,9 @@ function Agente() {
                   value={post.legenda}
                   onChange={(v) => updatePostField(index, 'legenda', v)}
                 />
+                <span className="inline-block text-xs px-2 py-1 rounded-full bg-gray-700/50 text-gray-300">
+                  {post.periodo === 'Manhã' ? '🎯 Objetivo: Relacionamento' : '💰 Objetivo: Conversão/Venda'}
+                </span>
 
                 {audioErrors[index] && (
                   <p className="text-red-400 text-xs">{audioErrors[index]}</p>

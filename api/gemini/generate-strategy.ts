@@ -40,12 +40,13 @@ function buildResponseSchema(vozes: string[]) {
         properties: {
           dia: { type: 'INTEGER' },
           periodo: { type: 'STRING', enum: ['Manhã', 'Tarde'] },
+          horario: { type: 'STRING' },
           hook: { type: 'STRING' },
           roteiro: { type: 'STRING' },
           legenda: { type: 'STRING' },
           vozSugerida: { type: 'STRING', enum: vozes } // V1.6: dinâmico
         },
-        required: ['dia', 'periodo', 'hook', 'roteiro', 'legenda', 'vozSugerida']
+        required: ['dia', 'periodo', 'horario', 'hook', 'roteiro', 'legenda', 'vozSugerida']
       }
     }
   },
@@ -98,6 +99,7 @@ Retorne um objeto JSON com dois campos: "estrategia" e "posts".
 outro para Tarde (${qtdDias * 2} roteiros no total), cada um com:
 - dia: número sequencial de 1 a ${qtdDias} (Manhã e Tarde do mesmo dia usam o MESMO número)
 - periodo: "Manhã" ou "Tarde"
+- horario: horário sugerido de postagem, formato "HH:MM" (ver regras abaixo)
 - hook: gancho de até 3 segundos para prender atenção
 - roteiro: narração de cerca de 20 segundos, pronta para ser lida em voz alta
 - legenda: legenda da postagem, com o CTA certo pro período (ver regras abaixo)
@@ -109,6 +111,10 @@ REGRAS OBRIGATÓRIAS para os posts:
   - Posts de TARDE: a legenda deve terminar com o CTA de venda "${ctaObrigatorio}".
   - Posts de MANHÃ: a legenda NUNCA usa o CTA de venda. Feche com um CTA leve de engajamento
     (comentar, salvar, compartilhar, marcar um amigo), variando a frase a cada dia.
+- Horário sugerido, baseado no nicho "${nicho}" e no período:
+  - MANHÃ: escolha um horário entre 07:00 e 11:00 (horários com mais engajamento: 09:15, 10:30).
+  - TARDE: escolha um horário entre 17:00 e 21:00 (horários com mais engajamento: 18:40, 20:15).
+  - Ajuste pelo nicho quando fizer sentido: Restaurante/gastronomia prioriza 11:30 e 19:00; Loja/E-commerce prioriza 09:00 e 18:00; Serviço/Agência prioriza 10:00 e 20:00.
 - Mantenha o tom "${tomObrigatorio}" em 100% dos roteiros e legendas${diferenciaisRegra}
 - O post da Manhã e o da Tarde do mesmo dia devem abordar ângulos diferentes, não o mesmo gancho reescrito.
 - VARIE A REDAÇÃO: nunca repita a mesma frase, expressão ou construção entre hook/roteiro/legenda do mesmo dia, nem entre dias/períodos diferentes. Cada texto deve soar único, mesmo falando do mesmo serviço ou tom.
