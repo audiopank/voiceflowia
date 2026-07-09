@@ -14,6 +14,7 @@ export const Route = createFileRoute('/agente')({
 
 interface Post {
   dia: number
+  periodo: 'Manhã' | 'Tarde'
   hook: string
   roteiro: string
   legenda: string
@@ -24,7 +25,9 @@ function Agente() {
   const { hasAccess, loading: loadingSubscription, trial, refresh } = useSubscription()
   const [nicho, setNicho] = useState('')
   const [tom, setTom] = useState('Profissional')
-  const [qtdPosts, setQtdPosts] = useState(30)
+  // Fluxo de 2 posts/dia (Manhã + Tarde): este campo é quantidade de DIAS, não de posts —
+  // o total de cards gerados é o dobro.
+  const [qtdDias, setQtdDias] = useState(15)
   const [posts, setPosts] = useState<Post[] | null>(null)
   const [isGenerating, setIsGenerating] = useState(false)
   const [error, setError] = useState('')
@@ -59,7 +62,7 @@ function Agente() {
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ nicho, tom, qtdPosts })
+          body: JSON.stringify({ nicho, tom, qtdPosts: qtdDias })
         },
         { onWait: (s) => setRateNotice(`⏳ Limite temporário da API. Aguardando ${s}s e tentando de novo...`) },
       )
@@ -147,13 +150,13 @@ function Agente() {
     audio.play()
   }
 
-  function handleDownloadAudio(index: number, dia: number) {
+  function handleDownloadAudio(index: number, dia: number, periodo: string) {
     const blob = audioBlobs[index]
     if (!blob) return
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `reel-dia-${dia}.wav`
+    a.download = `reel-dia-${dia}-${periodo.toLowerCase()}.wav`
     document.body.appendChild(a)
     a.click()
     document.body.removeChild(a)
@@ -240,15 +243,16 @@ function Agente() {
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">Qtd. Posts</label>
+              <label className="block text-sm font-medium text-gray-300 mb-2">Qtd. Dias</label>
               <input
                 type="number"
                 min={1}
                 max={30}
-                value={qtdPosts}
-                onChange={(e) => setQtdPosts(Math.min(Math.max(Number(e.target.value) || 1, 1), 30))}
+                value={qtdDias}
+                onChange={(e) => setQtdDias(Math.min(Math.max(Number(e.target.value) || 1, 1), 30))}
                 className="w-full p-3 bg-[#1A1A1A] border border-gray-700 rounded-lg text-white focus:outline-none focus:border-[#8B5CF6]"
               />
+              <p className="text-xs text-gray-600 mt-1">Cada dia gera 2 posts: Manhã + Tarde.</p>
             </div>
           </div>
 
@@ -273,7 +277,7 @@ function Agente() {
             {posts.map((post, index) => (
               <div key={index} className="bg-[#111111] border border-gray-800 rounded-2xl p-5 space-y-3">
                 <div className="flex items-center justify-between">
-                  <span className="text-[#8B5CF6] font-bold">Dia {post.dia}</span>
+                  <span className="text-[#8B5CF6] font-bold">Dia {post.dia} · {post.periodo}</span>
                   <span className="text-xs px-2 py-1 rounded-full bg-[#1A1A1A] border border-gray-700 text-gray-400">
                     Voz: {post.vozSugerida}
                   </span>
@@ -309,7 +313,7 @@ function Agente() {
                       Ouvir
                     </Button>
                     <Button
-                      onClick={() => handleDownloadAudio(index, post.dia)}
+                      onClick={() => handleDownloadAudio(index, post.dia, post.periodo)}
                       className="flex-1 bg-[#8B5CF6] hover:bg-[#7C3AED] flex items-center justify-center gap-2"
                     >
                       <Download className="w-4 h-4" />

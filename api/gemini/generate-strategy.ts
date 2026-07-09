@@ -39,12 +39,13 @@ function buildResponseSchema(vozes: string[]) {
         type: 'OBJECT',
         properties: {
           dia: { type: 'INTEGER' },
+          periodo: { type: 'STRING', enum: ['Manhã', 'Tarde'] },
           hook: { type: 'STRING' },
           roteiro: { type: 'STRING' },
           legenda: { type: 'STRING' },
           vozSugerida: { type: 'STRING', enum: vozes } // V1.6: dinâmico
         },
-        required: ['dia', 'hook', 'roteiro', 'legenda', 'vozSugerida']
+        required: ['dia', 'periodo', 'hook', 'roteiro', 'legenda', 'vozSugerida']
       }
     }
   },
@@ -60,7 +61,9 @@ interface Marca {
   diferenciais: string
 }
 
-function buildPrompt(nicho: string, tom: string, qtdPosts: number, marca: Marca): string {
+// qtdDias = quantidade de DIAS de conteúdo; cada dia gera 2 posts (Manhã + Tarde) — pedido de
+// cliente: fluxo de 2 posts/dia, não 1.
+function buildPrompt(nicho: string, tom: string, qtdDias: number, marca: Marca): string {
   // V1.5 Estudo de Marca: campos opcionais. Vazios = comportamento original.
   const tomObrigatorio = marca.tomMarca || tom
   const servicosLinha = marca.servicos || 'serviços típicos do nicho'
@@ -91,8 +94,10 @@ Retorne um objeto JSON com dois campos: "estrategia" e "posts".
 - melhoresHorarios: 3 a 5 sugestões de dias/horários de postagem no Brasil
 - ctas: 4 a 6 variações do call-to-action, girando em torno de "${ctaObrigatorio}"
 
-2) "posts": ${qtdPosts} roteiros de Reels, cada um com:
-- dia: número sequencial de 1 a ${qtdPosts}
+2) "posts": um calendário de ${qtdDias} dias, com 2 roteiros de Reels por dia — um para Manhã e
+outro para Tarde (${qtdDias * 2} roteiros no total), cada um com:
+- dia: número sequencial de 1 a ${qtdDias} (Manhã e Tarde do mesmo dia usam o MESMO número)
+- periodo: "Manhã" ou "Tarde"
 - hook: gancho de até 3 segundos para prender atenção
 - roteiro: narração de cerca de 20 segundos, pronta para ser lida em voz alta
 - legenda: legenda da postagem terminando com o CTA
@@ -102,7 +107,8 @@ REGRAS OBRIGATÓRIAS para os posts:
 - Cada roteiro deve citar pelo menos 1 serviço da lista: ${servicosLinha}
 - A legenda de TODOS os posts deve terminar com o CTA: "${ctaObrigatorio}"
 - Mantenha o tom "${tomObrigatorio}" em 100% dos roteiros e legendas${diferenciaisRegra}
-- VARIE A REDAÇÃO: nunca repita a mesma frase, expressão ou construção entre hook/roteiro/legenda do mesmo dia, nem entre dias diferentes. Cada texto deve soar único, mesmo falando do mesmo serviço ou tom.
+- O post da Manhã e o da Tarde do mesmo dia devem abordar ângulos diferentes, não o mesmo gancho reescrito.
+- VARIE A REDAÇÃO: nunca repita a mesma frase, expressão ou construção entre hook/roteiro/legenda do mesmo dia, nem entre dias/períodos diferentes. Cada texto deve soar único, mesmo falando do mesmo serviço ou tom.
 
 Responda apenas com o objeto JSON, sem texto adicional.`
 }

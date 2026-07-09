@@ -8,24 +8,34 @@ const RESPONSE_SCHEMA = {
     type: 'OBJECT',
     properties: {
       dia: { type: 'INTEGER' },
+      periodo: { type: 'STRING', enum: ['Manhã', 'Tarde'] },
       hook: { type: 'STRING' },
       roteiro: { type: 'STRING' },
       legenda: { type: 'STRING' },
       vozSugerida: { type: 'STRING', enum: ['Zephyr', 'Puck'] }
     },
-    required: ['dia', 'hook', 'roteiro', 'legenda', 'vozSugerida']
+    required: ['dia', 'periodo', 'hook', 'roteiro', 'legenda', 'vozSugerida']
   }
 }
 
-function buildPrompt(nicho: string, tom: string, qtdPosts: number): string {
-  return `Você é um social media sênior brasileiro. Gere ${qtdPosts} roteiros de Reels para o nicho: "${nicho}". Tom de voz: ${tom}.
+// qtdDias = quantidade de DIAS de conteúdo; cada dia gera 2 posts (Manhã + Tarde),
+// então o array final tem qtdDias * 2 itens (pedido de cliente: fluxo de 2 posts/dia).
+function buildPrompt(nicho: string, tom: string, qtdDias: number): string {
+  return `Você é um social media sênior brasileiro. Gere um calendário de Reels de ${qtdDias} dias para o nicho: "${nicho}". Tom de voz: ${tom}.
 
-Para cada um dos ${qtdPosts} roteiros, retorne um objeto com:
-- dia: número sequencial de 1 a ${qtdPosts}
+Cada dia tem 2 roteiros: um para postar de Manhã e outro para postar à Tarde — ${qtdDias * 2} roteiros no total.
+
+Para cada roteiro, retorne um objeto com:
+- dia: número sequencial de 1 a ${qtdDias} (Manhã e Tarde do mesmo dia usam o MESMO número)
+- periodo: "Manhã" ou "Tarde"
 - hook: gancho de até 3 segundos para prender atenção logo no início
 - roteiro: roteiro de narração de cerca de 20 segundos, pronto para ser lido em voz alta
 - legenda: legenda para a postagem, terminando com uma call-to-action
 - vozSugerida: "Zephyr" ou "Puck", a que combinar melhor com o tom do roteiro
+
+REGRAS:
+- O post da Manhã e o da Tarde do mesmo dia devem ser sobre ângulos diferentes (não repita o mesmo gancho/roteiro só mudando palavras).
+- Varie a redação entre todos os roteiros do calendário — nunca repita a mesma frase entre dias ou períodos diferentes.
 
 Responda apenas com o array JSON, sem texto adicional.`
 }

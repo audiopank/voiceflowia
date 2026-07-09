@@ -37,6 +37,7 @@ interface Estrategia {
 
 interface Post {
   dia: number
+  periodo: 'Manhã' | 'Tarde'
   hook: string
   roteiro: string
   legenda: string
@@ -68,8 +69,15 @@ ${est.ctas.map((c) => `- ${c}`).join('\n')}
 `
 }
 
+// Nome de arquivo estável pra um post: "dia-01-manha". Sem isso, Manhã e Tarde do mesmo dia
+// (mesmo "dia", pedido de cliente: 2 posts/dia) sobrescreveriam o arquivo uma da outra.
+function diaTag(dia: number, periodo: string): string {
+  const p = periodo === 'Manhã' ? 'manha' : 'tarde'
+  return `dia-${String(dia).padStart(2, '0')}-${p}`
+}
+
 function buildPostText(post: Post): string {
-  return `DIA ${post.dia} — Voz sugerida: ${post.vozSugerida}
+  return `DIA ${post.dia} · ${post.periodo} — Voz sugerida: ${post.vozSugerida}
 
 HOOK (3s):
 ${post.hook}
@@ -117,10 +125,11 @@ const EXPORT_H = 675
 // específico do bloco. Fica oculto (height:0/overflow:hidden na wrapper) até ser exportado.
 // "dia" aqui é só de exibição (rótulo "Dia N"); a chave de estado é sempre a posição na lista.
 function ExportSlide({
-  innerRef, dia, slide, index, total, brandLogo, children,
+  innerRef, dia, periodo, slide, index, total, brandLogo, children,
 }: {
   innerRef: (el: HTMLDivElement | null) => void
   dia: number
+  periodo: string
   slide: SlideKey
   index: number
   total: number
@@ -143,7 +152,7 @@ function ExportSlide({
         }}
       >
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-          <span style={{ color: '#8B5CF6', fontWeight: 700, fontSize: 18 }}>Dia {dia}</span>
+          <span style={{ color: '#8B5CF6', fontWeight: 700, fontSize: 18 }}>Dia {dia} · {periodo}</span>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <span style={{ fontSize: 13, color: '#6B7280', fontWeight: 600 }}>{index}/{total}</span>
             {brandLogo && (
@@ -170,7 +179,9 @@ function SuperAgente() {
   const { hasAccess, loading: loadingSubscription, trial, refresh } = useSubscription()
   const [nicho, setNicho] = useState('')
   const [tom, setTom] = useState('Profissional')
-  const [qtdPosts, setQtdPosts] = useState(7)
+  // Fluxo de 2 posts/dia (Manhã + Tarde): este campo é quantidade de DIAS, não de posts —
+  // o total de cards gerados é o dobro.
+  const [qtdDias, setQtdDias] = useState(4)
 
   // V1.5 Estudo de Marca — opcionais. Vazios = gera igual hoje.
   const [instagram, setInstagram] = useState('')
@@ -244,7 +255,7 @@ function SuperAgente() {
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ nicho, tom, qtdPosts, instagram, servicos, tomMarca, cta, diferenciais, voz }) // V1.6: voz forçada ('' = automático)
+          body: JSON.stringify({ nicho, tom, qtdPosts: qtdDias, instagram, servicos, tomMarca, cta, diferenciais, voz }) // V1.6: voz forçada ('' = automático)
         },
         { onWait: (s) => setRateNotice(`⏳ Limite temporário da API. Aguardando ${s}s e tentando de novo...`) },
       )
@@ -411,7 +422,7 @@ function SuperAgente() {
   // Exporta os templates ocultos (1080x1350 fixo cada) — um PNG por bloco (Hook, Roteiro,
   // Legenda, Imagem), prontos pra virar um carrossel no Instagram. Nunca o card da tela,
   // que tem altura variável e é o que causava o corte ao publicar.
-  async function handleDownloadPng(index: number, dia: number) {
+  async function handleDownloadPng(index: number, dia: number, periodo: string) {
     const slides = slidesFor(index)
     setExportingIndex(index)
     try {
@@ -427,7 +438,7 @@ function SuperAgente() {
         })
         const a = document.createElement('a')
         a.href = dataUrl
-        a.download = `card-dia-${String(dia).padStart(2, '0')}-${i + 1}-${slide}.png`
+        a.download = `card-${diaTag(dia, periodo)}-${i + 1}-${slide}.png`
         document.body.appendChild(a)
         a.click()
         document.body.removeChild(a)
@@ -452,11 +463,11 @@ function SuperAgente() {
       const audios = zip.folder('audios')
       const imagens = zip.folder('imagens')
       posts.forEach((p, index) => {
-        roteiros?.file(`dia-${String(p.dia).padStart(2, '0')}.txt`, buildPostText(p))
+        roteiros?.file(`${diaTag(p.dia, p.periodo)}.txt`, buildPostText(p))
         const blob = audioBlobs[index]
-        if (blob) audios?.file(`dia-${String(p.dia).padStart(2, '0')}.wav`, blob)
+        if (blob) audios?.file(`${diaTag(p.dia, p.periodo)}.wav`, blob)
         const img = postImages[index]
-        if (img) imagens?.file(`dia-${String(p.dia).padStart(2, '0')}.${img.ext}`, img.blob)
+        if (img) imagens?.file(`${diaTag(p.dia, p.periodo)}.${img.ext}`, img.blob)
       })
 
       // Renderiza os 4 slides (Hook/Roteiro/Legenda/Imagem) de cada dia e inclui no ZIP.
@@ -475,7 +486,7 @@ function SuperAgente() {
               height: EXPORT_H,
               backgroundColor: '#111111',
             })
-            cards?.file(`dia-${String(p.dia).padStart(2, '0')}-${i + 1}-${slide}.png`, dataUrl.split(',')[1], { base64: true })
+            cards?.file(`${diaTag(p.dia, p.periodo)}-${i + 1}-${slide}.png`, dataUrl.split(',')[1], { base64: true })
           } catch (err) {
             console.error(`Erro ao renderizar slide ${slide} do dia ${p.dia}:`, err)
           }
@@ -596,15 +607,16 @@ function SuperAgente() {
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">Qtd. Posts</label>
+              <label className="block text-sm font-medium text-gray-300 mb-2">Qtd. Dias</label>
               <input
                 type="number"
                 min={1}
                 max={30}
-                value={qtdPosts}
-                onChange={(e) => setQtdPosts(Math.min(Math.max(Number(e.target.value) || 1, 1), 30))}
+                value={qtdDias}
+                onChange={(e) => setQtdDias(Math.min(Math.max(Number(e.target.value) || 1, 1), 30))}
                 className="w-full p-3 bg-[#1A1A1A] border border-gray-700 rounded-lg text-white focus:outline-none focus:border-[#8B5CF6]"
               />
+              <p className="text-xs text-gray-600 mt-1">Cada dia gera 2 cards: Manhã + Tarde.</p>
             </div>
           </div>
 
@@ -867,7 +879,7 @@ function SuperAgente() {
                   />
                 )}
                 <div className={`flex items-center justify-between ${brandLogo ? 'pr-24' : ''}`}>
-                  <span className="text-[#8B5CF6] font-bold">Dia {post.dia}</span>
+                  <span className="text-[#8B5CF6] font-bold">Dia {post.dia} · {post.periodo}</span>
                   {audioBlobs[index] ? (
                     <span className="text-xs text-[#22C55E] flex items-center gap-1">
                       <CheckCircle2 className="w-3 h-3" /> áudio pronto
@@ -959,7 +971,7 @@ function SuperAgente() {
                     </Button>
                   )}
                   <Button
-                    onClick={() => handleDownloadPng(index, post.dia)}
+                    onClick={() => handleDownloadPng(index, post.dia, post.periodo)}
                     disabled={exportingIndex === index}
                     className="flex-1 bg-[#1A1A1A] hover:bg-[#252525] disabled:opacity-50 flex items-center justify-center gap-2"
                   >
@@ -976,6 +988,7 @@ function SuperAgente() {
                   key={slide}
                   innerRef={(el) => { exportRefs.current[slideRefKey(index, slide)] = el }}
                   dia={post.dia}
+                  periodo={post.periodo}
                   slide={slide}
                   index={i + 1}
                   total={arr.length}
