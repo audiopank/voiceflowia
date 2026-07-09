@@ -14,6 +14,7 @@ import { Button } from '../components/ui/button'
 import { BackButton } from '../components/BackButton'
 import { SuperAgenteGuia } from '../components/SuperAgenteGuia'
 import { buildIcsCalendar, downloadIcsFile, postDateTime } from '../lib/ics'
+import { convertToWhatsAppOgg } from '../lib/audioConvert'
 
 // Espaça as gerações de voz para não estourar o limite/minuto do free tier.
 const VOICE_THROTTLE_MS = 3500
@@ -480,13 +481,19 @@ function SuperAgente() {
       const roteiros = zip.folder('roteiros')
       const audios = zip.folder('audios')
       const imagens = zip.folder('imagens')
-      posts.forEach((p, index) => {
+      // Áudio vai como OGG/Opus no ZIP — único formato que o WhatsApp reconhece como "áudio
+      // de voz" (player embutido); WAV chega lá como anexo genérico ("arquivo").
+      for (let index = 0; index < posts.length; index++) {
+        const p = posts[index]
         roteiros?.file(`${diaTag(p.dia, p.periodo, p.horario)}.txt`, buildPostText(p))
         const blob = audioBlobs[index]
-        if (blob) audios?.file(`${diaTag(p.dia, p.periodo, p.horario)}.wav`, blob)
+        if (blob) {
+          const oggBlob = await convertToWhatsAppOgg(blob, 'wav')
+          audios?.file(`${diaTag(p.dia, p.periodo, p.horario)}.ogg`, oggBlob)
+        }
         const img = postImages[index]
         if (img) imagens?.file(`${diaTag(p.dia, p.periodo, p.horario)}.${img.ext}`, img.blob)
-      })
+      }
 
       // Renderiza os 4 slides (Hook/Roteiro/Legenda/Imagem) de cada dia e inclui no ZIP.
       const cards = zip.folder('cards')

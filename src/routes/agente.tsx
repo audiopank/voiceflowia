@@ -8,6 +8,7 @@ import { Button } from '../components/ui/button'
 import { BackButton } from '../components/BackButton'
 import { EditableText } from '../components/EditableText'
 import { buildIcsCalendar, downloadIcsFile, postDateTime } from '../lib/ics'
+import { convertToWhatsAppOgg } from '../lib/audioConvert'
 
 // Data de hoje em yyyy-mm-dd, pro input type="date" (padrão: "Dia 1" = hoje).
 function todayIso(): string {
@@ -45,6 +46,7 @@ function Agente() {
   const [audioBlobs, setAudioBlobs] = useState<Record<number, Blob>>({})
   const [audioErrors, setAudioErrors] = useState<Record<number, string>>({})
   const [generatingAudioFor, setGeneratingAudioFor] = useState<number | null>(null)
+  const [convertingIndex, setConvertingIndex] = useState<number | null>(null)
   const [rateNotice, setRateNotice] = useState('')
 
   async function handleGenerateContent() {
@@ -160,17 +162,25 @@ function Agente() {
     audio.play()
   }
 
-  function handleDownloadAudio(index: number, dia: number, periodo: string) {
+  // Baixa como OGG/Opus — único formato que o WhatsApp reconhece como "áudio de voz"
+  // (player embutido); WAV chega lá como anexo genérico ("arquivo").
+  async function handleDownloadAudio(index: number, dia: number, periodo: string) {
     const blob = audioBlobs[index]
     if (!blob) return
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `reel-dia-${dia}-${periodo.toLowerCase()}.wav`
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-    URL.revokeObjectURL(url)
+    setConvertingIndex(index)
+    try {
+      const oggBlob = await convertToWhatsAppOgg(blob, 'wav')
+      const url = URL.createObjectURL(oggBlob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `reel-dia-${dia}-${periodo.toLowerCase()}.ogg`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+    } finally {
+      setConvertingIndex(null)
+    }
   }
 
   // Exporta todo o calendário gerado como .ics — abre no Google Agenda (ou qualquer app de
@@ -373,9 +383,14 @@ function Agente() {
                     </Button>
                     <Button
                       onClick={() => handleDownloadAudio(index, post.dia, post.periodo)}
-                      className="flex-1 bg-[#8B5CF6] hover:bg-[#7C3AED] flex items-center justify-center gap-2"
+                      disabled={convertingIndex === index}
+                      className="flex-1 bg-[#8B5CF6] hover:bg-[#7C3AED] disabled:opacity-50 flex items-center justify-center gap-2"
                     >
-                      <Download className="w-4 h-4" />
+                      {convertingIndex === index ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Download className="w-4 h-4" />
+                      )}
                       Baixar
                     </Button>
                   </div>

@@ -6,6 +6,7 @@ import { fetchWithRetry } from '../lib/apiRetry'
 import { Button } from '../components/ui/button'
 import { BackButton } from '../components/BackButton'
 import { ELEVENLABS_VOICES, GEMINI_VOICES_TEXTO_LONGO, type Voice, type Provider } from '../lib/voices'
+import { convertToWhatsAppOgg } from '../lib/audioConvert'
 
 export const Route = createFileRoute("/editor")({
   component: Editor,
@@ -25,6 +26,7 @@ function Editor() {
   const [rateNotice, setRateNotice] = useState('')
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null)
   const [loadingVoices, setLoadingVoices] = useState(true)
+  const [isConverting, setIsConverting] = useState(false)
 
 
   // Carregar vozes do provedor selecionado.
@@ -89,17 +91,25 @@ function Editor() {
     }
   }
 
-  function handleDownload() {
+  // Baixa como OGG/Opus — é o único formato que o WhatsApp reconhece como "áudio de voz"
+  // (player embutido); MP3/WAV chegam lá como anexo genérico ("arquivo").
+  async function handleDownload() {
     if (!audioBlob) return
-    const extension = provider === 'elevenlabs' ? 'mp3' : 'wav'
-    const url = URL.createObjectURL(audioBlob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `voiceflow-ia-voiceover.${extension}`
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-    URL.revokeObjectURL(url)
+    setIsConverting(true)
+    try {
+      const originalExt = provider === 'elevenlabs' ? 'mp3' : 'wav'
+      const oggBlob = await convertToWhatsAppOgg(audioBlob, originalExt)
+      const url = URL.createObjectURL(oggBlob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = 'voiceflow-ia-voiceover.ogg'
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+    } finally {
+      setIsConverting(false)
+    }
   }
 
   function handlePlayPreview() {
@@ -259,10 +269,20 @@ function Editor() {
                 <div className="flex gap-4">
                   <Button
                     onClick={handleDownload}
-                    className="flex-1 bg-[#8B5CF6] hover:bg-[#7C3AED] text-lg py-4 font-bold flex items-center justify-center gap-2"
+                    disabled={isConverting}
+                    className="flex-1 bg-[#8B5CF6] hover:bg-[#7C3AED] disabled:opacity-50 text-lg py-4 font-bold flex items-center justify-center gap-2"
                   >
-                    <Download className="w-5 h-5" />
-                    Baixar {provider === 'elevenlabs' ? 'MP3' : 'WAV'}
+                    {isConverting ? (
+                      <>
+                        <Loader2 className="w-5 h-5 animate-spin" />
+                        Convertendo pra WhatsApp...
+                      </>
+                    ) : (
+                      <>
+                        <Download className="w-5 h-5" />
+                        Baixar OGG (WhatsApp)
+                      </>
+                    )}
                   </Button>
                   <Button
                     onClick={handlePlayPreview}
