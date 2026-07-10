@@ -92,6 +92,15 @@ function Login() {
         >
           {isSignUp ? 'Já tem conta? Entre aqui' : 'Não tem conta? Cadastre-se'}
         </button>
+        {!isSignUp && (
+          <button
+            type="button"
+            onClick={() => navigate({ to: '/esqueci-senha' })}
+            className="w-full text-gray-500 text-xs hover:text-gray-300"
+          >
+            Esqueci minha senha
+          </button>
+        )}
       </form>
     </div>
   )

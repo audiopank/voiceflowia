@@ -23,8 +23,8 @@ function PlanCard({ plan, fallbackUrl }: { plan: Plan; fallbackUrl: string | nul
     <Card
       className={
         plan.highlight
-          ? "bg-[#111111] border-2 border-[#8B5CF6] rounded-xl overflow-hidden shadow-[0_0_30px_rgba(139,92,246,0.3)] relative"
-          : "bg-[#111111] border border-gray-800 rounded-xl overflow-hidden relative"
+          ? "bg-[#111111] border-2 border-[#8B5CF6] rounded-xl shadow-[0_0_30px_rgba(139,92,246,0.3)] relative"
+          : "bg-[#111111] border border-gray-800 rounded-xl relative"
       }
     >
       {plan.badge && (

@@ -10,8 +10,10 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as SuperAgenteRouteImport } from './routes/super-agente'
+import { Route as RedefinirSenhaRouteImport } from './routes/redefinir-senha'
 import { Route as PrecosRouteImport } from './routes/precos'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as EsqueciSenhaRouteImport } from './routes/esqueci-senha'
 import { Route as EditorRouteImport } from './routes/editor'
 import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as CadastroRouteImport } from './routes/cadastro'
@@ -25,6 +27,11 @@ const SuperAgenteRoute = SuperAgenteRouteImport.update({
   path: '/super-agente',
   getParentRoute: () => rootRouteImport,
 } as any)
+const RedefinirSenhaRoute = RedefinirSenhaRouteImport.update({
+  id: '/redefinir-senha',
+  path: '/redefinir-senha',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const PrecosRoute = PrecosRouteImport.update({
   id: '/precos',
   path: '/precos',
@@ -33,6 +40,11 @@ const PrecosRoute = PrecosRouteImport.update({
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
   path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const EsqueciSenhaRoute = EsqueciSenhaRouteImport.update({
+  id: '/esqueci-senha',
+  path: '/esqueci-senha',
   getParentRoute: () => rootRouteImport,
 } as any)
 const EditorRoute = EditorRouteImport.update({
@@ -79,8 +91,10 @@ export interface FileRoutesByFullPath {
   '/cadastro': typeof CadastroRoute
   '/dashboard': typeof DashboardRoute
   '/editor': typeof EditorRoute
+  '/esqueci-senha': typeof EsqueciSenhaRoute
   '/login': typeof LoginRoute
   '/precos': typeof PrecosRoute
+  '/redefinir-senha': typeof RedefinirSenhaRoute
   '/super-agente': typeof SuperAgenteRoute
 }
 export interface FileRoutesByTo {
@@ -91,8 +105,10 @@ export interface FileRoutesByTo {
   '/cadastro': typeof CadastroRoute
   '/dashboard': typeof DashboardRoute
   '/editor': typeof EditorRoute
+  '/esqueci-senha': typeof EsqueciSenhaRoute
   '/login': typeof LoginRoute
   '/precos': typeof PrecosRoute
+  '/redefinir-senha': typeof RedefinirSenhaRoute
   '/super-agente': typeof SuperAgenteRoute
 }
 export interface FileRoutesById {
@@ -104,8 +120,10 @@ export interface FileRoutesById {
   '/cadastro': typeof CadastroRoute
   '/dashboard': typeof DashboardRoute
   '/editor': typeof EditorRoute
+  '/esqueci-senha': typeof EsqueciSenhaRoute
   '/login': typeof LoginRoute
   '/precos': typeof PrecosRoute
+  '/redefinir-senha': typeof RedefinirSenhaRoute
   '/super-agente': typeof SuperAgenteRoute
 }
 export interface FileRouteTypes {
@@ -118,8 +136,10 @@ export interface FileRouteTypes {
     | '/cadastro'
     | '/dashboard'
     | '/editor'
+    | '/esqueci-senha'
     | '/login'
     | '/precos'
+    | '/redefinir-senha'
     | '/super-agente'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -130,8 +150,10 @@ export interface FileRouteTypes {
     | '/cadastro'
     | '/dashboard'
     | '/editor'
+    | '/esqueci-senha'
     | '/login'
     | '/precos'
+    | '/redefinir-senha'
     | '/super-agente'
   id:
     | '__root__'
@@ -142,8 +164,10 @@ export interface FileRouteTypes {
     | '/cadastro'
     | '/dashboard'
     | '/editor'
+    | '/esqueci-senha'
     | '/login'
     | '/precos'
+    | '/redefinir-senha'
     | '/super-agente'
   fileRoutesById: FileRoutesById
 }
@@ -155,8 +179,10 @@ export interface RootRouteChildren {
   CadastroRoute: typeof CadastroRoute
   DashboardRoute: typeof DashboardRoute
   EditorRoute: typeof EditorRoute
+  EsqueciSenhaRoute: typeof EsqueciSenhaRoute
   LoginRoute: typeof LoginRoute
   PrecosRoute: typeof PrecosRoute
+  RedefinirSenhaRoute: typeof RedefinirSenhaRoute
   SuperAgenteRoute: typeof SuperAgenteRoute
 }
 
@@ -167,6 +193,13 @@ declare module '@tanstack/react-router' {
       path: '/super-agente'
       fullPath: '/super-agente'
       preLoaderRoute: typeof SuperAgenteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/redefinir-senha': {
+      id: '/redefinir-senha'
+      path: '/redefinir-senha'
+      fullPath: '/redefinir-senha'
+      preLoaderRoute: typeof RedefinirSenhaRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/precos': {
@@ -181,6 +214,13 @@ declare module '@tanstack/react-router' {
       path: '/login'
       fullPath: '/login'
       preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/esqueci-senha': {
+      id: '/esqueci-senha'
+      path: '/esqueci-senha'
+      fullPath: '/esqueci-senha'
+      preLoaderRoute: typeof EsqueciSenhaRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/editor': {
@@ -243,8 +283,10 @@ const rootRouteChildren: RootRouteChildren = {
   CadastroRoute: CadastroRoute,
   DashboardRoute: DashboardRoute,
   EditorRoute: EditorRoute,
+  EsqueciSenhaRoute: EsqueciSenhaRoute,
   LoginRoute: LoginRoute,
   PrecosRoute: PrecosRoute,
+  RedefinirSenhaRoute: RedefinirSenhaRoute,
   SuperAgenteRoute: SuperAgenteRoute,
 }
 export const routeTree = rootRouteImport
