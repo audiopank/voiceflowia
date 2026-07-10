@@ -5,6 +5,8 @@ import { supabase } from '../lib/supabase'
 import { fetchAllPlans, ADMIN_EMAIL, type Plan } from '../lib/plans'
 import { Button } from '../components/ui/button'
 import { BackButton } from '../components/BackButton'
+import { AgentesExpansores } from '../components/admin/AgentesExpansores'
+import { Field, inputClass } from '../components/admin/shared'
 
 export const Route = createFileRoute('/admin')({
   component: Admin,
@@ -19,6 +21,7 @@ function emptyPlan(order: number): Plan {
     features: [],
     cta_label: 'Assinar',
     kiwify_url: '',
+    referral_kiwify_url: '',
     badge: null,
     highlight: false,
     sort_order: order,
@@ -30,6 +33,7 @@ function Admin() {
   const navigate = useNavigate()
   const [checkingAuth, setCheckingAuth] = useState(true)
   const [isAdmin, setIsAdmin] = useState(false)
+  const [tab, setTab] = useState<'planos' | 'agentes'>('planos')
   const [plans, setPlans] = useState<Plan[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -123,7 +127,10 @@ function Admin() {
     }
 
     const payload = plans.map((p) => ({
-      ...(p.id ? { id: p.id } : {}),
+      // Sempre inclui um id: se algum plano do lote ja tem id e outro nao,
+      // o upsert em lote do PostgREST manda NULL pros que faltam em vez de
+      // aplicar o DEFAULT da coluna, e isso quebra a constraint NOT NULL.
+      id: p.id || crypto.randomUUID(),
       slug: p.slug.trim(),
       name: p.name,
       price: p.price,
@@ -131,6 +138,7 @@ function Admin() {
       features: p.features,
       cta_label: p.cta_label,
       kiwify_url: p.kiwify_url?.trim() || null,
+      referral_kiwify_url: p.referral_kiwify_url?.trim() || null,
       badge: p.badge?.trim() || null,
       highlight: p.highlight,
       sort_order: p.sort_order,
@@ -182,17 +190,46 @@ function Admin() {
       <div className="max-w-4xl mx-auto">
         <BackButton to="/dashboard" label="Voltar ao Painel" className="mb-6" />
 
-        <div className="flex items-center justify-between mb-8 gap-4 flex-wrap">
+        <div className="flex items-center justify-between mb-6 gap-4 flex-wrap">
           <div>
-            <h1 className="text-3xl font-bold text-white mb-1">Painel Admin — Planos</h1>
-            <p className="text-gray-400">Edite preços, features e cole os links da Kiwify. Sem precisar de deploy.</p>
+            <h1 className="text-3xl font-bold text-white mb-1">Painel Admin</h1>
+            <p className="text-gray-400">
+              {tab === 'planos'
+                ? 'Edite preços, features e cole os links da Kiwify. Sem precisar de deploy.'
+                : 'Gerencie os Agentes Expansores do programa de indicação.'}
+            </p>
           </div>
-          <Button onClick={addPlan} className="bg-[#1A1A1A] hover:bg-[#252525] flex items-center gap-2">
-            <Plus className="w-4 h-4" />
-            Adicionar Plano
-          </Button>
+          {tab === 'planos' && (
+            <Button onClick={addPlan} className="bg-[#1A1A1A] hover:bg-[#252525] flex items-center gap-2">
+              <Plus className="w-4 h-4" />
+              Adicionar Plano
+            </Button>
+          )}
         </div>
 
+        <div className="flex gap-2 mb-8 border-b border-gray-800">
+          <button
+            onClick={() => setTab('planos')}
+            className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
+              tab === 'planos' ? 'border-[#8B5CF6] text-white' : 'border-transparent text-gray-500 hover:text-gray-300'
+            }`}
+          >
+            Planos
+          </button>
+          <button
+            onClick={() => setTab('agentes')}
+            className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
+              tab === 'agentes' ? 'border-[#8B5CF6] text-white' : 'border-transparent text-gray-500 hover:text-gray-300'
+            }`}
+          >
+            Agentes Expansores
+          </button>
+        </div>
+
+        {tab === 'agentes' && <AgentesExpansores />}
+
+        {tab === 'planos' && (
+        <>
         {error && (
           <div className="mb-6 p-4 bg-red-900/30 border border-red-700 rounded-xl flex items-center gap-3">
             <AlertCircle className="w-5 h-5 text-red-400 shrink-0" />
@@ -287,6 +324,19 @@ function Admin() {
                       <input
                         value={plan.kiwify_url || ''}
                         onChange={(e) => updatePlan(index, { kiwify_url: e.target.value })}
+                        className={inputClass}
+                        placeholder="https://pay.kiwify.com.br/..."
+                      />
+                    </Field>
+                  </div>
+                  <div className="md:col-span-2">
+                    <Field
+                      label="Link com desconto (indicação)"
+                      hint='Link de checkout de uma "Oferta" separada na Kiwify, com 10% já embutido no preço — usado nos links dos Agentes Expansores. Deixe vazio se este plano não participa do programa de indicação.'
+                    >
+                      <input
+                        value={plan.referral_kiwify_url || ''}
+                        onChange={(e) => updatePlan(index, { referral_kiwify_url: e.target.value })}
                         className={inputClass}
                         placeholder="https://pay.kiwify.com.br/..."
                       />
@@ -391,20 +441,10 @@ function Admin() {
             </Button>
           </div>
         )}
+        </>
+        )}
       </div>
     </div>
   )
 }
 
-const inputClass =
-  'w-full p-2.5 bg-[#1A1A1A] border border-gray-700 rounded-lg text-white placeholder-gray-600 focus:outline-none focus:border-[#8B5CF6] text-sm'
-
-function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
-  return (
-    <div>
-      <label className="block text-sm font-medium text-gray-300 mb-1">{label}</label>
-      {children}
-      {hint && <p className="text-xs text-gray-600 mt-1">{hint}</p>}
-    </div>
-  )
-}

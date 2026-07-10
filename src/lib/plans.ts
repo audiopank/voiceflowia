@@ -14,6 +14,11 @@ export interface Plan {
   features: PlanFeature[]
   cta_label: string
   kiwify_url: string | null
+  // Link de checkout de uma "Oferta" separada na Kiwify, com o preço já
+  // reduzido (10% off) — usado nos links de indicação dos Agentes
+  // Expansores. A Kiwify desta conta não tem cupom avulso, então o
+  // desconto vem de uma Oferta própria, não de um parâmetro na URL.
+  referral_kiwify_url: string | null
   badge: string | null
   highlight: boolean
   sort_order: number
@@ -42,6 +47,7 @@ export const DEFAULT_PLANS: Plan[] = [
     // ISCA DE ANCORAGEM: sem link proprio de proposito. O clique e funilado
     // para o checkout do plano em destaque (R$97,90).
     kiwify_url: null,
+    referral_kiwify_url: null,
     badge: 'Melhor custo-benefício',
     highlight: false,
     sort_order: 1,
@@ -59,6 +65,7 @@ export const DEFAULT_PLANS: Plan[] = [
     ],
     cta_label: 'Começar Agora',
     kiwify_url: import.meta.env.VITE_KIWIFY_CRESCIMENTO_URL || null,
+    referral_kiwify_url: null,
     badge: 'MAIS VENDIDO',
     highlight: true,
     sort_order: 2,
@@ -77,6 +84,7 @@ export const DEFAULT_PLANS: Plan[] = [
     ],
     cta_label: 'Quero Dominar',
     kiwify_url: import.meta.env.VITE_KIWIFY_DOMINACAO_URL || null,
+    referral_kiwify_url: null,
     badge: null,
     highlight: false,
     sort_order: 3,

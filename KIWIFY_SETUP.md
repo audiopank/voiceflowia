@@ -10,10 +10,10 @@
 
 1. Acesse o painel da Kiwify: https://app.kiwify.com.br/
 2. Vá para **Produtos** > **Criar Produto**
-3. Crie os 3 planos:
-   - **Plano Barbeiro** - R$ 97/mês (assinatura)
-   - **Plano Crescimento** - R$ 297/mês (assinatura) - DESTAQUE
-   - **Plano Dominação** - R$ 497/mês (assinatura) - 5 vagas
+3. Crie os 2 planos:
+
+   - **Plano Crescimento** - R$ 97,90/mês (assinatura) - DESTAQUE
+   - **Plano Dominação** - R$ 167,90/mês (assinatura) - 5 vagas
 4. Copie os links de checkout de cada produto
 
 ## Passo 3: Configurar Variáveis de Ambiente
@@ -23,7 +23,6 @@ Atualize o arquivo `.env`:
 VITE_SUPABASE_URL=https://seu-projeto.supabase.co
 VITE_SUPABASE_ANON_KEY=sua-chave-anonima
 KIWIFY_WEBHOOK_SECRET=seu-token-secreto
-VITE_KIWIFY_BARBEIRO_URL=https://checkout.kiwify.com.br/seu-link-barbeiro
 VITE_KIWIFY_CRESCIMENTO_URL=https://checkout.kiwify.com.br/seu-link-crescimento
 VITE_KIWIFY_DOMINACAO_URL=https://checkout.kiwify.com.br/seu-link-dominacao
 ```

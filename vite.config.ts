@@ -14,6 +14,7 @@ function apiDevBridge(): Plugin {
     '/api/gemini/suggest-brand': './api/gemini/suggest-brand.ts',
     '/api/gemini/generate-hooks': './api/gemini/generate-hooks.ts',
     '/api/elevenlabs/text-to-speech': './api/elevenlabs/text-to-speech.ts',
+    '/api/kiwify/webhook': './api/kiwify/webhook.ts',
   }
 
   return {
