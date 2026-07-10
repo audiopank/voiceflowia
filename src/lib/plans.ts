@@ -30,19 +30,19 @@ export const ADMIN_EMAIL =
 export const DEFAULT_PLANS: Plan[] = [
   {
     slug: 'inicial',
-    name: 'Plano Inicial',
-    price: 'R$ 49',
+    name: 'Escolha seu plano',
+    price: 'Assinatura',
     period: '/mês',
     features: [
       { text: 'Dashboard de Métricas Completo', included: true },
-      { text: '5 Gerações de Voz / mês — Sem Download MP3', included: true },
-      { text: 'Sem Agente de Conteúdo IA', included: false },
+      { text: 'Gerações de Vozes com IA / mês', included: true },
+      { text: 'Conteúdos para suas redes sociais', included: true },
     ],
     cta_label: 'Começar Agora',
     // ISCA DE ANCORAGEM: sem link proprio de proposito. O clique e funilado
-    // para o checkout do plano em destaque (R$197). Ninguem compra o R$49.
+    // para o checkout do plano em destaque (R$97,90).
     kiwify_url: null,
-    badge: null,
+    badge: 'Melhor custo-benefício',
     highlight: false,
     sort_order: 1,
     active: true,
@@ -50,14 +50,14 @@ export const DEFAULT_PLANS: Plan[] = [
   {
     slug: 'crescimento',
     name: 'Plano Crescimento',
-    price: 'R$ 197',
+    price: 'R$ 97,90',
     period: '/mês',
     features: [
       { text: 'Tudo do Plano Inicial', included: true },
       { text: 'Agente de Conteúdo IA 24h', included: true },
-      { text: '30 Projetos de Voz / mês', included: true },
+      { text: '15 Projetos de Voz / mês', included: true },
     ],
-    cta_label: 'Testar 7 Dias Grátis',
+    cta_label: 'Começar Agora',
     kiwify_url: import.meta.env.VITE_KIWIFY_CRESCIMENTO_URL || null,
     badge: 'MAIS VENDIDO',
     highlight: true,
@@ -67,12 +67,12 @@ export const DEFAULT_PLANS: Plan[] = [
   {
     slug: 'dominacao',
     name: 'Plano Dominação',
-    price: 'R$ 297',
+    price: 'R$ 167,90',
     period: '/mês',
     features: [
       { text: 'Tudo do Plano Crescimento', included: true },
       { text: 'Atendimento por Voz no WhatsApp', included: true },
-      { text: 'Estratégia 1x1 com o Mestre 2x/mês', included: true },
+      { text: 'Estratégia com posts gerados com IA', included: true },
       { text: 'Vagas Limitadas: 5 vagas', included: true },
     ],
     cta_label: 'Quero Dominar',
