@@ -184,7 +184,13 @@ export default async function handler(request: Request): Promise<Response> {
             responseMimeType: 'application/json',
             responseSchema: buildResponseSchema(vozesPermitidas) // V1.6
           }
-        })
+        }),
+        // Sem isso, quando o Gemini fica "engasgado" (alta demanda) o fetch
+        // nunca desiste sozinho — a function fica pendurada até um timeout
+        // de infraestrutura da Vercel (~300s!), em vez de responder rápido
+        // com um erro. 45s deixa margem pro maxDuration=60 ainda processar
+        // e devolver a resposta antes da function ser morta.
+        signal: AbortSignal.timeout(45_000)
       }
     )
 
@@ -222,6 +228,12 @@ export default async function handler(request: Request): Promise<Response> {
     })
   } catch (error) {
     console.error('Erro ao gerar estratégia:', error)
+    if (error instanceof Error && error.name === 'TimeoutError') {
+      return new Response(
+        JSON.stringify({ error: 'O Gemini está demorando muito pra responder (alta demanda). Tente novamente em instantes.' }),
+        { status: 503, headers: { 'Content-Type': 'application/json' } }
+      )
+    }
     return new Response(
       JSON.stringify({ error: 'Erro ao gerar estratégia' }),
       { status: 500, headers: { 'Content-Type': 'application/json' } }
