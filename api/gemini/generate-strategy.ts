@@ -241,11 +241,12 @@ async function handler(request: Request): Promise<Response> {
   }
 }
 
-// No runtime Node.js (não-Edge), a Vercel só reconhece esta function como um
-// "Web Handler" (Request/Response) via export nomeado por metodo HTTP — sem
-// isso, ela assume a assinatura antiga `(req, res) => void`, ignora o que a
-// gente `return`, e a conexao fica pendurada ate a Vercel desistir sozinha
-// (~300s!) em vez de responder. `export default` continua aqui só pro
-// dev-bridge local (vite.config.ts), que chama `mod.default(request)` direto.
-export const POST = handler
-export default handler
+// No runtime Node.js (não-Edge) deste projeto (framework "Other", não
+// Next.js), a Vercel NÃO reconhece nem `export default function handler`
+// nem `export const POST` como Web Handler (Request/Response) — em ambos
+// os casos ela assume a assinatura antiga `(req, res) => void`, ignora o
+// que a gente `return`, e a conexao fica pendurada ate a Vercel desistir
+// sozinha (~300s!). O formato que funciona é `export default { fetch }`.
+// O dev-bridge local (vite.config.ts) foi ajustado pra aceitar os dois
+// formatos (function OU {fetch}).
+export default { fetch: handler }

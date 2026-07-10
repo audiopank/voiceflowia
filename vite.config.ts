@@ -37,7 +37,13 @@ function apiDevBridge(): Plugin {
             body: body.length ? body : undefined,
           })
 
-          const response: Response = await mod.default(request)
+          // Handlers podem exportar `export default handler` (function) ou
+          // `export default { fetch: handler }` (formato Web Handler que a
+          // Vercel exige em runtime Node.js pra projetos "Other") — aceita
+          // os dois formatos aqui.
+          const entry = mod.default
+          const invoke = typeof entry === 'function' ? entry : entry.fetch
+          const response: Response = await invoke(request)
           res.statusCode = response.status
           response.headers.forEach((value, key) => res.setHeader(key, value))
           res.end(Buffer.from(await response.arrayBuffer()))
