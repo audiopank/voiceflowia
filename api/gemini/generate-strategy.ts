@@ -126,7 +126,7 @@ REGRAS OBRIGATÓRIAS para os posts:
 Responda apenas com o objeto JSON, sem texto adicional.`
 }
 
-export default async function handler(request: Request): Promise<Response> {
+async function handler(request: Request): Promise<Response> {
   if (request.method !== 'POST') {
     return new Response(JSON.stringify({ error: 'Método não permitido' }), {
       status: 405,
@@ -240,3 +240,12 @@ export default async function handler(request: Request): Promise<Response> {
     )
   }
 }
+
+// No runtime Node.js (não-Edge), a Vercel só reconhece esta function como um
+// "Web Handler" (Request/Response) via export nomeado por metodo HTTP — sem
+// isso, ela assume a assinatura antiga `(req, res) => void`, ignora o que a
+// gente `return`, e a conexao fica pendurada ate a Vercel desistir sozinha
+// (~300s!) em vez de responder. `export default` continua aqui só pro
+// dev-bridge local (vite.config.ts), que chama `mod.default(request)` direto.
+export const POST = handler
+export default handler
