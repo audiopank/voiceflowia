@@ -1,9 +1,9 @@
-export const config = {
-  runtime: 'edge'
-}
-
-// Calendários maiores (mais dias = mais posts) podem passar do limite padrão de
-// execução (~25s) e virar "Erro na API: 504" (timeout do gateway, ver text-to-speech.ts).
+// Runtime Node.js (não 'edge'): o handler espera a resposta INTEIRA do Gemini
+// antes de responder (sem streaming) — Edge Functions da Vercel tem um teto
+// fixo de 25s pra "começar a responder" que o maxDuration NÃO estica (isso já
+// causou "Erro na API: 504"/FUNCTION_INVOCATION_TIMEOUT mesmo com maxDuration=60
+// configurado). No runtime Node.js, maxDuration vale de verdade (até 60s no
+// plano Hobby da Vercel).
 export const maxDuration = 60
 
 // V1.6: vozes válidas do Gemini TTS que o seletor manual oferece.
