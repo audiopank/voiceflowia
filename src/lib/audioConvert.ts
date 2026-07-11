@@ -45,7 +45,20 @@ export async function convertToWhatsAppOgg(input: Blob, inputExt: string): Promi
     const inputName = `input.${inputExt}`
     const outputName = 'output.ogg'
     await ffmpeg.writeFile(inputName, await fetchFile(input))
-    await ffmpeg.exec(['-i', inputName, '-c:a', 'libopus', '-b:a', '24k', '-ar', '16000', '-ac', '1', outputName])
+    // Qualidade: 24kbps/16kHz era "voz de telefone" e gerou reclamação de qualidade.
+    // 64kbps + 48kHz deixa a locução cheia e natural, e o WhatsApp continua
+    // reconhecendo como nota de voz (aceita qualquer OGG/Opus válido, independente
+    // do bitrate — confirmado). Mantido mono (`-ac 1`): locução é voz única, estéreo
+    // só dobraria o tamanho sem ganho audível. Só mexemos no VALOR de flags que já
+    // rodavam em produção (-b:a/-ar/-ac) pra não arriscar um fallback silencioso.
+    await ffmpeg.exec([
+      '-i', inputName,
+      '-c:a', 'libopus',
+      '-b:a', '64k',
+      '-ar', '48000',
+      '-ac', '1',
+      outputName,
+    ])
     const data = await ffmpeg.readFile(outputName)
     await ffmpeg.deleteFile(inputName)
     await ffmpeg.deleteFile(outputName)
