@@ -8,7 +8,7 @@ export interface SocialNetwork {
   key: string // 'instagram' | 'facebook' | ...
   label: string
   placeholder: string
-  defaultUrl?: string // só a PlugPost AI tem URL fixa
+  defaultUrl?: string // só a NewPost-IA tem URL fixa
 }
 
 export const SOCIAL_NETWORKS: SocialNetwork[] = [
@@ -18,7 +18,7 @@ export const SOCIAL_NETWORKS: SocialNetwork[] = [
   { key: 'youtube', label: 'YouTube', placeholder: 'https://youtube.com/@seucanal' },
   {
     key: 'plugpost',
-    label: 'PlugPost AI (rede BR)',
+    label: 'NewPost-IA (rede BR)',
     placeholder: 'https://plugpost-ai.lovable.app/',
     defaultUrl: 'https://plugpost-ai.lovable.app/',
   },
@@ -39,7 +39,7 @@ export function loadSocialLinks(key: string): SocialLinks {
   } catch {
     // localStorage indisponível/JSON inválido — cai no default abaixo.
   }
-  // Sem nada salvo: pré-preenche as redes que têm URL fixa (PlugPost AI).
+  // Sem nada salvo: pré-preenche as redes que têm URL fixa (NewPost-IA).
   const init: SocialLinks = {}
   for (const n of SOCIAL_NETWORKS) if (n.defaultUrl) init[n.key] = n.defaultUrl
   return init
