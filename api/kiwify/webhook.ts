@@ -8,11 +8,18 @@ import { createClient } from '@supabase/supabase-js'
 
 function resolvePlanFromProductName(name: string): string | null {
   const n = name.toLowerCase()
+  // RADAR PRO é add-on: NÃO é um subscription_plan, é um entitlement paralelo
+  // (radar_expires_at). Checado antes dos planos de conteúdo. Ver handler abaixo.
+  if (n.includes('radar')) return 'radar_pro'
   if (n.includes('barbeiro')) return 'barbeiro'
   if (n.includes('crescimento')) return 'crescimento'
   if (n.includes('dominação') || n.includes('dominacao')) return 'dominacao'
   return null
 }
+
+// Dias de acesso concedidos por pagamento de RADAR PRO. 32 = buffer pra não
+// lapsar entre cobranças mensais da Kiwify (webhook chega a cada renovação).
+const RADAR_DAYS = 32
 
 // Path exato do parametro de rastreio (s1) no payload da Kiwify ainda NAO
 // esta confirmado pra esta conta — checa candidatos plausiveis e loga o
@@ -125,6 +132,30 @@ export default async function handler(request: Request): Promise<Response> {
     .select('id, referred_by_agent_slug')
     .eq('email', customerEmail)
     .maybeSingle()
+
+  // RADAR PRO é add-on: concede o entitlement do Radar (radar_expires_at) SEM
+  // tocar no subscription_plan (o cliente mantém Dominação/Crescimento etc).
+  if (plan === 'radar_pro') {
+    if (existingProfile) {
+      const expires = new Date(Date.now() + RADAR_DAYS * 24 * 60 * 60 * 1000).toISOString()
+      const { error } = await supabaseAdmin
+        .from('profiles')
+        .update({ radar_expires_at: expires, updated_at: new Date().toISOString() })
+        .eq('id', existingProfile.id)
+      if (error) {
+        console.error('[kiwify-webhook] erro ao conceder Radar:', error)
+        return new Response(JSON.stringify({ error: 'Erro interno' }), { status: 500 })
+      }
+      console.log(`[kiwify-webhook] RADAR PRO ativado para ${customerEmail} até ${expires}`)
+    } else {
+      // Fase 1: reconciliação pré-cadastro do Radar não é suportada (raro comprar
+      // add-on premium antes de ter conta). O admin concede via grant_radar_access
+      // depois que o cliente se cadastrar. Não gravamos pending pra não corromper
+      // o subscription_plan na reconciliação do handle_new_user.
+      console.warn(`[kiwify-webhook] RADAR PRO comprado por ${customerEmail} sem conta — conceder manualmente via grant_radar_access após cadastro.`)
+    }
+    return new Response(JSON.stringify({ ok: true }), { status: 200 })
+  }
 
   if (existingProfile) {
     const { error } = await supabaseAdmin

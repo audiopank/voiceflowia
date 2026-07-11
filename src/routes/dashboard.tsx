@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { createFileRoute, useNavigate } from "@tanstack/react-router"
 import { supabase } from '../lib/supabase'
 import { useSubscription } from '../lib/useSubscription'
-import { Lock, Volume2, Settings, Rocket } from 'lucide-react'
+import { Lock, Volume2, Settings, Rocket, Radar as RadarIcon } from 'lucide-react'
 import { BackButton } from '../components/BackButton'
 import { ADMIN_EMAIL } from '../lib/plans'
 import { TRIAL_GENERATIONS } from '../lib/trial'
@@ -36,6 +36,7 @@ function Dashboard() {
   const navigate = useNavigate()
 
   const hasContentAgentFeature = subscription.hasContentAgentFeature
+  const hasRadar = subscription.hasRadar
   const subscriptionActive = subscription.status === 'active'
 
   // Trial mostra o que sobra das 10; pago é ilimitado; sem acesso mostra "—".
@@ -184,6 +185,28 @@ function Dashboard() {
             >
               <Lock className="w-9 h-9" />
               Super Agente 🔒 - Upgrade para Crescimento
+            </button>
+          )}
+        </div>
+
+        {/* VoiceFlow Radar — módulo premium (add-on RADAR PRO). Só aparece o
+            hero se o cliente tem o entitlement; senão vira convite pra conhecer. */}
+        <div className="mb-8">
+          {hasRadar ? (
+            <button
+              onClick={() => navigate({ to: '/radar' })}
+              className="w-full bg-gradient-to-r from-[#0EA5E9] to-[#2563EB] hover:from-[#0284C7] hover:to-[#1D4ED8] text-white font-bold py-6 px-8 rounded-xl text-2xl flex items-center justify-center gap-3 transition-all hover:scale-[1.02] shadow-lg shadow-[#2563EB]/30"
+            >
+              <RadarIcon className="w-9 h-9" />
+              VoiceFlow Radar — Monitore sua marca 📡
+            </button>
+          ) : (
+            <button
+              onClick={() => navigate({ to: '/precos' })}
+              className="w-full bg-[#0A0F1E] border border-[#1E3A5F] text-gray-300 hover:border-[#2563EB] font-bold py-6 px-8 rounded-xl text-2xl flex items-center justify-center gap-3 transition-all"
+            >
+              <RadarIcon className="w-9 h-9 text-[#2563EB]" />
+              Novo: VoiceFlow Radar — Conheça o RADAR PRO 📡
             </button>
           )}
         </div>

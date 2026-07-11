@@ -124,6 +124,40 @@ function Precos() {
         </div>
       </section>
 
+      {/* NOVO MÓDULO: VoiceFlow Radar */}
+      <section className="container mx-auto px-6 pb-20">
+        <div className="max-w-5xl mx-auto bg-gradient-to-br from-[#0A0F1E] to-[#0A0A0A] border border-[#1E3A5F] rounded-2xl p-8 md:p-12">
+          <div className="text-center mb-8">
+            <span className="inline-block px-3 py-1 rounded-full bg-[#2563EB]/20 border border-[#2563EB]/40 text-[#60A5FA] text-sm font-medium mb-4">
+              NOVO MÓDULO · FASE 1 JÁ DISPONÍVEL
+            </span>
+            <h3 className="text-3xl md:text-4xl font-bold mb-3">
+              VoiceFlow <span className="text-[#2563EB]">Radar</span>
+            </h3>
+            <p className="text-xl text-gray-400">Controle a narrativa da sua marca.</p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8 max-w-3xl mx-auto">
+            {[
+              'Antecipa crises de reputação na web e te avisa por email',
+              'Identifica tendências e oportunidades do seu nicho toda semana',
+              'Mapeia o sentimento e a percepção do público sobre sua marca',
+              'Sai na frente dos concorrentes com dados, não achismo',
+            ].map((item) => (
+              <div key={item} className="flex items-start gap-3">
+                <Check className="w-5 h-5 text-[#2563EB] shrink-0 mt-0.5" />
+                <span className="text-gray-300">{item}</span>
+              </div>
+            ))}
+          </div>
+
+          <p className="text-center text-sm text-gray-500">
+            Monitoramento de Instagram/TikTok em tempo real chega na <span className="text-gray-400">Fase 2</span>.
+            {' '}Fale com a gente para ativar o <span className="text-[#60A5FA] font-medium">RADAR PRO</span> na sua conta.
+          </p>
+        </div>
+      </section>
+
       {/* Para quem é? */}
       <section className="container mx-auto px-6 pb-20">
         <h3 className="text-3xl font-bold text-center mb-12">Para quem é?</h3>

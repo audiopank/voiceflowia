@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as SuperAgenteRouteImport } from './routes/super-agente'
 import { Route as RedefinirSenhaRouteImport } from './routes/redefinir-senha'
+import { Route as RadarRouteImport } from './routes/radar'
 import { Route as PrecosRouteImport } from './routes/precos'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as EsqueciSenhaRouteImport } from './routes/esqueci-senha'
@@ -30,6 +31,11 @@ const SuperAgenteRoute = SuperAgenteRouteImport.update({
 const RedefinirSenhaRoute = RedefinirSenhaRouteImport.update({
   id: '/redefinir-senha',
   path: '/redefinir-senha',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RadarRoute = RadarRouteImport.update({
+  id: '/radar',
+  path: '/radar',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PrecosRoute = PrecosRouteImport.update({
@@ -94,6 +100,7 @@ export interface FileRoutesByFullPath {
   '/esqueci-senha': typeof EsqueciSenhaRoute
   '/login': typeof LoginRoute
   '/precos': typeof PrecosRoute
+  '/radar': typeof RadarRoute
   '/redefinir-senha': typeof RedefinirSenhaRoute
   '/super-agente': typeof SuperAgenteRoute
 }
@@ -108,6 +115,7 @@ export interface FileRoutesByTo {
   '/esqueci-senha': typeof EsqueciSenhaRoute
   '/login': typeof LoginRoute
   '/precos': typeof PrecosRoute
+  '/radar': typeof RadarRoute
   '/redefinir-senha': typeof RedefinirSenhaRoute
   '/super-agente': typeof SuperAgenteRoute
 }
@@ -123,6 +131,7 @@ export interface FileRoutesById {
   '/esqueci-senha': typeof EsqueciSenhaRoute
   '/login': typeof LoginRoute
   '/precos': typeof PrecosRoute
+  '/radar': typeof RadarRoute
   '/redefinir-senha': typeof RedefinirSenhaRoute
   '/super-agente': typeof SuperAgenteRoute
 }
@@ -139,6 +148,7 @@ export interface FileRouteTypes {
     | '/esqueci-senha'
     | '/login'
     | '/precos'
+    | '/radar'
     | '/redefinir-senha'
     | '/super-agente'
   fileRoutesByTo: FileRoutesByTo
@@ -153,6 +163,7 @@ export interface FileRouteTypes {
     | '/esqueci-senha'
     | '/login'
     | '/precos'
+    | '/radar'
     | '/redefinir-senha'
     | '/super-agente'
   id:
@@ -167,6 +178,7 @@ export interface FileRouteTypes {
     | '/esqueci-senha'
     | '/login'
     | '/precos'
+    | '/radar'
     | '/redefinir-senha'
     | '/super-agente'
   fileRoutesById: FileRoutesById
@@ -182,6 +194,7 @@ export interface RootRouteChildren {
   EsqueciSenhaRoute: typeof EsqueciSenhaRoute
   LoginRoute: typeof LoginRoute
   PrecosRoute: typeof PrecosRoute
+  RadarRoute: typeof RadarRoute
   RedefinirSenhaRoute: typeof RedefinirSenhaRoute
   SuperAgenteRoute: typeof SuperAgenteRoute
 }
@@ -200,6 +213,13 @@ declare module '@tanstack/react-router' {
       path: '/redefinir-senha'
       fullPath: '/redefinir-senha'
       preLoaderRoute: typeof RedefinirSenhaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/radar': {
+      id: '/radar'
+      path: '/radar'
+      fullPath: '/radar'
+      preLoaderRoute: typeof RadarRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/precos': {
@@ -286,6 +306,7 @@ const rootRouteChildren: RootRouteChildren = {
   EsqueciSenhaRoute: EsqueciSenhaRoute,
   LoginRoute: LoginRoute,
   PrecosRoute: PrecosRoute,
+  RadarRoute: RadarRoute,
   RedefinirSenhaRoute: RedefinirSenhaRoute,
   SuperAgenteRoute: SuperAgenteRoute,
 }

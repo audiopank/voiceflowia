@@ -15,6 +15,8 @@ function apiDevBridge(): Plugin {
     '/api/gemini/generate-hooks': './api/gemini/generate-hooks.ts',
     '/api/elevenlabs/text-to-speech': './api/elevenlabs/text-to-speech.ts',
     '/api/kiwify/webhook': './api/kiwify/webhook.ts',
+    '/api/radar/generate-report': './api/radar/generate-report.ts',
+    '/api/radar/cron-alerts': './api/radar/cron-alerts.ts',
   }
 
   return {
