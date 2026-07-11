@@ -1,11 +1,11 @@
-import { Fragment, useRef, useState } from 'react'
+import { Fragment, useEffect, useRef, useState } from 'react'
 import { createFileRoute } from '@tanstack/react-router'
 import JSZip from 'jszip'
 import { toPng } from 'html-to-image'
 import {
   Lock, Loader2, AlertCircle, Rocket, Volume2, Download, Play, Package,
   Users, Target, Hash, Clock, Megaphone, CheckCircle2, Copy, Check, ImagePlus, X, Pencil,
-  ChevronDown, ChevronUp, CalendarDays
+  ChevronDown, ChevronUp, CalendarDays, Share2
 } from 'lucide-react'
 import { useSubscription } from '../lib/useSubscription'
 import { supabase } from '../lib/supabase'
@@ -15,6 +15,8 @@ import { BackButton } from '../components/BackButton'
 import { SuperAgenteGuia } from '../components/SuperAgenteGuia'
 import { buildIcsCalendar, downloadIcsFile, postDateTime } from '../lib/ics'
 import { convertToWhatsAppOgg } from '../lib/audioConvert'
+import { RedesSociais } from '../components/RedesSociais'
+import { SOCIAL_NETWORKS, socialKey, loadSocialLinks, saveSocialLinks, type SocialLinks } from '../lib/socialLinks'
 
 // Espaça as gerações de voz para não estourar o limite/minuto do free tier.
 const VOICE_THROTTLE_MS = 3500
@@ -214,6 +216,19 @@ function SuperAgente() {
 
   // Copiar texto (pedido de cliente): guarda a chave do campo copiado p/ feedback.
   const [copied, setCopied] = useState('')
+
+  // Redes sociais do cliente (localStorage por usuário, ver src/lib/socialLinks.ts).
+  // Fonte única da verdade: o painel edita via onSave; os cards leem pra "postar".
+  const [socialLinks, setSocialLinks] = useState<SocialLinks>({})
+  const [socialStoreKey, setSocialStoreKey] = useState('')
+  useEffect(() => {
+    ;(async () => {
+      const { data: { user } } = await supabase.auth.getUser()
+      const key = socialKey(user?.id)
+      setSocialStoreKey(key)
+      setSocialLinks(loadSocialLinks(key))
+    })()
+  }, [])
 
   // Imagem/logo do cliente por card (client-side, sem API). Entra no ZIP do kit.
   const [postImages, setPostImages] = useState<Record<number, { url: string; blob: Blob; ext: string }>>({})
@@ -922,6 +937,14 @@ function SuperAgente() {
         {/* Posts */}
         {posts && (
           <Fragment>
+          {/* Redes sociais do cliente: postar o conteúdo em 1 clique, sem sair do app. */}
+          <RedesSociais
+            links={socialLinks}
+            onSave={(l) => {
+              setSocialLinks(l)
+              saveSocialLinks(socialStoreKey, l)
+            }}
+          />
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {posts.map((post, index) => (
               <div
@@ -1045,6 +1068,42 @@ function SuperAgente() {
                     Baixar Cards ({slidesFor(index).length})
                   </Button>
                 </div>
+
+                {/* Postar em: copia a legenda deste post e abre a rede pra colar. Só mostra
+                    as redes que o cliente configurou no painel "Suas Redes Sociais". */}
+                {(() => {
+                  const configured = SOCIAL_NETWORKS.filter((net) => (socialLinks[net.key] ?? '').trim())
+                  if (configured.length === 0) return null
+                  return (
+                    <div className="no-export space-y-1 pt-1">
+                      <p className="text-xs text-gray-500">Postar em (copia a legenda e abre a rede):</p>
+                      <div className="flex flex-wrap gap-2">
+                        {configured.map((net) => {
+                          const url = (socialLinks[net.key] ?? '').trim()
+                          const copyKey = `postar-${index}-${net.key}`
+                          const isCopied = copied === copyKey
+                          return (
+                            <button
+                              key={net.key}
+                              onClick={async () => {
+                                await handleCopy(copyKey, `${post.hook}\n\n${post.legenda}`)
+                                window.open(url, '_blank', 'noopener')
+                              }}
+                              title={`Copia a legenda e abre o ${net.label}`}
+                              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs bg-[#1A1A1A] border border-gray-700 text-gray-300 hover:border-[#8B5CF6] hover:text-[#8B5CF6] transition-colors"
+                            >
+                              {isCopied ? (
+                                <><Check className="w-3.5 h-3.5" /> Copiado!</>
+                              ) : (
+                                <><Share2 className="w-3.5 h-3.5" /> {net.label}</>
+                              )}
+                            </button>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )
+                })()}
               </div>
             ))}
           </div>
