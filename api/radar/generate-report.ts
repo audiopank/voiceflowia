@@ -1,4 +1,4 @@
-// VoiceFlow Radar — gera o relatório semanal: busca menções (SerpAPI),
+// VoiceFlow Radar — gera o relatório semanal: busca menções (Serper.dev),
 // classifica sentimento (Gemini), sugere tendências (Gemini), monta nuvem de
 // palavras, e grava relatório + alertas. Runtime Node.js (padrão { fetch }).
 
@@ -45,55 +45,48 @@ function tokenize(texts: string[]): Record<string, number> {
   )
 }
 
+// Serper.dev (Google Search API): POST com header X-API-KEY; resposta tem
+// `organic` (busca) e `news` (endpoint /news).
+async function serperSearch(q: string, apiKey: string, num: number, endpoint: 'search' | 'news'): Promise<any | null> {
+  try {
+    const res = await fetch(`https://google.serper.dev/${endpoint}`, {
+      method: 'POST',
+      headers: { 'X-API-KEY': apiKey, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ q, gl: 'br', hl: 'pt', num }),
+      signal: AbortSignal.timeout(15_000),
+    })
+    if (!res.ok) return null
+    return await res.json()
+  } catch {
+    return null
+  }
+}
+
 async function serpMentions(brand: string, extras: string[], apiKey: string): Promise<Mencao[]> {
-  const queries = [
-    { engine: 'google', q: `"${brand}"` },
-    { engine: 'google_news', q: brand },
-  ]
   const out: Mencao[] = []
   const seen = new Set<string>()
 
-  for (const { engine, q } of queries) {
-    try {
-      const url = `https://serpapi.com/search.json?engine=${engine}&q=${encodeURIComponent(q)}&hl=pt&gl=br&num=20&api_key=${apiKey}`
-      const res = await fetch(url, { signal: AbortSignal.timeout(20_000) })
-      if (!res.ok) continue
-      const data: any = await res.json()
-      const rows = engine === 'google_news' ? data.news_results : data.organic_results
-      if (!Array.isArray(rows)) continue
-      for (const r of rows) {
-        const link = r.link || r.source?.link || ''
-        if (link && seen.has(link)) continue
-        if (link) seen.add(link)
-        const texto = [r.title, r.snippet].filter(Boolean).join(' — ').slice(0, 400)
-        if (!texto) continue
-        const fonte = r.source?.name || r.source || (link ? new URL(link).hostname.replace('www.', '') : engine)
-        out.push({ fonte: String(fonte), texto, url: link, classificacao: '', motivo: '' })
-      }
-    } catch {
-      // rede/timeout/parse — ignora essa query, segue a próxima.
+  const add = (rows: any, isNews: boolean) => {
+    if (!Array.isArray(rows)) return
+    for (const r of rows) {
+      const link = r.link || ''
+      if (link && seen.has(link)) continue
+      if (link) seen.add(link)
+      const texto = [r.title, r.snippet].filter(Boolean).join(' — ').slice(0, 400)
+      if (!texto) continue
+      const fonte = r.source || (link ? new URL(link).hostname.replace('www.', '') : isNews ? 'notícia' : 'busca')
+      out.push({ fonte: String(fonte), texto, url: link, classificacao: '', motivo: '' })
     }
   }
-  // Também procura reputação em avaliações/reclamações via busca dirigida.
+
+  const web = await serperSearch(`"${brand}"`, apiKey, 20, 'search')
+  if (web) add(web.organic, false)
+  const news = await serperSearch(brand, apiKey, 20, 'news')
+  if (news) add(news.news, true)
+  // Reputação em avaliações/reclamações via busca dirigida.
   for (const extra of extras) {
-    try {
-      const url = `https://serpapi.com/search.json?engine=google&q=${encodeURIComponent(`"${brand}" ${extra}`)}&hl=pt&gl=br&num=10&api_key=${apiKey}`
-      const res = await fetch(url, { signal: AbortSignal.timeout(15_000) })
-      if (!res.ok) continue
-      const data: any = await res.json()
-      if (!Array.isArray(data.organic_results)) continue
-      for (const r of data.organic_results) {
-        const link = r.link || ''
-        if (link && seen.has(link)) continue
-        if (link) seen.add(link)
-        const texto = [r.title, r.snippet].filter(Boolean).join(' — ').slice(0, 400)
-        if (!texto) continue
-        const fonte = link ? new URL(link).hostname.replace('www.', '') : 'busca'
-        out.push({ fonte, texto, url: link, classificacao: '', motivo: '' })
-      }
-    } catch {
-      // ignora
-    }
+    const r = await serperSearch(`"${brand}" ${extra}`, apiKey, 10, 'search')
+    if (r) add(r.organic, false)
   }
 
   return out.slice(0, 40)
@@ -144,10 +137,10 @@ async function handler(request: Request): Promise<Response> {
   }
 
   try {
-    const serpKey = process.env.SERPAPI_KEY
+    const serpKey = process.env.SERPER_API_KEY
     const geminiKey = process.env.GEMINI_API_KEY
     if (!geminiKey) return new Response(JSON.stringify({ error: 'GEMINI_API_KEY não configurada' }), { status: 500, headers: { 'Content-Type': 'application/json' } })
-    if (!serpKey) return new Response(JSON.stringify({ error: 'SERPAPI_KEY não configurada' }), { status: 500, headers: { 'Content-Type': 'application/json' } })
+    if (!serpKey) return new Response(JSON.stringify({ error: 'SERPER_API_KEY não configurada' }), { status: 500, headers: { 'Content-Type': 'application/json' } })
 
     const supabaseAdmin = createClient(process.env.VITE_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, { auth: { persistSession: false } })
 
@@ -170,7 +163,7 @@ async function handler(request: Request): Promise<Response> {
     const nicho: string = config.nicho || 'geral'
     const keywords: string[] = Array.isArray(config.palavras_chave_alerta) ? config.palavras_chave_alerta : []
 
-    // 1) Menções (SerpAPI): marca + termos de reputação comuns.
+    // 1) Menções (Serper.dev): marca + termos de reputação comuns.
     const mencoes = await serpMentions(marca, ['reclame aqui', 'avaliações', 'reclamação'], serpKey)
 
     // 2) Classificação de sentimento (1 chamada Gemini pra todas).

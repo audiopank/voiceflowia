@@ -8,7 +8,7 @@ export const maxDuration = 60
 import { createClient } from '@supabase/supabase-js'
 
 const GEMINI_MODEL = 'gemini-3.5-flash'
-const MAX_CONFIGS = 25 // teto de segurança por execução (protege o free tier da SerpAPI)
+const MAX_CONFIGS = 25 // teto de segurança por execução (protege os créditos do Serper)
 
 interface Hit {
   texto: string
@@ -18,15 +18,20 @@ interface Hit {
   motivo: string
 }
 
+// Serper.dev (Google Search API): POST com header X-API-KEY, resposta em `organic`.
 async function serpBrand(brand: string, apiKey: string): Promise<Hit[]> {
   const out: Hit[] = []
   try {
-    const url = `https://serpapi.com/search.json?engine=google&q=${encodeURIComponent(`"${brand}"`)}&hl=pt&gl=br&num=15&api_key=${apiKey}`
-    const res = await fetch(url, { signal: AbortSignal.timeout(15_000) })
+    const res = await fetch('https://google.serper.dev/search', {
+      method: 'POST',
+      headers: { 'X-API-KEY': apiKey, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ q: `"${brand}"`, gl: 'br', hl: 'pt', num: 15 }),
+      signal: AbortSignal.timeout(15_000),
+    })
     if (!res.ok) return out
     const data: any = await res.json()
-    if (!Array.isArray(data.organic_results)) return out
-    for (const r of data.organic_results) {
+    if (!Array.isArray(data.organic)) return out
+    for (const r of data.organic) {
       const link = r.link || ''
       const texto = [r.title, r.snippet].filter(Boolean).join(' — ').slice(0, 400)
       if (!texto) continue
@@ -115,10 +120,10 @@ async function handler(request: Request): Promise<Response> {
     }
   }
 
-  const serpKey = process.env.SERPAPI_KEY
+  const serpKey = process.env.SERPER_API_KEY
   const geminiKey = process.env.GEMINI_API_KEY
   if (!serpKey || !geminiKey) {
-    return new Response(JSON.stringify({ error: 'SERPAPI_KEY/GEMINI_API_KEY não configuradas' }), { status: 500, headers: { 'Content-Type': 'application/json' } })
+    return new Response(JSON.stringify({ error: 'SERPER_API_KEY/GEMINI_API_KEY não configuradas' }), { status: 500, headers: { 'Content-Type': 'application/json' } })
   }
 
   const supabaseAdmin = createClient(process.env.VITE_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, { auth: { persistSession: false } })
