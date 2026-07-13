@@ -102,7 +102,7 @@ async function geminiJson(apiKey: string, prompt: string, schema: any): Promise<
         contents: [{ parts: [{ text: prompt }] }],
         generationConfig: { responseMimeType: 'application/json', responseSchema: schema },
       }),
-      signal: AbortSignal.timeout(45_000),
+      signal: AbortSignal.timeout(25_000),
     }
   )
   if (!res.ok) throw new Error(`Gemini ${res.status}`)
@@ -166,8 +166,15 @@ async function handler(request: Request): Promise<Response> {
     // 1) Menções (Serper.dev): marca + termos de reputação comuns.
     const mencoes = await serpMentions(marca, ['reclame aqui', 'avaliações', 'reclamação'], serpKey)
 
-    // 2) Classificação de sentimento (1 chamada Gemini pra todas).
-    if (mencoes.length > 0) {
+    // 2+3) Classificação de sentimento E tendências: 2 chamadas Gemini
+    // INDEPENDENTES rodadas em PARALELO (Promise.all) — não sequencial. Isso
+    // mantém o tempo total ~= 1 chamada (não a soma), crítico porque o Gemini
+    // free tier é lento/instável (ver memória gemini-free-tier-billing): com
+    // timeout de 25s cada, o pior caso é ~25s e cabe folgado no maxDuration=60,
+    // devolvendo relatório útil (menções + nuvem + alertas por palavra-chave, que
+    // NÃO dependem do Gemini) mesmo quando o Gemini está fora — em vez de 504.
+    const classifyTask = (async () => {
+      if (mencoes.length === 0) return
       const lista = mencoes.map((m, i) => `${i}. ${m.texto}`).join('\n')
       const prompt = `Você analisa reputação de marca no nicho "${nicho}". Para cada menção abaixo sobre a marca "${marca}", classifique o sentimento como Positivo, Neutro, Negativo ou Crise (Crise = ameaça séria à reputação: acusação de golpe/fraude, ameaça de processo, escândalo). Dê o motivo em 1 frase curta. Responda um array JSON com um item por menção, cada um com "indice" (o número da menção), "classificacao" e "motivo".\n\nMenções:\n${lista}`
       try {
@@ -182,20 +189,23 @@ async function handler(request: Request): Promise<Response> {
           }
         }
       } catch {
-        // Se a classificação falhar, deixa como Neutro (não trava o relatório).
+        // Gemini fora/lento: deixa como Neutro (não trava o relatório).
       }
-    }
-    for (const m of mencoes) if (!m.classificacao) m.classificacao = 'Neutro'
+    })()
 
-    // 3) Tendências do nicho (sugeridas por IA — rotulado como tal no client).
-    let tendencias: string[] = []
-    try {
-      const tPrompt = `Você é estrategista de conteúdo. Liste 3 tendências de conteúdo para redes sociais no nicho "${nicho}" nesta semana, cada uma como uma frase acionável (o que postar e por quê). Responda JSON { "tendencias": ["...", "...", "..."] }.`
-      const tData = await geminiJson(geminiKey, tPrompt, TRENDS_SCHEMA)
-      if (Array.isArray(tData?.tendencias)) tendencias = tData.tendencias.slice(0, 5)
-    } catch {
-      // tendências são opcionais
-    }
+    const trendsTask = (async (): Promise<string[]> => {
+      try {
+        const tPrompt = `Você é estrategista de conteúdo. Liste 3 tendências de conteúdo para redes sociais no nicho "${nicho}" nesta semana, cada uma como uma frase acionável (o que postar e por quê). Responda JSON { "tendencias": ["...", "...", "..."] }.`
+        const tData = await geminiJson(geminiKey, tPrompt, TRENDS_SCHEMA)
+        if (Array.isArray(tData?.tendencias)) return tData.tendencias.slice(0, 5)
+      } catch {
+        // tendências são opcionais
+      }
+      return []
+    })()
+
+    const [, tendencias] = await Promise.all([classifyTask, trendsTask])
+    for (const m of mencoes) if (!m.classificacao) m.classificacao = 'Neutro'
 
     // 4) Sentimento agregado + nuvem de palavras.
     const sentimento = { positivo: 0, neutro: 0, negativo: 0, crise: 0 }
