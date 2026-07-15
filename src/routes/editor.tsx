@@ -1,13 +1,13 @@
 import { useState, useEffect, useRef } from 'react'
 import { createFileRoute } from "@tanstack/react-router"
-import { Lock, Download, Volume2, Loader2, AlertCircle, Music, Mic, Upload, Play, Square } from 'lucide-react'
+import { Lock, Download, Volume2, Loader2, AlertCircle, Music, Mic, Upload, Play, Square, Sparkles } from 'lucide-react'
 import { useSubscription } from '../lib/useSubscription'
 import { fetchWithRetry } from '../lib/apiRetry'
 import { Button } from '../components/ui/button'
 import { BackButton } from '../components/BackButton'
 import { ELEVENLABS_VOICES, GEMINI_VOICES_TEXTO_LONGO, type Voice, type Provider } from '../lib/voices'
 import { convertToWhatsAppOgg, convertMixToMp3 } from '../lib/audioConvert'
-import { blobToAudioBuffer, renderMix, audioBufferToWav } from '../lib/audioMix'
+import { blobToAudioBuffer, renderMix, audioBufferToWav, enhanceVoiceBuffer } from '../lib/audioMix'
 
 export const Route = createFileRoute("/editor")({
   component: Editor,
@@ -25,7 +25,9 @@ function Editor() {
   const [audioReady, setAudioReady] = useState(false)
   const [error, setError] = useState('')
   const [rateNotice, setRateNotice] = useState('')
-  const [audioBlob, setAudioBlob] = useState<Blob | null>(null)
+  const [audioBlob, setAudioBlob] = useState<Blob | null>(null) // locução crua da API
+  const [enhancedBlob, setEnhancedBlob] = useState<Blob | null>(null) // locução com realce (WAV)
+  const [enhanceOn, setEnhanceOn] = useState(true) // Realce Profissional ligado por padrão
   const [loadingVoices, setLoadingVoices] = useState(true)
   const [isConverting, setIsConverting] = useState(false)
 
@@ -70,6 +72,7 @@ function Editor() {
     setError('')
     setMixError('')
     setAudioBlob(null)
+    setEnhancedBlob(null)
 
     try {
       const endpoint =
@@ -101,6 +104,19 @@ function Editor() {
 
       const blob = await response.blob()
       setAudioBlob(blob)
+
+      // Realce Profissional: masteriza a locução crua (trim + EQ + compressor + reverb) já
+      // aqui, pra que prévia, OGG do WhatsApp e mixagem saiam todos polidos. Se falhar por
+      // qualquer motivo, seguimos com a voz crua (enhancedBlob fica null) — nunca trava.
+      try {
+        const rawBuffer = await blobToAudioBuffer(blob)
+        const enhanced = await enhanceVoiceBuffer(rawBuffer)
+        setEnhancedBlob(audioBufferToWav(enhanced))
+      } catch (enhanceErr) {
+        console.error('Realce de voz falhou, usando áudio cru:', enhanceErr)
+        setEnhancedBlob(null)
+      }
+
       setAudioReady(true)
       console.log(`Áudio ${provider} pronto!`)
     } catch (err) {
@@ -111,14 +127,20 @@ function Editor() {
     }
   }
 
+  // A voz "efetiva" que vai pra prévia/OGG/mixagem: com Realce ligado (e disponível), usa a
+  // versão masterizada (WAV); senão, a locução crua da API.
+  const usingEnhanced = enhanceOn && enhancedBlob !== null
+  const effectiveVoiceBlob = usingEnhanced ? enhancedBlob : audioBlob
+  // Extensão do container pra conversão: o realce sempre sai em WAV; a crua depende do provedor.
+  const effectiveVoiceExt = usingEnhanced ? 'wav' : provider === 'elevenlabs' ? 'mp3' : 'wav'
+
   // Baixa como OGG/Opus — é o único formato que o WhatsApp reconhece como "áudio de voz"
   // (player embutido); MP3/WAV chegam lá como anexo genérico ("arquivo").
   async function handleDownload() {
-    if (!audioBlob) return
+    if (!effectiveVoiceBlob) return
     setIsConverting(true)
     try {
-      const originalExt = provider === 'elevenlabs' ? 'mp3' : 'wav'
-      const oggBlob = await convertToWhatsAppOgg(audioBlob, originalExt)
+      const oggBlob = await convertToWhatsAppOgg(effectiveVoiceBlob, effectiveVoiceExt)
       const url = URL.createObjectURL(oggBlob)
       const a = document.createElement('a')
       a.href = url
@@ -133,8 +155,8 @@ function Editor() {
   }
 
   function handlePlayPreview() {
-    if (!audioBlob) return
-    const url = URL.createObjectURL(audioBlob)
+    if (!effectiveVoiceBlob) return
+    const url = URL.createObjectURL(effectiveVoiceBlob)
     const audio = new Audio(url)
     audio.play()
   }
@@ -165,7 +187,7 @@ function Editor() {
   // Renderiza a mixagem atual (voz + trilha, com os volumes escolhidos) num WAV.
   // Usado tanto pela prévia quanto pelo download.
   async function buildMix(): Promise<Blob> {
-    const voiceBuffer = await blobToAudioBuffer(audioBlob!)
+    const voiceBuffer = await blobToAudioBuffer(effectiveVoiceBlob!)
     const trackBuffer = trackBlob ? await blobToAudioBuffer(trackBlob) : null
     const mixed = await renderMix(voiceBuffer, trackBuffer, voiceVol / 100, trackVol / 100)
     return audioBufferToWav(mixed)
@@ -393,6 +415,43 @@ function Editor() {
                     Ouvir Prévia
                   </Button>
                 </div>
+
+                {/* Realce Profissional da Voz (masterização: trim + EQ + compressor + reverb) */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    stopPreview()
+                    setEnhanceOn((v) => !v)
+                  }}
+                  className={`w-full flex items-center justify-between gap-3 p-3 rounded-lg border transition-colors ${
+                    enhanceOn
+                      ? 'bg-[#8B5CF6]/10 border-[#8B5CF6]/60'
+                      : 'bg-[#1A1A1A] border-gray-700 hover:border-gray-500'
+                  }`}
+                >
+                  <span className="flex items-center gap-2 text-sm font-medium text-left">
+                    <Sparkles className={`w-4 h-4 shrink-0 ${enhanceOn ? 'text-[#8B5CF6]' : 'text-gray-500'}`} />
+                    <span className={enhanceOn ? 'text-white' : 'text-gray-400'}>
+                      Realce Profissional da Voz
+                      <span className="block text-[11px] font-normal text-gray-500">
+                        Brilho de estúdio: equaliza, comprime e dá corpo à locução
+                      </span>
+                    </span>
+                  </span>
+                  {/* Switch visual */}
+                  <span
+                    className={`relative w-11 h-6 rounded-full shrink-0 transition-colors ${
+                      enhanceOn ? 'bg-[#8B5CF6]' : 'bg-gray-600'
+                    }`}
+                  >
+                    <span
+                      className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform ${
+                        enhanceOn ? 'translate-x-5' : 'translate-x-0'
+                      }`}
+                    />
+                  </span>
+                </button>
+
                 {/* ===== Estúdio de Mixagem (mini-mixer) ===== */}
                 <div className="mt-2 pt-6 border-t border-gray-800 space-y-5">
                   <div>

@@ -28,7 +28,17 @@ export async function blobToAudioBuffer(blob: Blob): Promise<AudioBuffer> {
   return getDecodeCtx().decodeAudioData(arrayBuffer.slice(0))
 }
 
-const TAIL_SECONDS = 0.5
+function getOfflineCtx(channels: number, length: number, sampleRate: number): OfflineAudioContext {
+  const OfflineCtx =
+    window.OfflineAudioContext ||
+    (window as unknown as { webkitOfflineAudioContext: typeof OfflineAudioContext }).webkitOfflineAudioContext
+  return new OfflineCtx(channels, length, sampleRate)
+}
+
+// Fade-out da trilha ao fim da locução (pedido do Mestre): quando a voz termina, a música
+// não corta seca — desce até o silêncio ao longo de FADE_OUT_SECONDS. A cauda do master é
+// dimensionada pra caber esse fade inteiro.
+const FADE_OUT_SECONDS = 1.1
 
 // Renderiza voz + trilha num único AudioBuffer estéreo.
 // voiceGain/trackGain são multiplicadores lineares (1 = 100%). A trilha costuma entrar
@@ -40,12 +50,10 @@ export async function renderMix(
   trackGain: number,
 ): Promise<AudioBuffer> {
   const sampleRate = 44100
-  const length = Math.ceil((voice.duration + TAIL_SECONDS) * sampleRate)
-
-  const OfflineCtx =
-    window.OfflineAudioContext ||
-    (window as unknown as { webkitOfflineAudioContext: typeof OfflineAudioContext }).webkitOfflineAudioContext
-  const ctx = new OfflineCtx(2, length, sampleRate)
+  // Cauda = fade completo + folga. Sem trilha, uma cauda mínima já basta.
+  const tail = track ? FADE_OUT_SECONDS + 0.1 : 0.3
+  const length = Math.ceil((voice.duration + tail) * sampleRate)
+  const ctx = getOfflineCtx(2, length, sampleRate)
 
   const voiceSrc = ctx.createBufferSource()
   voiceSrc.buffer = voice
@@ -58,11 +66,133 @@ export async function renderMix(
     const trackSrc = ctx.createBufferSource()
     trackSrc.buffer = track
     const trackGainNode = ctx.createGain()
-    trackGainNode.gain.value = trackGain
+    // Mantém o volume da trilha até a voz acabar; a partir daí, rampa linear até zero
+    // em FADE_OUT_SECONDS. (setValueAtTime "ancora" o valor antes da rampa começar.)
+    trackGainNode.gain.setValueAtTime(trackGain, 0)
+    trackGainNode.gain.setValueAtTime(trackGain, voice.duration)
+    trackGainNode.gain.linearRampToValueAtTime(0, voice.duration + FADE_OUT_SECONDS)
     trackSrc.connect(trackGainNode).connect(ctx.destination)
     trackSrc.start(0)
   }
 
+  return ctx.startRendering()
+}
+
+// ===== Realce Profissional da Voz (masterização) =====
+// Cadeia aplicada à locução crua pra dar "brilho de estúdio" sem soar amador:
+//   trim de silêncio -> passa-alta (tira ronco) -> corte leve de médio-grave (des-embarra)
+//   -> high-shelf de presença (brilho) -> compressor (firmeza/constância) -> reverb sutil.
+// Roda offline e devolve um AudioBuffer mono 44.1kHz, pronto pra virar WAV/OGG/mixagem.
+
+// Impulso sintético (ruído decaindo) pra um reverb curto de sala. Barato e sem asset externo.
+function makeImpulseResponse(ctx: BaseAudioContext, seconds: number, decay: number): AudioBuffer {
+  const rate = ctx.sampleRate
+  const len = Math.floor(rate * seconds)
+  const impulse = ctx.createBuffer(2, len, rate)
+  for (let c = 0; c < 2; c++) {
+    const data = impulse.getChannelData(c)
+    for (let i = 0; i < len; i++) {
+      data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, decay)
+    }
+  }
+  return impulse
+}
+
+// Corta silêncio no começo e no fim da locução, deixando uma pequena folga pra não "engolir"
+// o ataque/solta das palavras. Se a faixa for toda silêncio (nada acima do limiar), devolve
+// o buffer original.
+function trimSilence(buffer: AudioBuffer): AudioBuffer {
+  const threshold = 0.005 // ~ -46 dBFS
+  const data = buffer.getChannelData(0)
+  const n = data.length
+
+  let first = -1
+  let last = -1
+  for (let i = 0; i < n; i++) {
+    if (Math.abs(data[i]) > threshold) {
+      if (first === -1) first = i
+      last = i
+    }
+  }
+  if (first === -1) return buffer // faixa muda
+
+  const rate = buffer.sampleRate
+  const start = Math.max(0, first - Math.floor(0.03 * rate)) // 30ms de respiro antes
+  const end = Math.min(n, last + Math.floor(0.08 * rate)) // 80ms de cauda depois
+  const newLen = end - start
+
+  const out = getDecodeCtx().createBuffer(buffer.numberOfChannels, newLen, rate)
+  for (let c = 0; c < buffer.numberOfChannels; c++) {
+    out.getChannelData(c).set(buffer.getChannelData(c).subarray(start, end))
+  }
+  return out
+}
+
+export async function enhanceVoiceBuffer(
+  input: AudioBuffer,
+  opts: { reverb?: boolean } = {},
+): Promise<AudioBuffer> {
+  const reverb = opts.reverb ?? true
+  const trimmed = trimSilence(input)
+  const sampleRate = 44100
+  const reverbTail = reverb ? 0.6 : 0.05
+  const length = Math.ceil(trimmed.duration * sampleRate) + Math.ceil(reverbTail * sampleRate)
+  const ctx = getOfflineCtx(1, length, sampleRate)
+
+  const src = ctx.createBufferSource()
+  src.buffer = trimmed
+
+  // Passa-alta: remove ronco/pop abaixo de 85Hz (não existe voz útil aí).
+  const highpass = ctx.createBiquadFilter()
+  highpass.type = 'highpass'
+  highpass.frequency.value = 85
+
+  // Corte leve nos médios-graves: tira o "abafado/barro" que deixa a voz sem definição.
+  const mud = ctx.createBiquadFilter()
+  mud.type = 'peaking'
+  mud.frequency.value = 300
+  mud.Q.value = 1
+  mud.gain.value = -2
+
+  // High-shelf de presença: o "brilho" pedido — realça agudos a partir de 5kHz.
+  const presence = ctx.createBiquadFilter()
+  presence.type = 'highshelf'
+  presence.frequency.value = 5000
+  presence.gain.value = 3.5
+
+  // Compressor: nivela a locução (partes baixas sobem, picos são contidos) = voz firme e
+  // constante, típica de rádio.
+  const comp = ctx.createDynamicsCompressor()
+  comp.threshold.value = -20
+  comp.knee.value = 25
+  comp.ratio.value = 3
+  comp.attack.value = 0.005
+  comp.release.value = 0.18
+
+  // Ganho de make-up conservador: recupera volume pós-compressão sem estourar (0dBFS).
+  const makeup = ctx.createGain()
+  makeup.gain.value = 1.2
+
+  src.connect(highpass)
+  highpass.connect(mud)
+  mud.connect(presence)
+  presence.connect(comp)
+  comp.connect(makeup)
+
+  if (reverb) {
+    const convolver = ctx.createConvolver()
+    convolver.buffer = makeImpulseResponse(ctx, 0.5, 2.2)
+    const wet = ctx.createGain()
+    wet.gain.value = 0.1 // reverb bem sutil — só dá "corpo", sem soar num banheiro
+    const dry = ctx.createGain()
+    dry.gain.value = 1.0
+    makeup.connect(dry).connect(ctx.destination)
+    makeup.connect(convolver).connect(wet).connect(ctx.destination)
+  } else {
+    makeup.connect(ctx.destination)
+  }
+
+  src.start(0)
   return ctx.startRendering()
 }
 
