@@ -104,6 +104,7 @@ interface ConcorrenteAnalise {
   total: number
   sentimento: SentCount
   score: number
+  classificado: boolean // false = IA não classificou OU sem menções → score não é confiável
 }
 
 // Nota de Reputação 0-100 a partir da contagem de sentimentos. Positivo puxa pra cima,
@@ -170,19 +171,21 @@ async function analisarConcorrentes(
   const flat: { comp: number; texto: string; classificacao: string }[] = []
   buscas.forEach((c, ci) => c.mencoes.forEach((texto) => flat.push({ comp: ci, texto, classificacao: '' })))
 
+  let classifyOk = false
   if (flat.length) {
     try {
       const lista = flat.map((f, i) => `${i}. ${f.texto}`).join('\n')
       const prompt = `Você analisa reputação de marcas no nicho "${nicho}". Para cada menção abaixo (sobre marcas concorrentes), classifique o sentimento como Positivo, Neutro, Negativo ou Crise (Crise = golpe/fraude/processo/escândalo). Motivo em 1 frase. Responda um array JSON com um item por menção: "indice", "classificacao", "motivo".\n\nMenções:\n${lista}`
       const arr = await geminiJson(geminiKey, prompt, CLASSIFY_SCHEMA)
       if (Array.isArray(arr)) {
+        classifyOk = true
         for (const it of arr) {
           const idx = Number(it.indice)
           if (flat[idx]) flat[idx].classificacao = it.classificacao || 'Neutro'
         }
       }
     } catch {
-      // Gemini fora: fica tudo Neutro (score 50) — não trava o relatório.
+      // Gemini fora: classifyOk fica false → score marcado como não confiável (UI mostra "—").
     }
   }
 
@@ -197,7 +200,8 @@ async function analisarConcorrentes(
       else s.neutro++
     }
     const total = s.positivo + s.neutro + s.negativo + s.crise
-    return { nome: c.nome, total, sentimento: s, score: reputationScore(s) }
+    // classificado só é confiável se a IA classificou E o concorrente teve menções.
+    return { nome: c.nome, total, sentimento: s, score: reputationScore(s), classificado: classifyOk && total > 0 }
   })
 }
 

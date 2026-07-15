@@ -51,6 +51,7 @@ interface Concorrente {
   total: number
   sentimento: Record<string, number>
   score: number
+  classificado?: boolean // false = IA não classificou / sem menções → score não confiável
 }
 
 interface Relatorio {
@@ -366,11 +367,19 @@ function Radar() {
   const maxFreq = palavrasOrdenadas.length ? Number(palavrasOrdenadas[0][1]) : 1
 
   // Nota da própria marca + comparativo com concorrentes (você no topo, destacado).
+  // `valido` = tem nota confiável (IA classificou E teve menções). Sem isso, mostra "—"
+  // em vez de um 50 falso.
   const brandScore = relatorio ? reputationScore(relatorio.sentimento) : 0
   const comparativo = relatorio
     ? [
-        { nome: `${config?.marca_nome || 'Sua marca'}`, score: brandScore, total: relatorio.mencoes?.length || 0, voce: true },
-        ...(relatorio.concorrentes || []).map((c) => ({ nome: c.nome, score: c.score, total: c.total, voce: false })),
+        { nome: `${config?.marca_nome || 'Sua marca'}`, score: brandScore, total: mencoesCount, voce: true, valido: !semClassificacao && mencoesCount > 0 },
+        ...(relatorio.concorrentes || []).map((c) => ({
+          nome: c.nome,
+          score: c.score,
+          total: c.total,
+          voce: false,
+          valido: c.classificado !== false && (c.total || 0) > 0,
+        })),
       ]
     : []
 
@@ -603,21 +612,33 @@ function Radar() {
                     <div className="space-y-2">
                       {comparativo
                         .slice()
-                        .sort((a, b) => b.score - a.score)
+                        // Válidos primeiro (por nota desc); os "—" (sem nota confiável) vão pro fim.
+                        .sort((a, b) => Number(b.valido) - Number(a.valido) || b.score - a.score)
                         .map((row) => (
                           <div key={row.nome} className={`flex items-center gap-3 rounded-lg p-2 ${row.voce ? 'bg-[#8B5CF6]/10 border border-[#8B5CF6]/40' : 'bg-[#0A0A0A] border border-gray-800'}`}>
                             <span className={`w-40 shrink-0 text-sm truncate ${row.voce ? 'text-white font-semibold' : 'text-gray-300'}`}>
                               {row.nome} {row.voce && <span className="text-[10px] text-[#a78bfa]">você</span>}
                             </span>
                             <div className="flex-1 h-3 bg-gray-800 rounded-full overflow-hidden">
-                              <div className="h-full rounded-full" style={{ width: `${row.score}%`, background: scoreColor(row.score) }} />
+                              {row.valido && (
+                                <div className="h-full rounded-full" style={{ width: `${row.score}%`, background: scoreColor(row.score) }} />
+                              )}
                             </div>
-                            <span className="w-8 text-right text-sm font-bold tabular-nums" style={{ color: scoreColor(row.score) }}>
-                              {row.score}
-                            </span>
+                            {row.valido ? (
+                              <span className="w-8 text-right text-sm font-bold tabular-nums" style={{ color: scoreColor(row.score) }}>
+                                {row.score}
+                              </span>
+                            ) : (
+                              <span className="w-8 text-right text-sm font-bold text-gray-600" title={row.total > 0 ? 'IA não classificou nesta rodada' : 'Sem menções encontradas'}>
+                                —
+                              </span>
+                            )}
                             <span className="w-16 text-right text-[11px] text-gray-600">{row.total} menç.</span>
                           </div>
                         ))}
+                      {comparativo.some((r) => !r.valido) && (
+                        <p className="text-[11px] text-gray-600 pt-1">"—" = sem nota confiável nesta rodada (IA não classificou ou sem menções). Gere novamente.</p>
+                      )}
                     </div>
                   ) : (
                     <p className="text-gray-600 text-sm">
