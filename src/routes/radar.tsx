@@ -86,6 +86,22 @@ function scoreColor(score: number): string {
 // Chave usada pra levar a resposta gerada pro Editor de Voz (lida lá no mount).
 const EDITOR_PRESET_KEY = 'vfia:editor-preset-text'
 
+// Rótulo da pizza em branco, POR FORA da rosca (legível em qualquer cor/fundo escuro),
+// mostrando nome + contagem. O label padrão da recharts saía na cor da fatia (cinza sobre
+// cinza = ilegível).
+function renderPieLabel(props: any) {
+  const RADIAN = Math.PI / 180
+  const { cx, cy, midAngle, outerRadius, name, value } = props
+  const r = outerRadius + 16
+  const x = cx + r * Math.cos(-midAngle * RADIAN)
+  const y = cy + r * Math.sin(-midAngle * RADIAN)
+  return (
+    <text x={x} y={y} fill="#fff" fontSize={12} fontWeight={600} textAnchor={x > cx ? 'start' : 'end'} dominantBaseline="central">
+      {`${name}: ${value}`}
+    </text>
+  )
+}
+
 interface Alerta {
   id: string
   created_at: string
@@ -541,9 +557,9 @@ function Radar() {
                       <div style={{ width: '100%', height: 220 }}>
                         <ResponsiveContainer>
                           <PieChart>
-                            <Pie data={sentData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} label>
+                            <Pie data={sentData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={72} label={renderPieLabel} labelLine={false}>
                               {sentData.map((d) => (
-                                <Cell key={d.key} fill={SENT_COLORS[d.key] ?? '#8B5CF6'} />
+                                <Cell key={d.key} fill={SENT_COLORS[d.key] ?? '#8B5CF6'} stroke="#111111" strokeWidth={2} />
                               ))}
                             </Pie>
                             <Tooltip contentStyle={{ background: '#1A1A1A', border: '1px solid #374151', borderRadius: 8, color: '#fff' }} />
