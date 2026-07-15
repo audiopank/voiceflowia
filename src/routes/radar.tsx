@@ -25,6 +25,9 @@ const SENT_COLORS: Record<string, string> = {
   crise: '#EF4444',
 }
 
+// Chaves reais de sentimento — separa dos metadados que viajam no mesmo JSONB (ex: `classificado`).
+const SENT_KEYS = ['positivo', 'neutro', 'negativo', 'crise']
+
 interface RadarConfig {
   id?: string
   marca_nome: string
@@ -330,9 +333,16 @@ function Radar() {
 
   const sentData = relatorio
     ? Object.entries(relatorio.sentimento)
-        .filter(([, v]) => Number(v) > 0)
+        .filter(([k, v]) => SENT_KEYS.includes(k) && Number(v) > 0)
         .map(([k, v]) => ({ name: k.charAt(0).toUpperCase() + k.slice(1), key: k, value: Number(v) }))
     : []
+
+  // A IA classificou o sentimento nesta rodada? `classificado === 0` = caiu no fallback
+  // (Gemini sobrecarregado) e tudo virou "Neutro" — não é reputação neutra real.
+  // Relatórios antigos não têm o flag (undefined) → tratados como classificados (legado).
+  const mencoesCount = relatorio?.mencoes?.length || 0
+  const sentimentoOk = relatorio ? Number((relatorio.sentimento as Record<string, number>).classificado) !== 0 : true
+  const semClassificacao = !!relatorio && mencoesCount > 0 && !sentimentoOk
 
   const palavrasOrdenadas = relatorio
     ? Object.entries(relatorio.palavras).sort((a, b) => Number(b[1]) - Number(a[1])).slice(0, 30)
@@ -487,14 +497,34 @@ function Radar() {
 
                 {relatorio.resumo && <p className="text-gray-300 text-sm">{relatorio.resumo}</p>}
 
+                {/* Aviso quando a IA não classificou o sentimento (fallback = tudo Neutro) */}
+                {semClassificacao && (
+                  <div className="p-3 bg-yellow-900/20 border border-yellow-700/50 rounded-lg flex items-start gap-2">
+                    <AlertTriangle className="w-4 h-4 text-yellow-400 shrink-0 mt-0.5" />
+                    <span className="text-yellow-200 text-sm">
+                      A IA não conseguiu classificar o sentimento nesta rodada (sobrecarga temporária do Gemini). As {mencoesCount} menções foram coletadas, mas <strong>não estão classificadas</strong> — o "Neutro" abaixo não reflete a reputação real. Clique em <strong>Gerar Relatório</strong> de novo em alguns instantes.
+                    </span>
+                  </div>
+                )}
+
                 {/* Nota de Reputação da marca */}
                 <div className="flex items-center gap-4 bg-[#0A0A0A] border border-gray-800 rounded-lg p-4">
-                  <div className="shrink-0 w-16 h-16 rounded-full flex items-center justify-center font-bold text-xl" style={{ color: scoreColor(brandScore), border: `3px solid ${scoreColor(brandScore)}` }}>
-                    {brandScore}
-                  </div>
+                  {semClassificacao ? (
+                    <div className="shrink-0 w-16 h-16 rounded-full flex items-center justify-center font-bold text-xl text-gray-600 border-[3px] border-gray-700">
+                      —
+                    </div>
+                  ) : (
+                    <div className="shrink-0 w-16 h-16 rounded-full flex items-center justify-center font-bold text-xl" style={{ color: scoreColor(brandScore), border: `3px solid ${scoreColor(brandScore)}` }}>
+                      {brandScore}
+                    </div>
+                  )}
                   <div>
                     <p className="text-sm font-medium text-white">Nota de Reputação da sua marca</p>
-                    <p className="text-xs text-gray-500">0 a 100 — quanto maior, melhor a reputação nas menções da web.</p>
+                    <p className="text-xs text-gray-500">
+                      {semClassificacao
+                        ? 'Indisponível nesta rodada — o sentimento não foi classificado.'
+                        : '0 a 100 — quanto maior, melhor a reputação nas menções da web.'}
+                    </p>
                   </div>
                 </div>
 
@@ -502,7 +532,12 @@ function Radar() {
                   {/* Pizza de sentimento */}
                   <div>
                     <h3 className="text-sm font-medium text-gray-400 mb-2">Sentimento das menções</h3>
-                    {sentData.length ? (
+                    {semClassificacao ? (
+                      <div className="flex items-center gap-2 text-sm text-gray-500 h-[220px]">
+                        <AlertTriangle className="w-4 h-4 text-yellow-500 shrink-0" />
+                        Sentimento não classificado nesta rodada — gere o relatório novamente.
+                      </div>
+                    ) : sentData.length ? (
                       <div style={{ width: '100%', height: 220 }}>
                         <ResponsiveContainer>
                           <PieChart>
@@ -612,9 +647,13 @@ function Radar() {
                               <tr key={i} className="border-b border-gray-900 last:border-0">
                                 <td className="p-2 text-gray-300 max-w-xs">{m.texto}</td>
                                 <td className="p-2">
-                                  <span className="text-xs font-medium" style={{ color: SENT_COLORS[cl] ?? '#9CA3AF' }}>
-                                    {m.classificacao}
-                                  </span>
+                                  {semClassificacao ? (
+                                    <span className="text-xs text-gray-600" title="IA não classificou nesta rodada">—</span>
+                                  ) : (
+                                    <span className="text-xs font-medium" style={{ color: SENT_COLORS[cl] ?? '#9CA3AF' }}>
+                                      {m.classificacao}
+                                    </span>
+                                  )}
                                 </td>
                                 <td className="p-2 text-gray-500">{m.motivo}</td>
                                 <td className="p-2">

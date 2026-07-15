@@ -262,6 +262,11 @@ async function handler(request: Request): Promise<Response> {
     // timeout de 25s cada, o pior caso é ~25s e cabe folgado no maxDuration=60,
     // devolvendo relatório útil (menções + nuvem + alertas por palavra-chave, que
     // NÃO dependem do Gemini) mesmo quando o Gemini está fora — em vez de 504.
+    // Marca se a IA REALMENTE classificou o sentimento. Quando o Gemini está fora/lento
+    // (free tier), tudo cai pra "Neutro" no fallback — e antes isso era indistinguível de
+    // uma marca genuinamente neutra. Persistimos esse flag pra UI avisar "não classificado"
+    // em vez de mostrar 100% neutro como se fosse real.
+    let sentimentoOk = false
     const classifyTask = (async () => {
       if (mencoes.length === 0) return
       const lista = mencoes.map((m, i) => `${i}. ${m.texto}`).join('\n')
@@ -269,6 +274,7 @@ async function handler(request: Request): Promise<Response> {
       try {
         const arr = await geminiJson(geminiKey, prompt, CLASSIFY_SCHEMA)
         if (Array.isArray(arr)) {
+          sentimentoOk = true
           for (const item of arr) {
             const idx = Number(item.indice)
             if (mencoes[idx]) {
@@ -278,7 +284,7 @@ async function handler(request: Request): Promise<Response> {
           }
         }
       } catch {
-        // Gemini fora/lento: deixa como Neutro (não trava o relatório).
+        // Gemini fora/lento: deixa como Neutro e sentimentoOk = false (UI avisa).
       }
     })()
 
@@ -301,6 +307,8 @@ async function handler(request: Request): Promise<Response> {
 
     const [, tendencias, concorrentesAnalise] = await Promise.all([classifyTask, trendsTask, competitorsTask])
     for (const m of mencoes) if (!m.classificacao) m.classificacao = 'Neutro'
+    // Sem menções não há o que classificar — não é falha (evita aviso falso).
+    if (mencoes.length === 0) sentimentoOk = true
 
     // 4) Sentimento agregado + nuvem de palavras.
     const sentimento = { positivo: 0, neutro: 0, negativo: 0, crise: 0 }
@@ -313,14 +321,20 @@ async function handler(request: Request): Promise<Response> {
     }
     const palavras = tokenize(mencoes.map((m) => m.texto))
 
-    const resumo = mencoes.length
-      ? `Analisamos ${mencoes.length} menções sobre "${marca}" na web: ${sentimento.positivo} positivas, ${sentimento.neutro} neutras, ${sentimento.negativo} negativas e ${sentimento.crise} de crise.`
-      : `Não encontramos menções relevantes de "${marca}" na web nesta rodada. Tente novamente mais tarde ou ajuste o nome da marca.`
+    // `classificado` (1/0) viaja junto do sentimento (mesma coluna JSONB, sem migration
+    // nova) pra UI distinguir "neutro de verdade" de "IA não classificou".
+    const sentimentoStore = { ...sentimento, classificado: sentimentoOk ? 1 : 0 }
+
+    const resumo = !mencoes.length
+      ? `Não encontramos menções relevantes de "${marca}" na web nesta rodada. Tente novamente mais tarde ou ajuste o nome da marca.`
+      : sentimentoOk
+        ? `Analisamos ${mencoes.length} menções sobre "${marca}" na web: ${sentimento.positivo} positivas, ${sentimento.neutro} neutras, ${sentimento.negativo} negativas e ${sentimento.crise} de crise.`
+        : `Coletamos ${mencoes.length} menções sobre "${marca}", mas a IA não conseguiu classificar o sentimento nesta rodada (sobrecarga temporária do Gemini). Gere o relatório novamente em alguns instantes.`
 
     // 5) Grava relatório. A coluna `concorrentes` é da migration 1.1 — se ela ainda não
     // foi rodada no Supabase, o insert com esse campo falha. Nesse caso, regrava SEM ele
     // (degrada pra relatório sem comparativo) em vez de quebrar a geração inteira.
-    const baseRow = { user_id: user.id, config_id: config.id, resumo, sentimento, mencoes, tendencias, palavras }
+    const baseRow = { user_id: user.id, config_id: config.id, resumo, sentimento: sentimentoStore, mencoes, tendencias, palavras }
     let { data: rel, error: relErr } = await supabaseAdmin
       .from('radar_relatorios')
       .insert({ ...baseRow, concorrentes: concorrentesAnalise })
