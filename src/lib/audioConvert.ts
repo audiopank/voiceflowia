@@ -72,3 +72,37 @@ export async function convertToWhatsAppOgg(input: Blob, inputExt: string): Promi
     return input
   }
 }
+
+// Converte a mixagem (WAV vindo do OfflineAudioContext) pra MP3 320kbps estéreo 44.1kHz —
+// formato universal aceito por rádios e plataformas de streaming. Reusa a mesma instância
+// de FFmpeg.wasm do OGG. Se a conversão falhar (rede/codec), devolve o WAV original: pesa
+// mais, mas ainda toca em qualquer lugar (fallback igual ao do OGG).
+export async function convertMixToMp3(wavBlob: Blob): Promise<{ blob: Blob; ext: 'mp3' | 'wav' }> {
+  try {
+    const { fetchFile } = await import('@ffmpeg/util')
+    const ffmpeg = await getFFmpeg()
+
+    const inputName = 'mix.wav'
+    const outputName = 'mix.mp3'
+    await ffmpeg.writeFile(inputName, await fetchFile(wavBlob))
+    await ffmpeg.exec([
+      '-i', inputName,
+      '-c:a', 'libmp3lame',
+      '-b:a', '320k',
+      '-ar', '44100',
+      '-ac', '2',
+      outputName,
+    ])
+    const data = await ffmpeg.readFile(outputName)
+    await ffmpeg.deleteFile(inputName)
+    await ffmpeg.deleteFile(outputName)
+
+    // Copia pra um Uint8Array com ArrayBuffer comum: o FFmpeg pode devolver uma view sobre
+    // SharedArrayBuffer (threads), que o TS não aceita direto como BlobPart.
+    const bytes = new Uint8Array(data as Uint8Array)
+    return { blob: new Blob([bytes], { type: 'audio/mpeg' }), ext: 'mp3' }
+  } catch (err) {
+    console.error('Erro ao converter mixagem pra MP3:', err)
+    return { blob: wavBlob, ext: 'wav' }
+  }
+}

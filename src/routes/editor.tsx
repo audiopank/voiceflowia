@@ -1,12 +1,13 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { createFileRoute } from "@tanstack/react-router"
-import { Lock, Download, Volume2, Loader2, AlertCircle } from 'lucide-react'
+import { Lock, Download, Volume2, Loader2, AlertCircle, Music, Mic, Upload, Play, Square } from 'lucide-react'
 import { useSubscription } from '../lib/useSubscription'
 import { fetchWithRetry } from '../lib/apiRetry'
 import { Button } from '../components/ui/button'
 import { BackButton } from '../components/BackButton'
 import { ELEVENLABS_VOICES, GEMINI_VOICES_TEXTO_LONGO, type Voice, type Provider } from '../lib/voices'
-import { convertToWhatsAppOgg } from '../lib/audioConvert'
+import { convertToWhatsAppOgg, convertMixToMp3 } from '../lib/audioConvert'
+import { blobToAudioBuffer, renderMix, audioBufferToWav } from '../lib/audioMix'
 
 export const Route = createFileRoute("/editor")({
   component: Editor,
@@ -28,6 +29,17 @@ function Editor() {
   const [loadingVoices, setLoadingVoices] = useState(true)
   const [isConverting, setIsConverting] = useState(false)
 
+  // --- Estúdio de Mixagem (mini-mixer): trilha de fundo + volumes independentes ---
+  const [trackBlob, setTrackBlob] = useState<Blob | null>(null)
+  const [trackName, setTrackName] = useState('')
+  const [voiceVol, setVoiceVol] = useState(100) // % (100 = som original da locução)
+  const [trackVol, setTrackVol] = useState(25) // % (trilha entra como cama, baixinha)
+  const [isMixing, setIsMixing] = useState(false)
+  const [isPreviewing, setIsPreviewing] = useState(false)
+  const [mixError, setMixError] = useState('')
+  const previewRef = useRef<HTMLAudioElement | null>(null)
+  const previewUrlRef = useRef<string | null>(null)
+
 
   // Carregar vozes do provedor selecionado.
   // Gemini: só o trio rápido (Zephyr/Puck/Kore) — as outras 5 vozes do catálogo são bem
@@ -43,12 +55,20 @@ function Editor() {
     setLoadingVoices(false)
   }, [hasAccess, provider])
 
+  // Para qualquer prévia da mixagem em andamento ao desmontar a tela.
+  useEffect(() => {
+    return () => stopPreview()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   async function handleGenerateVoice() {
     console.log(`=== Iniciando geração de voz (${provider}) ===`)
 
+    stopPreview()
     setIsGenerating(true)
     setAudioReady(false)
     setError('')
+    setMixError('')
     setAudioBlob(null)
 
     try {
@@ -117,6 +137,87 @@ function Editor() {
     const url = URL.createObjectURL(audioBlob)
     const audio = new Audio(url)
     audio.play()
+  }
+
+  // --- Estúdio de Mixagem ---
+
+  function handleTrackUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    stopPreview()
+    setMixError('')
+    setTrackBlob(file)
+    setTrackName(file.name)
+  }
+
+  function stopPreview() {
+    if (previewRef.current) {
+      previewRef.current.pause()
+      previewRef.current = null
+    }
+    if (previewUrlRef.current) {
+      URL.revokeObjectURL(previewUrlRef.current)
+      previewUrlRef.current = null
+    }
+    setIsPreviewing(false)
+  }
+
+  // Renderiza a mixagem atual (voz + trilha, com os volumes escolhidos) num WAV.
+  // Usado tanto pela prévia quanto pelo download.
+  async function buildMix(): Promise<Blob> {
+    const voiceBuffer = await blobToAudioBuffer(audioBlob!)
+    const trackBuffer = trackBlob ? await blobToAudioBuffer(trackBlob) : null
+    const mixed = await renderMix(voiceBuffer, trackBuffer, voiceVol / 100, trackVol / 100)
+    return audioBufferToWav(mixed)
+  }
+
+  async function handlePreviewMix() {
+    if (isPreviewing) {
+      stopPreview()
+      return
+    }
+    if (!audioBlob) return
+    setMixError('')
+    setIsMixing(true)
+    try {
+      const wav = await buildMix()
+      const url = URL.createObjectURL(wav)
+      const audio = new Audio(url)
+      audio.onended = stopPreview
+      previewRef.current = audio
+      previewUrlRef.current = url
+      await audio.play()
+      setIsPreviewing(true)
+    } catch (err) {
+      console.error('Erro na prévia da mixagem:', err)
+      setMixError('Não consegui montar a prévia. A trilha pode estar num formato que o navegador não lê — tente MP3 ou WAV.')
+    } finally {
+      setIsMixing(false)
+    }
+  }
+
+  async function handleDownloadMix() {
+    if (!audioBlob) return
+    stopPreview()
+    setMixError('')
+    setIsMixing(true)
+    try {
+      const wav = await buildMix()
+      const { blob, ext } = await convertMixToMp3(wav)
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `voiceflow-ia-mixagem.${ext}`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+    } catch (err) {
+      console.error('Erro ao baixar a mixagem:', err)
+      setMixError('Não consegui gerar a mixagem. A trilha pode estar num formato que o navegador não lê — tente MP3 ou WAV.')
+    } finally {
+      setIsMixing(false)
+    }
   }
 
   if (loadingSubscription) {
@@ -292,8 +393,124 @@ function Editor() {
                     Ouvir Prévia
                   </Button>
                 </div>
+                {/* ===== Estúdio de Mixagem (mini-mixer) ===== */}
+                <div className="mt-2 pt-6 border-t border-gray-800 space-y-5">
+                  <div>
+                    <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                      <Music className="w-5 h-5 text-[#8B5CF6]" />
+                      Estúdio de Mixagem
+                    </h3>
+                    <p className="text-sm text-gray-400">
+                      Suba uma trilha de fundo, ajuste os volumes e baixe a locução já sonorizada — pronta pra rádio e streaming.
+                    </p>
+                  </div>
+
+                  {mixError && (
+                    <div className="p-3 bg-red-900/30 border border-red-700 rounded-lg flex items-center gap-2">
+                      <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />
+                      <span className="text-sm text-red-300">{mixError}</span>
+                    </div>
+                  )}
+
+                  {/* Upload da trilha */}
+                  <label className="flex items-center gap-3 p-4 bg-[#1A1A1A] border border-dashed border-gray-700 rounded-lg cursor-pointer hover:border-[#8B5CF6] transition-colors">
+                    <Upload className="w-5 h-5 text-gray-400 shrink-0" />
+                    <span className="text-sm text-gray-300 truncate">
+                      {trackName || 'Escolher trilha de fundo (MP3, WAV, M4A)'}
+                    </span>
+                    <input
+                      type="file"
+                      accept="audio/*"
+                      onChange={handleTrackUpload}
+                      className="hidden"
+                    />
+                  </label>
+
+                  {/* Fader da Voz */}
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-sm font-medium text-gray-300 flex items-center gap-2">
+                        <Mic className="w-4 h-4 text-[#22C55E]" />
+                        Volume da Voz
+                      </label>
+                      <span className="text-sm text-gray-400 tabular-nums">{voiceVol}%</span>
+                    </div>
+                    <input
+                      type="range"
+                      min={0}
+                      max={150}
+                      value={voiceVol}
+                      onChange={(e) => setVoiceVol(Number(e.target.value))}
+                      className="w-full accent-[#22C55E]"
+                    />
+                  </div>
+
+                  {/* Fader da Trilha */}
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-sm font-medium text-gray-300 flex items-center gap-2">
+                        <Music className="w-4 h-4 text-[#8B5CF6]" />
+                        Volume da Trilha
+                      </label>
+                      <span className="text-sm text-gray-400 tabular-nums">{trackVol}%</span>
+                    </div>
+                    <input
+                      type="range"
+                      min={0}
+                      max={100}
+                      value={trackVol}
+                      onChange={(e) => setTrackVol(Number(e.target.value))}
+                      disabled={!trackBlob}
+                      className="w-full accent-[#8B5CF6] disabled:opacity-40"
+                    />
+                  </div>
+
+                  {/* Ações da mixagem */}
+                  <div className="flex gap-4">
+                    <Button
+                      onClick={handlePreviewMix}
+                      disabled={isMixing}
+                      className="flex-1 bg-[#1A1A1A] hover:bg-[#252525] py-4 font-bold flex items-center justify-center gap-2"
+                    >
+                      {isMixing && !isPreviewing ? (
+                        <Loader2 className="w-5 h-5 animate-spin" />
+                      ) : isPreviewing ? (
+                        <>
+                          <Square className="w-5 h-5" />
+                          Parar
+                        </>
+                      ) : (
+                        <>
+                          <Play className="w-5 h-5" />
+                          Ouvir Mixagem
+                        </>
+                      )}
+                    </Button>
+                    <Button
+                      onClick={handleDownloadMix}
+                      disabled={isMixing}
+                      className="flex-1 bg-[#22C55E] hover:bg-[#16A34A] disabled:opacity-50 py-4 font-bold flex items-center justify-center gap-2"
+                    >
+                      {isMixing && !isPreviewing ? (
+                        <>
+                          <Loader2 className="w-5 h-5 animate-spin" />
+                          Mixando...
+                        </>
+                      ) : (
+                        <>
+                          <Download className="w-5 h-5" />
+                          Baixar Mixagem (MP3)
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                </div>
+
                 <Button
-                  onClick={() => setAudioReady(false)}
+                  onClick={() => {
+                    stopPreview()
+                    setAudioReady(false)
+                  }}
                   variant="secondary"
                   className="w-full bg-[#1A1A1A] hover:bg-[#252525] text-gray-300"
                 >
