@@ -360,6 +360,8 @@ function Radar() {
   const mencoesCount = relatorio?.mencoes?.length || 0
   const sentimentoOk = relatorio ? Number((relatorio.sentimento as Record<string, number>).classificado) !== 0 : true
   const semClassificacao = !!relatorio && mencoesCount > 0 && !sentimentoOk
+  // Quantas menções foram descartadas por serem de "xará" (outra empresa de mesmo nome).
+  const descartadas = relatorio ? Number((relatorio.sentimento as Record<string, number>).descartadas || 0) : 0
 
   const palavrasOrdenadas = relatorio
     ? Object.entries(relatorio.palavras).sort((a, b) => Number(b[1]) - Number(a[1])).slice(0, 30)
@@ -521,6 +523,14 @@ function Radar() {
                 </div>
 
                 {relatorio.resumo && <p className="text-gray-300 text-sm">{relatorio.resumo}</p>}
+
+                {/* Xarás descartados (outra empresa de mesmo nome, fora do nicho) */}
+                {descartadas > 0 && (
+                  <p className="text-xs text-gray-500 flex items-center gap-1">
+                    <Users className="w-3.5 h-3.5 shrink-0" />
+                    {descartadas} menção(ões) descartada(s) por serem de outra empresa de mesmo nome, fora do seu nicho.
+                  </p>
+                )}
 
                 {/* Aviso quando a IA não classificou o sentimento (fallback = tudo Neutro) */}
                 {semClassificacao && (

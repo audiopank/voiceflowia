@@ -14,6 +14,7 @@ interface Mencao {
   url: string
   classificacao: string
   motivo: string
+  relevante?: boolean // false = xará (outra empresa/pessoa de mesmo nome, fora do nicho)
 }
 
 // Stopwords PT-BR pra limpar a nuvem de palavras.
@@ -62,7 +63,7 @@ async function serperSearch(q: string, apiKey: string, num: number, endpoint: 's
   }
 }
 
-async function serpMentions(brand: string, extras: string[], apiKey: string): Promise<Mencao[]> {
+async function serpMentions(brand: string, nicho: string, extras: string[], apiKey: string): Promise<Mencao[]> {
   const out: Mencao[] = []
   const seen = new Set<string>()
 
@@ -79,6 +80,14 @@ async function serpMentions(brand: string, extras: string[], apiKey: string): Pr
     }
   }
 
+  // Nicho definido (ex: "aparelhos auditivos") vira contexto pra desambiguar xarás:
+  // uma busca ENVIESADA pelo nicho traz a marca certa mesmo quando ela tem pouca
+  // presença na web e um "xará" domina os resultados. Vem primeiro pra priorizar.
+  const temNicho = !!nicho && nicho !== 'geral'
+  if (temNicho) {
+    const ctx = await serperSearch(`"${brand}" ${nicho}`, apiKey, 15, 'search')
+    if (ctx) add(ctx.organic, false)
+  }
   const web = await serperSearch(`"${brand}"`, apiKey, 20, 'search')
   if (web) add(web.organic, false)
   const news = await serperSearch(brand, apiKey, 20, 'news')
@@ -213,6 +222,9 @@ const CLASSIFY_SCHEMA = {
       indice: { type: 'INTEGER' },
       classificacao: { type: 'STRING', enum: ['Positivo', 'Neutro', 'Negativo', 'Crise'] },
       motivo: { type: 'STRING' },
+      // Opcional (só o classify da MARCA pede) — desambigua xarás. Fora do `required`
+      // pra não obrigar o classify dos concorrentes a devolver.
+      relevante: { type: 'BOOLEAN' },
     },
     required: ['indice', 'classificacao', 'motivo'],
   },
@@ -256,8 +268,8 @@ async function handler(request: Request): Promise<Response> {
     const nicho: string = config.nicho || 'geral'
     const keywords: string[] = Array.isArray(config.palavras_chave_alerta) ? config.palavras_chave_alerta : []
 
-    // 1) Menções (Serper.dev): marca + termos de reputação comuns.
-    const mencoes = await serpMentions(marca, ['reclame aqui', 'avaliações', 'reclamação'], serpKey)
+    // 1) Menções (Serper.dev): marca + nicho (desambigua xarás) + termos de reputação.
+    const mencoes = await serpMentions(marca, nicho, ['reclame aqui', 'avaliações', 'reclamação'], serpKey)
 
     // 2+3) Classificação de sentimento E tendências: 2 chamadas Gemini
     // INDEPENDENTES rodadas em PARALELO (Promise.all) — não sequencial. Isso
@@ -274,7 +286,11 @@ async function handler(request: Request): Promise<Response> {
     const classifyTask = (async () => {
       if (mencoes.length === 0) return
       const lista = mencoes.map((m, i) => `${i}. ${m.texto}`).join('\n')
-      const prompt = `Você analisa reputação de marca no nicho "${nicho}". Para cada menção abaixo sobre a marca "${marca}", classifique o sentimento como Positivo, Neutro, Negativo ou Crise (Crise = ameaça séria à reputação: acusação de golpe/fraude, ameaça de processo, escândalo). Dê o motivo em 1 frase curta. Responda um array JSON com um item por menção, cada um com "indice" (o número da menção), "classificacao" e "motivo".\n\nMenções:\n${lista}`
+      const prompt = `Você analisa reputação da marca "${marca}", que atua no nicho "${nicho}". Para cada menção abaixo:
+1. "relevante": true se a menção é MESMO sobre a marca "${marca}" do nicho "${nicho}"; false se for um XARÁ — outra empresa, pessoa ou produto de nome igual/parecido, mas de outro ramo (ex: uma empresa homônima de outro setor).
+2. "classificacao": Positivo, Neutro, Negativo ou Crise (Crise = ameaça séria: acusação de golpe/fraude, ameaça de processo, escândalo).
+3. "motivo": 1 frase curta.
+Responda um array JSON com um item por menção: "indice" (número da menção), "relevante", "classificacao", "motivo".\n\nMenções:\n${lista}`
       try {
         const arr = await geminiJson(geminiKey, prompt, CLASSIFY_SCHEMA)
         if (Array.isArray(arr)) {
@@ -284,6 +300,7 @@ async function handler(request: Request): Promise<Response> {
             if (mencoes[idx]) {
               mencoes[idx].classificacao = item.classificacao || 'Neutro'
               mencoes[idx].motivo = item.motivo || ''
+              mencoes[idx].relevante = item.relevante !== false // só false explícito descarta
             }
           }
         }
@@ -314,31 +331,41 @@ async function handler(request: Request): Promise<Response> {
     // Sem menções não há o que classificar — não é falha (evita aviso falso).
     if (mencoes.length === 0) sentimentoOk = true
 
-    // 4) Sentimento agregado + nuvem de palavras.
+    // Filtra XARÁS: quando a IA classificou, descarta o que ela marcou como não relevante
+    // (outra empresa/pessoa de mesmo nome, fora do nicho). Sem classificação não dá pra
+    // julgar → mantém tudo (a UI já avisa "não classificado").
+    const coletadas = mencoes.length
+    const mencoesRel = sentimentoOk ? mencoes.filter((m) => m.relevante !== false) : mencoes
+    const descartadas = coletadas - mencoesRel.length
+
+    // 4) Sentimento agregado + nuvem de palavras (só das menções relevantes).
     const sentimento = { positivo: 0, neutro: 0, negativo: 0, crise: 0 }
-    for (const m of mencoes) {
+    for (const m of mencoesRel) {
       const c = m.classificacao.toLowerCase()
       if (c === 'positivo') sentimento.positivo++
       else if (c === 'negativo') sentimento.negativo++
       else if (c === 'crise') sentimento.crise++
       else sentimento.neutro++
     }
-    const palavras = tokenize(mencoes.map((m) => m.texto))
+    const palavras = tokenize(mencoesRel.map((m) => m.texto))
 
-    // `classificado` (1/0) viaja junto do sentimento (mesma coluna JSONB, sem migration
-    // nova) pra UI distinguir "neutro de verdade" de "IA não classificou".
-    const sentimentoStore = { ...sentimento, classificado: sentimentoOk ? 1 : 0 }
+    // `classificado` (1/0) e `descartadas` viajam junto do sentimento (mesma coluna JSONB,
+    // sem migration nova). UI usa pra distinguir neutro real de "IA não classificou" e pra
+    // avisar quantos xarás foram descartados.
+    const sentimentoStore = { ...sentimento, classificado: sentimentoOk ? 1 : 0, descartadas }
 
-    const resumo = !mencoes.length
+    const resumo = !coletadas
       ? `Não encontramos menções relevantes de "${marca}" na web nesta rodada. Tente novamente mais tarde ou ajuste o nome da marca.`
-      : sentimentoOk
-        ? `Analisamos ${mencoes.length} menções sobre "${marca}" na web: ${sentimento.positivo} positivas, ${sentimento.neutro} neutras, ${sentimento.negativo} negativas e ${sentimento.crise} de crise.`
-        : `Coletamos ${mencoes.length} menções sobre "${marca}", mas a IA não conseguiu classificar o sentimento nesta rodada (sobrecarga temporária do Gemini). Gere o relatório novamente em alguns instantes.`
+      : !sentimentoOk
+        ? `Coletamos ${coletadas} menções sobre "${marca}", mas a IA não conseguiu classificar o sentimento nesta rodada (sobrecarga temporária do Gemini). Gere o relatório novamente em alguns instantes.`
+        : mencoesRel.length === 0
+          ? `Encontramos ${coletadas} menções com o nome "${marca}", mas todas eram de outra empresa/contexto (mesmo nome, nicho diferente). Nenhuma menção da sua marca nesta rodada.`
+          : `Analisamos ${mencoesRel.length} menções da sua marca "${marca}": ${sentimento.positivo} positivas, ${sentimento.neutro} neutras, ${sentimento.negativo} negativas e ${sentimento.crise} de crise.${descartadas > 0 ? ` (${descartadas} descartadas por serem de outra empresa de mesmo nome.)` : ''}`
 
-    // 5) Grava relatório. A coluna `concorrentes` é da migration 1.1 — se ela ainda não
-    // foi rodada no Supabase, o insert com esse campo falha. Nesse caso, regrava SEM ele
-    // (degrada pra relatório sem comparativo) em vez de quebrar a geração inteira.
-    const baseRow = { user_id: user.id, config_id: config.id, resumo, sentimento: sentimentoStore, mencoes, tendencias, palavras }
+    // 5) Grava relatório (só as menções relevantes). A coluna `concorrentes` é da migration
+    // 1.1 — se ela ainda não foi rodada no Supabase, o insert com esse campo falha. Nesse
+    // caso, regrava SEM ele (degrada pra relatório sem comparativo) em vez de quebrar.
+    const baseRow = { user_id: user.id, config_id: config.id, resumo, sentimento: sentimentoStore, mencoes: mencoesRel, tendencias, palavras }
     let { data: rel, error: relErr } = await supabaseAdmin
       .from('radar_relatorios')
       .insert({ ...baseRow, concorrentes: concorrentesAnalise })
@@ -349,9 +376,9 @@ async function handler(request: Request): Promise<Response> {
     }
     if (relErr) return new Response(JSON.stringify({ error: `Erro ao salvar relatório: ${relErr.message}` }), { status: 500, headers: { 'Content-Type': 'application/json' } })
 
-    // 6) Gera alertas: Crise OU menção que bate com palavra-chave.
+    // 6) Gera alertas: Crise OU menção que bate com palavra-chave (só das relevantes).
     const lowerKeywords = keywords.map((k) => k.toLowerCase())
-    const alertas = mencoes
+    const alertas = mencoesRel
       .filter((m) => m.classificacao.toLowerCase() === 'crise' || lowerKeywords.some((k) => k && m.texto.toLowerCase().includes(k)))
       .map((m) => ({
         user_id: user.id, config_id: config.id, mencao_texto: m.texto.slice(0, 300),
