@@ -16,6 +16,7 @@ function apiDevBridge(): Plugin {
     '/api/elevenlabs/text-to-speech': './api/elevenlabs/text-to-speech.ts',
     '/api/kiwify/webhook': './api/kiwify/webhook.ts',
     '/api/radar/generate-report': './api/radar/generate-report.ts',
+    '/api/radar/generate-response': './api/radar/generate-response.ts',
     '/api/radar/cron-alerts': './api/radar/cron-alerts.ts',
   }
 

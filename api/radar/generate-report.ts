@@ -92,6 +92,29 @@ async function serpMentions(brand: string, extras: string[], apiKey: string): Pr
   return out.slice(0, 40)
 }
 
+interface SentCount {
+  positivo: number
+  neutro: number
+  negativo: number
+  crise: number
+}
+
+interface ConcorrenteAnalise {
+  nome: string
+  total: number
+  sentimento: SentCount
+  score: number
+}
+
+// Nota de Reputação 0-100 a partir da contagem de sentimentos. Positivo puxa pra cima,
+// negativo é neutro-baixo, crise penaliza pesado. Sem menções = 0.
+function reputationScore(s: SentCount): number {
+  const total = s.positivo + s.neutro + s.negativo + s.crise
+  if (!total) return 0
+  const raw = (s.positivo * 1 + s.neutro * 0.5 + s.negativo * 0 + s.crise * -0.5) / total
+  return Math.max(0, Math.min(100, Math.round(raw * 100)))
+}
+
 async function geminiJson(apiKey: string, prompt: string, schema: any): Promise<any> {
   const res = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`,
@@ -110,6 +133,72 @@ async function geminiJson(apiKey: string, prompt: string, schema: any): Promise<
   const text = data.candidates?.[0]?.content?.parts?.find((p: any) => typeof p.text === 'string')?.text
   if (!text) throw new Error('Gemini sem conteúdo')
   return JSON.parse(text)
+}
+
+// Análise de reputação dos concorrentes (dado já capturado na config, antes ignorado).
+// Limita a 3 concorrentes e busca em PARALELO pra não estourar o maxDuration; classifica
+// TODAS as menções numa ÚNICA chamada Gemini pra economizar cota do free tier.
+async function analisarConcorrentes(
+  concorrentes: string[],
+  serpKey: string,
+  geminiKey: string,
+  nicho: string,
+): Promise<ConcorrenteAnalise[]> {
+  const limit = concorrentes.slice(0, 3)
+  if (!limit.length) return []
+
+  // Buscas em paralelo (uma por concorrente).
+  const buscas = await Promise.all(
+    limit.map(async (nome) => {
+      const web = await serperSearch(`"${nome}"`, serpKey, 8, 'search')
+      const mencoes: string[] = []
+      const seen = new Set<string>()
+      if (web && Array.isArray(web.organic)) {
+        for (const r of web.organic) {
+          const link = r.link || ''
+          if (link && seen.has(link)) continue
+          if (link) seen.add(link)
+          const texto = [r.title, r.snippet].filter(Boolean).join(' — ').slice(0, 300)
+          if (texto) mencoes.push(texto)
+        }
+      }
+      return { nome, mencoes: mencoes.slice(0, 8) }
+    }),
+  )
+
+  // Achata todas as menções tagueando de qual concorrente vieram.
+  const flat: { comp: number; texto: string; classificacao: string }[] = []
+  buscas.forEach((c, ci) => c.mencoes.forEach((texto) => flat.push({ comp: ci, texto, classificacao: '' })))
+
+  if (flat.length) {
+    try {
+      const lista = flat.map((f, i) => `${i}. ${f.texto}`).join('\n')
+      const prompt = `Você analisa reputação de marcas no nicho "${nicho}". Para cada menção abaixo (sobre marcas concorrentes), classifique o sentimento como Positivo, Neutro, Negativo ou Crise (Crise = golpe/fraude/processo/escândalo). Motivo em 1 frase. Responda um array JSON com um item por menção: "indice", "classificacao", "motivo".\n\nMenções:\n${lista}`
+      const arr = await geminiJson(geminiKey, prompt, CLASSIFY_SCHEMA)
+      if (Array.isArray(arr)) {
+        for (const it of arr) {
+          const idx = Number(it.indice)
+          if (flat[idx]) flat[idx].classificacao = it.classificacao || 'Neutro'
+        }
+      }
+    } catch {
+      // Gemini fora: fica tudo Neutro (score 50) — não trava o relatório.
+    }
+  }
+
+  return buscas.map((c, ci) => {
+    const s: SentCount = { positivo: 0, neutro: 0, negativo: 0, crise: 0 }
+    for (const f of flat) {
+      if (f.comp !== ci) continue
+      const cl = (f.classificacao || 'neutro').toLowerCase()
+      if (cl === 'positivo') s.positivo++
+      else if (cl === 'negativo') s.negativo++
+      else if (cl === 'crise') s.crise++
+      else s.neutro++
+    }
+    const total = s.positivo + s.neutro + s.negativo + s.crise
+    return { nome: c.nome, total, sentimento: s, score: reputationScore(s) }
+  })
 }
 
 const CLASSIFY_SCHEMA = {
@@ -204,7 +293,13 @@ async function handler(request: Request): Promise<Response> {
       return []
     })()
 
-    const [, tendencias] = await Promise.all([classifyTask, trendsTask])
+    // Análise de concorrentes (roda em paralelo com classify/trends).
+    const concorrentesCfg: string[] = Array.isArray(config.concorrentes) ? config.concorrentes.filter(Boolean) : []
+    const competitorsTask = concorrentesCfg.length
+      ? analisarConcorrentes(concorrentesCfg, serpKey, geminiKey, nicho)
+      : Promise.resolve([] as ConcorrenteAnalise[])
+
+    const [, tendencias, concorrentesAnalise] = await Promise.all([classifyTask, trendsTask, competitorsTask])
     for (const m of mencoes) if (!m.classificacao) m.classificacao = 'Neutro'
 
     // 4) Sentimento agregado + nuvem de palavras.
@@ -222,12 +317,18 @@ async function handler(request: Request): Promise<Response> {
       ? `Analisamos ${mencoes.length} menções sobre "${marca}" na web: ${sentimento.positivo} positivas, ${sentimento.neutro} neutras, ${sentimento.negativo} negativas e ${sentimento.crise} de crise.`
       : `Não encontramos menções relevantes de "${marca}" na web nesta rodada. Tente novamente mais tarde ou ajuste o nome da marca.`
 
-    // 5) Grava relatório.
-    const { data: rel, error: relErr } = await supabaseAdmin
+    // 5) Grava relatório. A coluna `concorrentes` é da migration 1.1 — se ela ainda não
+    // foi rodada no Supabase, o insert com esse campo falha. Nesse caso, regrava SEM ele
+    // (degrada pra relatório sem comparativo) em vez de quebrar a geração inteira.
+    const baseRow = { user_id: user.id, config_id: config.id, resumo, sentimento, mencoes, tendencias, palavras }
+    let { data: rel, error: relErr } = await supabaseAdmin
       .from('radar_relatorios')
-      .insert({ user_id: user.id, config_id: config.id, resumo, sentimento, mencoes, tendencias, palavras })
+      .insert({ ...baseRow, concorrentes: concorrentesAnalise })
       .select()
       .single()
+    if (relErr) {
+      ;({ data: rel, error: relErr } = await supabaseAdmin.from('radar_relatorios').insert(baseRow).select().single())
+    }
     if (relErr) return new Response(JSON.stringify({ error: `Erro ao salvar relatório: ${relErr.message}` }), { status: 500, headers: { 'Content-Type': 'application/json' } })
 
     // 6) Gera alertas: Crise OU menção que bate com palavra-chave.

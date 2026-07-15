@@ -77,6 +77,19 @@ function Editor() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // Texto vindo do VoiceFlow Radar ("Ouvir no Editor de Voz"): pré-preenche a caixa e limpa.
+  useEffect(() => {
+    try {
+      const preset = sessionStorage.getItem('vfia:editor-preset-text')
+      if (preset) {
+        setText(preset)
+        sessionStorage.removeItem('vfia:editor-preset-text')
+      }
+    } catch {
+      // sessionStorage indisponível — ignora
+    }
+  }, [])
+
   async function handleGenerateVoice() {
     console.log(`=== Iniciando geração de voz (${provider}) ===`)
 

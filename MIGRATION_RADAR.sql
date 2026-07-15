@@ -48,6 +48,11 @@ CREATE TABLE IF NOT EXISTS radar_relatorios (
   palavras JSONB NOT NULL DEFAULT '{}'::jsonb       -- {palavra: contagem} p/ nuvem
 );
 
+-- ADITIVO (Fase 1.1): análise de concorrentes no relatório.
+-- [{ nome, total, sentimento:{positivo,neutro,negativo,crise}, score } ]
+ALTER TABLE radar_relatorios
+  ADD COLUMN IF NOT EXISTS concorrentes JSONB NOT NULL DEFAULT '[]'::jsonb;
+
 ALTER TABLE radar_relatorios ENABLE ROW LEVEL SECURITY;
 
 -- Dono só LÊ; a escrita vem do endpoint via service_role (bypassa RLS).
