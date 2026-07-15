@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { createFileRoute } from "@tanstack/react-router"
-import { Lock, Download, Volume2, Loader2, AlertCircle, Music, Mic, Upload, Play, Square, Sparkles } from 'lucide-react'
+import { Lock, Download, Volume2, Loader2, AlertCircle, Music, Mic, Upload, Play, Square, Sparkles, ArrowDown } from 'lucide-react'
 import { useSubscription } from '../lib/useSubscription'
 import { fetchWithRetry } from '../lib/apiRetry'
 import { Button } from '../components/ui/button'
@@ -12,6 +12,17 @@ import { blobToAudioBuffer, renderMix, audioBufferToWav, enhanceVoiceBuffer } fr
 export const Route = createFileRoute("/editor")({
   component: Editor,
 })
+
+// Trilhas prontas ("camas" instrumentais royalty-free) servidas de public/trilhas/*.mp3.
+// O cliente clica e a trilha entra direto no mixer, sem precisar ter música própria — é o
+// que tira o atrito "cadê a música?" na hora de sonorizar. Os arquivos ficam em public/ pra
+// serem servidos same-origin pela Vercel (sem CORS pro Web Audio decodificar).
+const PRESET_TRACKS = [
+  { id: 'corporativa', label: 'Corporativa', emoji: '💼', file: 'corporativa.mp3' },
+  { id: 'business', label: 'Business', emoji: '🏢', file: 'business.mp3' },
+  { id: 'global', label: 'Global', emoji: '🌎', file: 'global.mp3' },
+  { id: 'pop', label: 'Pop', emoji: '🎵', file: 'pop.mp3' },
+] as const
 
 function Editor() {
   const { hasAccess, loading: loadingSubscription } = useSubscription()
@@ -39,8 +50,11 @@ function Editor() {
   const [isMixing, setIsMixing] = useState(false)
   const [isPreviewing, setIsPreviewing] = useState(false)
   const [mixError, setMixError] = useState('')
+  const [selectedPresetId, setSelectedPresetId] = useState<string | null>(null)
+  const [loadingPreset, setLoadingPreset] = useState<string | null>(null)
   const previewRef = useRef<HTMLAudioElement | null>(null)
   const previewUrlRef = useRef<string | null>(null)
+  const mixerRef = useRef<HTMLDivElement | null>(null)
 
 
   // Carregar vozes do provedor selecionado.
@@ -168,8 +182,33 @@ function Editor() {
     if (!file) return
     stopPreview()
     setMixError('')
+    setSelectedPresetId(null) // subiu a própria música: desmarca a trilha pronta
     setTrackBlob(file)
     setTrackName(file.name)
+  }
+
+  // Carrega uma trilha pronta de public/trilhas/ e joga direto no mixer.
+  async function handlePresetTrack(preset: (typeof PRESET_TRACKS)[number]) {
+    stopPreview()
+    setMixError('')
+    setLoadingPreset(preset.id)
+    try {
+      const res = await fetch(`/trilhas/${preset.file}`)
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      const blob = await res.blob()
+      // Em SPA/host com fallback pra index.html, um arquivo faltando volta como HTML 200 —
+      // o check de tipo evita "carregar" um HTML achando que é áudio.
+      if (!blob.type.startsWith('audio')) throw new Error('não é áudio')
+      setTrackBlob(blob)
+      setTrackName(`${preset.emoji} ${preset.label}`)
+      setSelectedPresetId(preset.id)
+    } catch (err) {
+      console.error('Falha ao carregar trilha pronta:', err)
+      setSelectedPresetId(null)
+      setMixError('Essa trilha ainda não está disponível. Você pode subir a sua própria música.')
+    } finally {
+      setLoadingPreset(null)
+    }
   }
 
   function stopPreview() {
@@ -416,6 +455,17 @@ function Editor() {
                   </Button>
                 </div>
 
+                {/* CTA de sonorização: puxa o olho do cliente pro mixer logo abaixo. */}
+                <button
+                  type="button"
+                  onClick={() => mixerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+                  className="w-full flex items-center justify-center gap-2 p-3 rounded-lg bg-gradient-to-r from-[#8B5CF6]/20 to-[#22C55E]/20 border border-[#8B5CF6]/40 hover:border-[#8B5CF6] transition-colors text-sm font-bold text-white"
+                >
+                  <Sparkles className="w-4 h-4 text-[#8B5CF6]" />
+                  Quer sonorizar seu áudio? Escolha uma trilha
+                  <ArrowDown className="w-4 h-4 text-[#22C55E]" />
+                </button>
+
                 {/* Realce Profissional da Voz (masterização: trim + EQ + compressor + reverb) */}
                 <button
                   type="button"
@@ -453,7 +503,7 @@ function Editor() {
                 </button>
 
                 {/* ===== Estúdio de Mixagem (mini-mixer) ===== */}
-                <div className="mt-2 pt-6 border-t border-gray-800 space-y-5">
+                <div ref={mixerRef} className="mt-2 pt-6 border-t border-gray-800 space-y-5 scroll-mt-6">
                   <div>
                     <h3 className="text-lg font-bold text-white flex items-center gap-2">
                       <Music className="w-5 h-5 text-[#8B5CF6]" />
@@ -471,11 +521,40 @@ function Editor() {
                     </div>
                   )}
 
-                  {/* Upload da trilha */}
+                  {/* Trilhas prontas: 1 clique carrega a cama no mixer */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                      Trilhas prontas <span className="text-gray-500 font-normal">— clique pra usar</span>
+                    </label>
+                    <div className="flex flex-wrap gap-2">
+                      {PRESET_TRACKS.map((preset) => {
+                        const active = selectedPresetId === preset.id
+                        const loading = loadingPreset === preset.id
+                        return (
+                          <button
+                            key={preset.id}
+                            type="button"
+                            onClick={() => handlePresetTrack(preset)}
+                            disabled={loading}
+                            className={`flex items-center gap-1.5 px-3 py-2 rounded-full border text-sm font-medium transition-colors disabled:opacity-60 ${
+                              active
+                                ? 'bg-[#8B5CF6] border-[#8B5CF6] text-white'
+                                : 'bg-[#1A1A1A] border-gray-700 text-gray-300 hover:border-[#8B5CF6]'
+                            }`}
+                          >
+                            {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <span>{preset.emoji}</span>}
+                            {preset.label}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Ou subir a própria trilha */}
                   <label className="flex items-center gap-3 p-4 bg-[#1A1A1A] border border-dashed border-gray-700 rounded-lg cursor-pointer hover:border-[#8B5CF6] transition-colors">
                     <Upload className="w-5 h-5 text-gray-400 shrink-0" />
                     <span className="text-sm text-gray-300 truncate">
-                      {trackName || 'Escolher trilha de fundo (MP3, WAV, M4A)'}
+                      {trackName || 'Ou suba a sua própria música (MP3, WAV, M4A)'}
                     </span>
                     <input
                       type="file"
