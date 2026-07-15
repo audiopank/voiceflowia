@@ -125,24 +125,45 @@ function reputationScore(s: SentCount): number {
   return Math.max(0, Math.min(100, Math.round(raw * 100)))
 }
 
-async function geminiJson(apiKey: string, prompt: string, schema: any): Promise<any> {
-  const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { responseMimeType: 'application/json', responseSchema: schema },
-      }),
-      signal: AbortSignal.timeout(25_000),
+// Chama o Gemini com RETRY: o free tier engasga (429/timeout) com frequência e uma 2ª
+// tentativa costuma pegar. Em caso de erro HTTP, inclui o motivo real do Google (ex:
+// "quota exceeded") na mensagem — pra diagnóstico, em vez de só "Gemini 429".
+async function geminiJson(apiKey: string, prompt: string, schema: any, attempts = 2): Promise<any> {
+  let lastErr: unknown = null
+  for (let i = 0; i < attempts; i++) {
+    try {
+      const res = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig: { responseMimeType: 'application/json', responseSchema: schema },
+          }),
+          signal: AbortSignal.timeout(20_000),
+        }
+      )
+      if (!res.ok) {
+        const body = await res.text().catch(() => '')
+        let detalhe = ''
+        try {
+          detalhe = JSON.parse(body)?.error?.message || ''
+        } catch {
+          detalhe = body.slice(0, 140)
+        }
+        throw new Error(`Gemini ${res.status}${detalhe ? `: ${detalhe}` : ''}`)
+      }
+      const data: any = await res.json()
+      const text = data.candidates?.[0]?.content?.parts?.find((p: any) => typeof p.text === 'string')?.text
+      if (!text) throw new Error('Gemini sem conteúdo')
+      return JSON.parse(text)
+    } catch (err) {
+      lastErr = err
+      if (i < attempts - 1) await new Promise((r) => setTimeout(r, 1500))
     }
-  )
-  if (!res.ok) throw new Error(`Gemini ${res.status}`)
-  const data: any = await res.json()
-  const text = data.candidates?.[0]?.content?.parts?.find((p: any) => typeof p.text === 'string')?.text
-  if (!text) throw new Error('Gemini sem conteúdo')
-  return JSON.parse(text)
+  }
+  throw lastErr instanceof Error ? lastErr : new Error('Gemini falhou')
 }
 
 // Análise de reputação dos concorrentes (dado já capturado na config, antes ignorado).
@@ -185,7 +206,7 @@ async function analisarConcorrentes(
     try {
       const lista = flat.map((f, i) => `${i}. ${f.texto}`).join('\n')
       const prompt = `Você analisa reputação de marcas no nicho "${nicho}". Para cada menção abaixo (sobre marcas concorrentes), classifique o sentimento como Positivo, Neutro, Negativo ou Crise (Crise = golpe/fraude/processo/escândalo). Motivo em 1 frase. Responda um array JSON com um item por menção: "indice", "classificacao", "motivo".\n\nMenções:\n${lista}`
-      const arr = await geminiJson(geminiKey, prompt, CLASSIFY_SCHEMA)
+      const arr = await geminiJson(geminiKey, prompt, CLASSIFY_SCHEMA, 1)
       if (Array.isArray(arr)) {
         classifyOk = true
         for (const it of arr) {
@@ -283,6 +304,7 @@ async function handler(request: Request): Promise<Response> {
     // uma marca genuinamente neutra. Persistimos esse flag pra UI avisar "não classificado"
     // em vez de mostrar 100% neutro como se fosse real.
     let sentimentoOk = false
+    let classifyErro = '' // motivo real da falha do Gemini (pra diagnóstico na UI)
     const classifyTask = (async () => {
       if (mencoes.length === 0) return
       const lista = mencoes.map((m, i) => `${i}. ${m.texto}`).join('\n')
@@ -304,15 +326,16 @@ Responda um array JSON com um item por menção: "indice" (número da menção),
             }
           }
         }
-      } catch {
+      } catch (err) {
         // Gemini fora/lento: deixa como Neutro e sentimentoOk = false (UI avisa).
+        classifyErro = err instanceof Error ? err.message : 'Falha desconhecida no Gemini'
       }
     })()
 
     const trendsTask = (async (): Promise<string[]> => {
       try {
         const tPrompt = `Você é estrategista de conteúdo. Liste 3 tendências de conteúdo para redes sociais no nicho "${nicho}" nesta semana, cada uma como uma frase acionável (o que postar e por quê). Responda JSON { "tendencias": ["...", "...", "..."] }.`
-        const tData = await geminiJson(geminiKey, tPrompt, TRENDS_SCHEMA)
+        const tData = await geminiJson(geminiKey, tPrompt, TRENDS_SCHEMA, 1)
         if (Array.isArray(tData?.tendencias)) return tData.tendencias.slice(0, 5)
       } catch {
         // tendências são opcionais
@@ -386,7 +409,10 @@ Responda um array JSON com um item por menção: "indice" (número da menção),
       }))
     if (alertas.length) await supabaseAdmin.from('radar_alertas').insert(alertas)
 
-    return new Response(JSON.stringify(rel), { headers: { 'Content-Type': 'application/json' } })
+    // Diagnóstico (não persistido): só volta quando a IA falhou, pra UI mostrar o motivo
+    // real (429/cota/billing) em vez de deixar o Mestre adivinhando.
+    const payload = classifyErro && !sentimentoOk ? { ...rel, diagnostico: classifyErro } : rel
+    return new Response(JSON.stringify(payload), { headers: { 'Content-Type': 'application/json' } })
   } catch (error) {
     console.error('Erro no radar generate-report:', error)
     return new Response(JSON.stringify({ error: 'Erro ao gerar relatório' }), { status: 500, headers: { 'Content-Type': 'application/json' } })

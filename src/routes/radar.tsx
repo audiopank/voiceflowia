@@ -63,6 +63,7 @@ interface Relatorio {
   tendencias: string[]
   palavras: Record<string, number>
   concorrentes?: Concorrente[]
+  diagnostico?: string // motivo real da falha do Gemini (só ao vivo, quando falhou)
 }
 
 // Nota de Reputação 0-100 (mesma fórmula do backend), pra calcular a nota da própria
@@ -538,6 +539,9 @@ function Radar() {
                     <AlertTriangle className="w-4 h-4 text-yellow-400 shrink-0 mt-0.5" />
                     <span className="text-yellow-200 text-sm">
                       A IA não conseguiu classificar o sentimento nesta rodada (sobrecarga temporária do Gemini). As {mencoesCount} menções foram coletadas, mas <strong>não estão classificadas</strong> — o "Neutro" abaixo não reflete a reputação real. Clique em <strong>Gerar Relatório</strong> de novo em alguns instantes.
+                      {relatorio.diagnostico && (
+                        <span className="block mt-1 text-[11px] text-yellow-400/70">Detalhe técnico: {relatorio.diagnostico}</span>
+                      )}
                     </span>
                   </div>
                 )}
