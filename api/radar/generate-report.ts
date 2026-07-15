@@ -152,7 +152,9 @@ async function geminiJson(apiKey: string, prompt: string, schema: any, attempts 
         } catch {
           detalhe = body.slice(0, 140)
         }
-        throw new Error(`Gemini ${res.status}${detalhe ? `: ${detalhe}` : ''}`)
+        const httpErr = new Error(`Gemini ${res.status}${detalhe ? `: ${detalhe}` : ''}`)
+        ;(httpErr as any).status = res.status
+        throw httpErr
       }
       const data: any = await res.json()
       const text = data.candidates?.[0]?.content?.parts?.find((p: any) => typeof p.text === 'string')?.text
@@ -160,6 +162,9 @@ async function geminiJson(apiKey: string, prompt: string, schema: any, attempts 
       return JSON.parse(text)
     } catch (err) {
       lastErr = err
+      // 429 = cota estourada: a janela só reseta em ~37s e retentar em 1.5s só queima outra
+      // das 20 req/min do free tier. Não retenta (só timeout/rede/5xx é que vale retry).
+      if ((err as any)?.status === 429) break
       if (i < attempts - 1) await new Promise((r) => setTimeout(r, 1500))
     }
   }
