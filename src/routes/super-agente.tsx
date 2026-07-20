@@ -9,7 +9,7 @@ import {
 } from 'lucide-react'
 import { useSubscription } from '../lib/useSubscription'
 import { supabase } from '../lib/supabase'
-import { fetchWithRetry, sleep, safeJson } from '../lib/apiRetry'
+import { fetchWithRetry, sleep, safeJson, friendlyApiError } from '../lib/apiRetry'
 import { Button } from '../components/ui/button'
 import { BackButton } from '../components/BackButton'
 import { SuperAgenteGuia } from '../components/SuperAgenteGuia'
@@ -291,15 +291,18 @@ function SuperAgente() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ nicho, tom, qtdPosts: qtdDias, instagram, servicos, tomMarca, cta, diferenciais, voz }) // V1.6: voz forçada ('' = automático)
         },
-        { onWait: (s) => setRateNotice(`⏳ Limite temporário da API. Aguardando ${s}s e tentando de novo...`) },
+        { onWait: (s) => setRateNotice(`⏳ Muita procura agora — tentando de novo em ${s}s...`) },
       )
       setRateNotice('')
 
-      const data = await safeJson(response)
+      // Ver agente.tsx: checa o erro antes de parsear, senão um 504 em HTML (não-JSON) faz
+      // o safeJson estourar com a mensagem crua em vez da amigável.
       if (!response.ok) {
-        throw new Error(data?.error || `Erro na API: ${response.status}`)
+        const errData = await response.json().catch(() => null)
+        throw new Error(friendlyApiError(response.status, errData?.error))
       }
 
+      const data = await safeJson(response)
       setEstrategia(data.estrategia)
       setPosts(data.posts)
 
@@ -331,11 +334,11 @@ function SuperAgente() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text: `${post.hook} ${post.roteiro}`, voiceName: post.vozSugerida })
       },
-      { onWait: (s) => setRateNotice(`⏳ Limite temporário da API. Aguardando ${s}s e tentando de novo...`) },
+      { onWait: (s) => setRateNotice(`⏳ Muita procura agora — tentando de novo em ${s}s...`) },
     )
     if (!response.ok) {
       const data = await response.json().catch(() => null)
-      throw new Error(data?.error || `Erro na API: ${response.status}`)
+      throw new Error(friendlyApiError(response.status, data?.error))
     }
     return response.blob()
   }

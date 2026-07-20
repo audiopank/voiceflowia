@@ -21,13 +21,18 @@ export function parseRetryMs(text: string, fallbackMs = 30000): number {
 
 interface RetryOpts {
   retries?: number
+  // Teto de espera ACUMULADA em 429 (ms). Um cliente testando não pode ficar minutos
+  // olhando "aguardando...": se o próximo "retry in Xs" estourar esse teto (cota de fato
+  // esgotada, não um pico passageiro), a gente devolve o erro na hora pra UI mostrar uma
+  // mensagem decente — fail-fast em vez de fingir que vai gerar. Padrão: 20s.
+  maxTotalWaitMs?: number
   // Chamado antes de cada espera, com os segundos e o número da tentativa.
   onWait?: (secondsLeft: number, attempt: number) => void
 }
 
 // Gateway/timeout transitórios (ex: síntese de voz demorou mais que o limite de execução
 // da function) — sem "retry-in-Xs" no corpo, então usa uma espera curta fixa.
-const GATEWAY_ERROR_STATUSES = [502, 503, 504]
+export const GATEWAY_ERROR_STATUSES = [502, 503, 504]
 
 // fetch que re-tenta sozinho quando a API responde 429 (limite atingido) ou um erro
 // transitório de gateway (502/503/504). Retorna a Response final (ok ou o último erro) —
@@ -35,8 +40,9 @@ const GATEWAY_ERROR_STATUSES = [502, 503, 504]
 export async function fetchWithRetry(
   input: RequestInfo,
   init: RequestInit,
-  { retries = 3, onWait }: RetryOpts = {},
+  { retries = 3, maxTotalWaitMs = 20000, onWait }: RetryOpts = {},
 ): Promise<Response> {
+  let waitedMs = 0
   for (let attempt = 1; ; attempt++) {
     const res = await fetch(input, init)
     if (attempt > retries) return res
@@ -48,6 +54,10 @@ export async function fetchWithRetry(
       } catch {
         // corpo ilegível — usa fallback
       }
+      // Esperar isso passaria do teto total: é cota esgotada, não pico passageiro.
+      // Falha rápido — segurar o cliente por mais tempo só piora a demo.
+      if (waitedMs + ms > maxTotalWaitMs) return res
+      waitedMs += ms
       onWait?.(Math.ceil(ms / 1000), attempt)
       await sleep(ms + 500)
       continue
@@ -61,6 +71,29 @@ export async function fetchWithRetry(
 
     return res
   }
+}
+
+// Mensagem de erro amigável pro usuário final a partir do status + corpo cru da API.
+// Traduz "You exceeded your current quota..." / 429 / RESOURCE_EXHAUSTED (jargão do Google
+// que assusta um cliente testando) numa frase que soa "alta demanda", não "app quebrado".
+export function friendlyApiError(status: number, rawMessage?: string): string {
+  const msg = (rawMessage || '').toLowerCase()
+  const isQuota =
+    status === 429 ||
+    msg.includes('quota') ||
+    msg.includes('resource_exhausted') ||
+    msg.includes('rate limit')
+
+  if (isQuota) {
+    return 'Estamos com muita procura agora e o limite temporário da IA foi atingido. Aguarde alguns minutos e gere de novo. 🙏'
+  }
+
+  if (GATEWAY_ERROR_STATUSES.includes(status) || status === 504) {
+    return 'A IA demorou demais pra responder desta vez. Tente gerar de novo em instantes.'
+  }
+
+  // Erro genuinamente inesperado: mantém o detalhe (ajuda no suporte) com um fallback.
+  return rawMessage || `Não foi possível concluir agora (erro ${status}). Tente de novo.`
 }
 
 // Lê a Response como JSON com fallback: se o corpo não for JSON válido (ex: página de erro

@@ -8,6 +8,7 @@ import {
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useSubscription } from '../lib/useSubscription'
+import { friendlyApiError } from '../lib/apiRetry'
 import { Button } from '../components/ui/button'
 import { BackButton } from '../components/BackButton'
 
@@ -170,7 +171,7 @@ function Radar() {
         body: JSON.stringify({ marca: config?.marca_nome, nicho: config?.nicho, mencao, classificacao }),
       })
       const data = await res.json().catch(() => null)
-      if (!res.ok) throw new Error(data?.error || `Erro na API: ${res.status}`)
+      if (!res.ok) throw new Error(friendlyApiError(res.status, data?.error))
       setResp((r) => ({ ...r, loading: false, texto: data?.resposta || '' }))
     } catch (e) {
       setResp((r) => ({ ...r, loading: false, erro: e instanceof Error ? e.message : 'Erro ao gerar resposta' }))
@@ -305,7 +306,7 @@ function Radar() {
         body: JSON.stringify({}),
       })
       const data = await res.json().catch(() => null)
-      if (!res.ok) throw new Error(data?.error || `Erro na API: ${res.status}`)
+      if (!res.ok) throw new Error(friendlyApiError(res.status, data?.error))
       setRelatorio(data as Relatorio)
       // Recarrega alertas (o relatório pode ter gerado novos).
       if (userId) {

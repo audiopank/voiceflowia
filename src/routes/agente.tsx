@@ -3,7 +3,7 @@ import { createFileRoute } from '@tanstack/react-router'
 import { Lock, Loader2, AlertCircle, Sparkles, Volume2, Download, Play, CalendarDays } from 'lucide-react'
 import { useSubscription } from '../lib/useSubscription'
 import { supabase } from '../lib/supabase'
-import { fetchWithRetry, safeJson } from '../lib/apiRetry'
+import { fetchWithRetry, safeJson, friendlyApiError } from '../lib/apiRetry'
 import { Button } from '../components/ui/button'
 import { BackButton } from '../components/BackButton'
 import { EditableText } from '../components/EditableText'
@@ -76,16 +76,19 @@ function Agente() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ nicho, tom, qtdPosts: qtdDias })
         },
-        { onWait: (s) => setRateNotice(`⏳ Limite temporário da API. Aguardando ${s}s e tentando de novo...`) },
+        { onWait: (s) => setRateNotice(`⏳ Muita procura agora — tentando de novo em ${s}s...`) },
       )
       setRateNotice('')
 
-      const data = await safeJson(response)
-
+      // Checa o erro ANTES de parsear como JSON: numa falha 504/erro de plataforma a Vercel
+      // devolve HTML (não-JSON), e aí o safeJson estouraria com a mensagem crua em vez da
+      // amigável. Lê o corpo só uma vez em cada ramo (ok x erro são mutuamente exclusivos).
       if (!response.ok) {
-        throw new Error(data?.error || `Erro na API: ${response.status}`)
+        const errData = await response.json().catch(() => null)
+        throw new Error(friendlyApiError(response.status, errData?.error))
       }
 
+      const data = await safeJson(response)
       setPosts(data.posts)
 
       const { data: { user } } = await supabase.auth.getUser()
@@ -126,13 +129,13 @@ function Agente() {
             voiceName: post.vozSugerida
           })
         },
-        { onWait: (s) => setRateNotice(`⏳ Limite temporário da API. Aguardando ${s}s e tentando de novo...`) },
+        { onWait: (s) => setRateNotice(`⏳ Muita procura agora — tentando de novo em ${s}s...`) },
       )
       setRateNotice('')
 
       if (!response.ok) {
         const data = await response.json().catch(() => null)
-        throw new Error(data?.error || `Erro na API: ${response.status}`)
+        throw new Error(friendlyApiError(response.status, data?.error))
       }
 
       const blob = await response.blob()

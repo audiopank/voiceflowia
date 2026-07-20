@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { createFileRoute } from "@tanstack/react-router"
 import { Lock, Download, Volume2, Loader2, AlertCircle, Music, Mic, Upload, Play, Square, Sparkles, ArrowDown } from 'lucide-react'
 import { useSubscription } from '../lib/useSubscription'
-import { fetchWithRetry } from '../lib/apiRetry'
+import { fetchWithRetry, friendlyApiError } from '../lib/apiRetry'
 import { Button } from '../components/ui/button'
 import { BackButton } from '../components/BackButton'
 import { ELEVENLABS_VOICES, GEMINI_VOICES_TEXTO_LONGO, type Voice, type Provider } from '../lib/voices'
@@ -119,14 +119,14 @@ function Editor() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(body)
         },
-        { onWait: (s) => setRateNotice(`⏳ Limite temporário da API. Aguardando ${s}s e tentando de novo...`) },
+        { onWait: (s) => setRateNotice(`⏳ Muita procura agora — tentando de novo em ${s}s...`) },
       )
       setRateNotice('')
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => null)
         console.error(`Erro ${provider}:`, response.status, errorData)
-        throw new Error(errorData?.error || `Erro na API: ${response.status}`)
+        throw new Error(friendlyApiError(response.status, errorData?.error))
       }
 
       const blob = await response.blob()

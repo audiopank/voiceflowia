@@ -3,7 +3,7 @@ import { createFileRoute } from '@tanstack/react-router'
 import { Lock, Loader2, Volume2, Play, Pause, Heart, AlertCircle, Sparkles, Crown } from 'lucide-react'
 import { useSubscription } from '../lib/useSubscription'
 import { supabase } from '../lib/supabase'
-import { fetchWithRetry } from '../lib/apiRetry'
+import { fetchWithRetry, friendlyApiError } from '../lib/apiRetry'
 import { Button } from '../components/ui/button'
 import { BackButton } from '../components/BackButton'
 import { ALL_VOICES, GEMINI_VOICES, ELEVENLABS_VOICES, type CatalogVoice } from '../lib/voices'
@@ -117,13 +117,13 @@ function Biblioteca() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ text: sampleText.trim() || DEFAULT_SAMPLE, voiceName: voice.voice_id }),
         },
-        { onWait: (s) => setRateNotice(`⏳ Limite temporário da API. Aguardando ${s}s e tentando de novo...`) },
+        { onWait: (s) => setRateNotice(`⏳ Muita procura agora — tentando de novo em ${s}s...`) },
       )
       setRateNotice('')
 
       if (!response.ok) {
         const data = await response.json().catch(() => null)
-        throw new Error(data?.error || `Erro na API: ${response.status}`)
+        throw new Error(friendlyApiError(response.status, data?.error))
       }
 
       const blob = await response.blob()
