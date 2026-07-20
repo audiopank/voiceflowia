@@ -122,31 +122,20 @@ function bodyFontSize(text: string): number {
 }
 
 type SlideKey = 'hook' | 'roteiro' | 'legenda' | 'imagem'
-const SLIDE_LABEL: Record<SlideKey, string> = {
-  hook: 'HOOK',
-  roteiro: 'ROTEIRO (20s)',
-  legenda: 'LEGENDA',
-  imagem: 'IMAGEM',
-}
 
 // Tamanho fixo dos slides do carrossel: 1080x1350 (4:5), o retrato mais alto que o Instagram
 // aceita sem cortar/recomprimir no feed.
 const EXPORT_W = 540
 const EXPORT_H = 675
 
-// Um slide do carrossel — chrome comum (dia, contador, logo, rótulo do bloco) + conteúdo
-// específico do bloco. Fica oculto (height:0/overflow:hidden na wrapper) até ser exportado.
-// "dia" aqui é só de exibição (rótulo "Dia N"); a chave de estado é sempre a posição na lista.
+// Um slide do carrossel: só o CONTEÚDO + a logo da marca no canto. NADA de chrome de
+// produção (Dia, rótulo do bloco HOOK/ROTEIRO/LEGENDA/IMAGEM, contador 1/4, rodapé de
+// horário) — isso serve pra organização interna e vazava no PNG que o cliente publica.
+// Fica oculto (height:0/overflow:hidden na wrapper) até ser exportado.
 function ExportSlide({
-  innerRef, dia, periodo, horario, slide, index, total, brandLogo, children,
+  innerRef, brandLogo, children,
 }: {
   innerRef: (el: HTMLDivElement | null) => void
-  dia: number
-  periodo: string
-  horario: string
-  slide: SlideKey
-  index: number
-  total: number
   brandLogo: string | null
   children: React.ReactNode
 }) {
@@ -165,30 +154,18 @@ function ExportSlide({
           flexDirection: 'column',
         }}
       >
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-          <span style={{ color: '#8B5CF6', fontWeight: 700, fontSize: 18 }}>Dia {dia} · {periodo}</span>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <span style={{ fontSize: 13, color: '#6B7280', fontWeight: 600 }}>{index}/{total}</span>
-            {brandLogo && (
-              <img
-                src={brandLogo}
-                alt=""
-                style={{ width: 40, height: 40, objectFit: 'contain', background: '#FFFFFF', borderRadius: 8, padding: 4 }}
-              />
-            )}
+        {brandLogo && (
+          <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'flex-start' }}>
+            <img
+              src={brandLogo}
+              alt=""
+              style={{ width: 40, height: 40, objectFit: 'contain', background: '#FFFFFF', borderRadius: 8, padding: 4 }}
+            />
           </div>
-        </div>
-        <p style={{ margin: '16px 0 0', fontSize: 13, letterSpacing: 1, color: '#8B5CF6', fontWeight: 700 }}>
-          {SLIDE_LABEL[slide]}
-        </p>
+        )}
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', marginTop: 8 }}>
           {children}
         </div>
-        {horario && (
-          <p style={{ margin: 0, fontSize: 13, color: '#6B7280', textAlign: 'center' }}>
-            Dia {dia} · {periodo} · 📅 {horario}
-          </p>
-        )}
       </div>
     </div>
   )
@@ -1116,16 +1093,10 @@ function SuperAgente() {
               não entrar no auto-placement do CSS Grid e empurrar os cards visíveis. */}
           {posts.map((post, index) => (
             <Fragment key={index}>
-              {slidesFor(index).map((slide, i, arr) => (
+              {slidesFor(index).map((slide) => (
                 <ExportSlide
                   key={slide}
                   innerRef={(el) => { exportRefs.current[slideRefKey(index, slide)] = el }}
-                  dia={post.dia}
-                  periodo={post.periodo}
-                  horario={post.horario}
-                  slide={slide}
-                  index={i + 1}
-                  total={arr.length}
                   brandLogo={brandLogo}
                 >
                   {slide === 'hook' && (
