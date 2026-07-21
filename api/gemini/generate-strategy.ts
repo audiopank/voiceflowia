@@ -89,6 +89,19 @@ CONTEXTO DA MARCA (use como REFERÊNCIA para deixar o conteúdo na cara dessa ma
 - Tom de voz obrigatório (estilo/personalidade, não um texto pra repetir): ${tomObrigatorio}
 - CTA de venda (só entra nos posts de Tarde — ver regras abaixo): ${ctaObrigatorio}${diferenciaisContexto}
 
+REGRA DE PRODUTO (vale para a estratégia E para os posts — nunca a quebre):
+- Esta ferramenta entrega ROTEIRO + LEGENDA + LOCUÇÃO (áudio de IA), além de cards em imagem
+  (carrossel) com esses textos. Ela NÃO grava, NÃO edita, NÃO produz e NÃO entrega VÍDEO nem
+  animação. Quem grava o vídeo é o próprio cliente, usando o roteiro e a locução por cima.
+- Portanto, NUNCA escreva nada que afirme ou dê a entender que vídeos são gerados, editados,
+  produzidos ou entregues prontos pela IA/plataforma. Proibido: "gere seus vídeos com IA",
+  "escalar a entrega de vídeos", "vídeos prontos em segundos", "produção de vídeo automatizada".
+- Quando o assunto for vídeo, escreva sempre do ponto de vista de quem GRAVA: "roteiro pronto
+  pra você gravar", "locução profissional pra usar no seu vídeo", "é só gravar por cima".
+- ATENÇÃO à exceção: se o próprio nicho "${nicho}" for um negócio que de fato produz vídeo
+  (produtora, videomaker, editor), fale dos serviços DELE normalmente — a proibição acima é só
+  sobre o que esta ferramenta faz, não sobre o que o cliente vende.
+
 Retorne um objeto JSON com dois campos: "estrategia" e "posts".
 
 1) "estrategia" deve conter:

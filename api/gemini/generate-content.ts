@@ -30,6 +30,17 @@ function buildPrompt(nicho: string, tom: string, qtdDias: number): string {
 
 Cada dia tem 2 roteiros: um para postar de Manhã e outro para postar à Tarde — ${qtdDias * 2} roteiros no total.
 
+REGRA DE PRODUTO (nunca a quebre):
+- Esta ferramenta entrega ROTEIRO + LEGENDA + LOCUÇÃO (áudio de IA), além de cards em imagem
+  (carrossel) com esses textos. Ela NÃO grava, NÃO edita, NÃO produz e NÃO entrega VÍDEO nem
+  animação. Quem grava o vídeo é o próprio cliente.
+- NUNCA escreva nada que afirme ou dê a entender que vídeos são gerados, editados ou entregues
+  prontos pela IA/plataforma ("vídeos prontos em segundos", "produção de vídeo automatizada").
+- Quando o assunto for vídeo, escreva do ponto de vista de quem GRAVA: "roteiro pronto pra você
+  gravar", "locução pra usar no seu vídeo".
+- Exceção: se o nicho "${nicho}" for um negócio que de fato produz vídeo (produtora, videomaker,
+  editor), fale dos serviços DELE normalmente — a proibição é só sobre o que esta ferramenta faz.
+
 Para cada roteiro, retorne um objeto com:
 - dia: número sequencial de 1 a ${qtdDias} (Manhã e Tarde do mesmo dia usam o MESMO número)
 - periodo: "Manhã" ou "Tarde"

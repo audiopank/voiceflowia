@@ -36,6 +36,9 @@ Regras:
 - hook: frase curta, forte e específica do nicho, que prende a atenção nos 3 primeiros segundos.
 - angle: 1 palavra que nomeia o ângulo usado.
 - Português do Brasil, linguagem natural de Instagram. Nada genérico.
+- Esta ferramenta entrega roteiro + legenda + locução (áudio), NÃO gera nem edita vídeo. Nunca
+  prometa vídeo pronto por IA. Exceção: se o nicho "${nicho}" for uma produtora/videomaker,
+  fale dos serviços dele normalmente.
 
 Responda apenas o JSON.`
 }
