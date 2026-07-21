@@ -958,7 +958,7 @@ function SuperAgente() {
                 )}
                 <div className={brandLogo ? 'pr-24' : ''}>
                   <PostField
-                    label="Hook (3s)"
+                    label="🎙️ Hook (3s)"
                     value={post.hook}
                     copyKey={`${index}-hook`}
                     copiedKey={copied}
@@ -969,7 +969,7 @@ function SuperAgente() {
                 </div>
                 <div>
                   <PostField
-                    label="Roteiro (20s)"
+                    label="🎙️ Roteiro (20s)"
                     value={post.roteiro}
                     copyKey={`${index}-roteiro`}
                     copiedKey={copied}
@@ -980,7 +980,7 @@ function SuperAgente() {
                 </div>
                 <div>
                   <PostField
-                    label="Legenda"
+                    label="📝 Legenda · não vira áudio"
                     value={post.legenda}
                     copyKey={`${index}-legenda`}
                     copiedKey={copied}
@@ -1197,9 +1197,9 @@ function PostField({
   return (
     <div>
       <div className="flex items-center justify-between mb-1">
-        <p className="text-xs uppercase text-gray-500">{label}</p>
+        <p className="text-xs uppercase text-gray-500 leading-snug">{label}</p>
         {!editing && (
-          <div className="no-export flex items-center gap-3">
+          <div className="no-export flex items-center gap-3 shrink-0">
             <button
               onClick={startEditing}
               title="Editar texto"
