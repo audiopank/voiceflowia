@@ -307,6 +307,10 @@ function Radar() {
       })
       const data = await res.json().catch(() => null)
       if (!res.ok) throw new Error(friendlyApiError(res.status, data?.error))
+      // Corpo 200 que não é JSON (página de erro de plataforma da Vercel após crash/timeout)
+      // cairia aqui como null e o relatório sumiria sem mensagem nenhuma — mesma mensagem
+      // do safeJson() em vez de tela vazia.
+      if (!data) throw new Error('Resposta inválida do servidor. Tente novamente.')
       setRelatorio(data as Relatorio)
       // Recarrega alertas (o relatório pode ter gerado novos).
       if (userId) {
