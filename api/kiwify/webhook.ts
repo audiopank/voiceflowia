@@ -77,28 +77,41 @@ function extractAgentSlug(body: any): string | null {
   return found ? found.trim().toLowerCase() : null
 }
 
-async function verifySignature(rawBody: string, signature: string | null, secret: string): Promise<boolean> {
-  if (!signature) return false
-
+async function hmacHex(rawBody: string, secret: string, hash: 'SHA-1' | 'SHA-256'): Promise<string> {
   const key = await crypto.subtle.importKey(
     'raw',
     new TextEncoder().encode(secret),
-    { name: 'HMAC', hash: 'SHA-256' },
+    { name: 'HMAC', hash },
     false,
     ['sign']
   )
   const sigBuf = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(rawBody))
-  const digestHex = Array.from(new Uint8Array(sigBuf))
+  return Array.from(new Uint8Array(sigBuf))
     .map((b) => b.toString(16).padStart(2, '0'))
     .join('')
+}
+
+async function verifySignature(rawBody: string, signature: string | null, secret: string): Promise<boolean> {
+  if (!signature) return false
 
   // Normaliza antes de comparar: hex maiúsculo ou com espaço em volta é a mesma
   // assinatura, e reprovar por isso seria rejeitar evento legítimo.
   const recebida = signature.trim().toLowerCase()
-  if (digestHex.length !== recebida.length) return false
+
+  // A Kiwify usa HMAC-SHA1 (hex, 40 chars), não SHA-256 — medido em 21/07/2026
+  // pelo log de diagnóstico, com a assinatura chegando na query ?signature=.
+  // A documentação pública dela não informa isso, e o código nasceu assumindo
+  // SHA-256: nenhuma assinatura real jamais poderia bater. Escolhemos o
+  // algoritmo pelo TAMANHO recebido (40 = SHA-1, 64 = SHA-256) pra continuar
+  // funcionando se a Kiwify migrar pra SHA-256 sem avisar. Não enfraquece: o
+  // atacante escolhe o algoritmo, mas segue precisando do segredo pra forjar
+  // qualquer um dos dois.
+  const esperado = await hmacHex(rawBody, secret, recebida.length === 40 ? 'SHA-1' : 'SHA-256')
+
+  if (esperado.length !== recebida.length) return false
   let diff = 0
-  for (let i = 0; i < digestHex.length; i++) {
-    diff |= digestHex.charCodeAt(i) ^ recebida.charCodeAt(i)
+  for (let i = 0; i < esperado.length; i++) {
+    diff |= esperado.charCodeAt(i) ^ recebida.charCodeAt(i)
   }
   return diff === 0
 }
@@ -120,7 +133,20 @@ export default async function handler(request: Request): Promise<Response> {
   const sigQuery = new URL(request.url).searchParams.get('signature')
   const signature = sigHeader || sigQuery
 
-  if (!secret || !(await verifySignature(rawBody, signature, secret))) {
+  let assinaturaValida = false
+  try {
+    assinaturaValida = !!secret && (await verifySignature(rawBody, signature, secret))
+  } catch (err) {
+    // Se o runtime edge não suportar o algoritmo, crypto.subtle LANÇA. Sem este
+    // catch a exceção viraria um 500 mudo — indistinguível de falha do Supabase,
+    // com a Kiwify reenviando em looping e nenhuma pista no log. Mantemos 500
+    // (e não 401) de propósito: 500 preserva a retentativa da Kiwify, enquanto
+    // 401 descartaria um evento legítimo por causa de erro nosso.
+    console.error('[kiwify-webhook] erro ao verificar assinatura (algoritmo indisponível no runtime?):', err)
+    return new Response(JSON.stringify({ error: 'Erro interno' }), { status: 500 })
+  }
+
+  if (!assinaturaValida) {
     // Diagnóstico sem vazar segredo: só a ORIGEM e o TAMANHO da assinatura, e
     // os NOMES dos cabeçalhos recebidos. Sem isto, "assinatura inválida" não
     // distingue segredo errado de assinatura em outro lugar — foi exatamente
@@ -130,6 +156,9 @@ export default async function handler(request: Request): Promise<Response> {
       `secret configurado: ${secret ? 'sim' : 'NÃO'} |`,
       `header x-kiwify-signature: ${sigHeader ? `sim (${sigHeader.length} chars)` : 'ausente'} |`,
       `query ?signature: ${sigQuery ? `sim (${sigQuery.length} chars)` : 'ausente'} |`,
+      // Qual algoritmo foi tentado: sem isto, "não bateu" não separa algoritmo
+      // errado de segredo errado — a mesma ambiguidade já custou um ciclo hoje.
+      `algoritmo tentado: ${signature && signature.trim().length === 40 ? 'SHA-1' : 'SHA-256'} |`,
       `corpo: ${rawBody.length} bytes |`,
       `headers recebidos: ${Array.from(request.headers.keys()).join(', ')}`
     )
