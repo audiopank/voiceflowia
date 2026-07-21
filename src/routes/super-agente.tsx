@@ -171,6 +171,67 @@ function ExportSlide({
   )
 }
 
+// Teto de hooks enviados como memória. Um mês cheio já são 60 posts, e mandar
+// tudo incharia o prompt de uma chamada que já vive perto do limite de 45s.
+// Os 40 mais recentes cobrem o que o cliente lembra de ter visto.
+const MAX_HOOKS_MEMORIA = 40
+
+// Lê os hooks já gerados pra este nicho nas últimas gerações do próprio usuário
+// (RLS garante que só enxerga o que é dele). A memória é BÔNUS: se a consulta
+// falhar, devolve lista vazia e a geração acontece normalmente — nunca vale a
+// pena derrubar a entrega principal por causa do extra.
+// O nicho é texto livre digitado pelo usuário. Comparar cru no banco faria
+// "Estética", "estetica" e "Estética " serem três nichos diferentes, e a memória
+// voltaria VAZIA sem ninguém perceber — a feature não tem sinal na UI, então o
+// sintoma seria só os ângulos repetindo de novo. Normaliza caixa, acento e
+// espaço em ambos os lados, na comparação, sem mudar o que é gravado.
+function chaveNicho(v: string): string {
+  return v
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, '')
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+async function buscarHooksAnteriores(nicho: string): Promise<string[]> {
+  try {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return []
+
+    // Traz as últimas gerações do usuário e filtra no cliente: o PostgREST não
+    // compara ignorando acento, e é justamente o acento que quebra em português.
+    const { data, error } = await supabase
+      .from('contents')
+      .select('nicho, posts_json')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false })
+      .limit(12)
+
+    if (error || !Array.isArray(data)) return []
+
+    const alvo = chaveNicho(nicho)
+    const hooks: string[] = []
+    let geracoesUsadas = 0
+
+    for (const linha of data) {
+      if (typeof linha?.nicho !== 'string' || chaveNicho(linha.nicho) !== alvo) continue
+      if (geracoesUsadas >= 3) break
+      geracoesUsadas++
+
+      const posts = Array.isArray(linha?.posts_json) ? linha.posts_json : []
+      for (const p of posts) {
+        const h = typeof p?.hook === 'string' ? p.hook.trim() : ''
+        if (h) hooks.push(h.slice(0, 120))
+        if (hooks.length >= MAX_HOOKS_MEMORIA) return hooks
+      }
+    }
+    return hooks
+  } catch {
+    return []
+  }
+}
+
 function SuperAgente() {
   const { hasAccess, loading: loadingSubscription, trial, refresh } = useSubscription()
   const [nicho, setNicho] = useState('')
@@ -261,12 +322,17 @@ function SuperAgente() {
     setAudioProgress({ done: 0, total: 0 })
 
     try {
+      // MEMÓRIA DA MARCA: o que já foi gerado antes pra este mesmo nicho não pode
+      // voltar reescrito. Sem isto, o mês 2 sai parecido com o mês 1 e o cliente
+      // sente que a ferramenta não aprendeu nada sobre ele.
+      const hooksAnteriores = await buscarHooksAnteriores(nicho)
+
       const response = await fetchWithRetry(
         '/api/gemini/generate-strategy',
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ nicho, tom, qtdPosts: qtdDias, instagram, servicos, tomMarca, cta, diferenciais, voz }) // V1.6: voz forçada ('' = automático)
+          body: JSON.stringify({ nicho, tom, qtdPosts: qtdDias, instagram, servicos, tomMarca, cta, diferenciais, voz, hooksAnteriores }) // V1.6: voz forçada ('' = automático)
         },
         { onWait: (s) => setRateNotice(`⏳ Muita procura agora — tentando de novo em ${s}s...`) },
       )

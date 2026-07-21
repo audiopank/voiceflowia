@@ -9,6 +9,10 @@ export const maxDuration = 60
 // V1.6: vozes válidas do Gemini TTS que o seletor manual oferece.
 const VOZES_VALIDAS = ['Zephyr', 'Puck', 'Kore']
 
+// Teto de ganchos de memória aceitos por requisição. O cliente já limita, mas
+// quem manda a requisição é o navegador — o teto que vale é o daqui.
+const MAX_HOOKS_MEMORIA = 40
+
 // V1.6: schema virou builder. `vozes` = quais valores vozSugerida pode assumir.
 // Automático -> ['Zephyr','Puck'] (IA decide). Forçado -> [voz] (uma só).
 function buildResponseSchema(vozes: string[]) {
@@ -68,7 +72,25 @@ interface Marca {
 
 // qtdDias = quantidade de DIAS de conteúdo; cada dia gera 2 posts (Manhã + Tarde) — pedido de
 // cliente: fluxo de 2 posts/dia, não 1.
-function buildPrompt(nicho: string, tom: string, qtdDias: number, marca: Marca): string {
+function buildPrompt(nicho: string, tom: string, qtdDias: number, marca: Marca, hooksAnteriores: string[]): string {
+  // MEMÓRIA DA MARCA: hooks já entregues a este cliente em gerações passadas.
+  // Sem isto o mês 2 sai como releitura do mês 1 — o cliente percebe na hora e
+  // conclui que a ferramenta não aprendeu nada sobre o negócio dele.
+  const memoriaBloco = hooksAnteriores.length
+    ? `\n\nJÁ ENTREGUE A ESTE CLIENTE (${hooksAnteriores.length} ganchos de meses anteriores) — NÃO REPITA:
+${hooksAnteriores.map((h) => `- ${h}`).join('\n')}
+
+REGRA DA MEMÓRIA: não reutilize nenhum desses ganchos, nem versões reescritas
+deles com sinônimos. Também não repita o ÂNGULO (a promessa/dor central), mesmo
+com palavras totalmente diferentes. Se um tema importante já apareceu, aborde-o
+por outra porta: outro momento da jornada, outra objeção, outro formato de prova.
+Este mês precisa parecer continuação do trabalho, não recomeço.`
+    : ''
+
+  return buildPromptBase(nicho, tom, qtdDias, marca, memoriaBloco)
+}
+
+function buildPromptBase(nicho: string, tom: string, qtdDias: number, marca: Marca, memoriaBloco: string): string {
   // V1.5 Estudo de Marca: campos opcionais. Vazios = comportamento original.
   const tomObrigatorio = marca.tomMarca || tom
   const servicosLinha = marca.servicos || 'serviços típicos do nicho'
@@ -134,7 +156,7 @@ REGRAS OBRIGATÓRIAS para os posts:
   - Ajuste pelo nicho quando fizer sentido: Restaurante/gastronomia prioriza 11:30 e 19:00; Loja/E-commerce prioriza 09:00 e 18:00; Serviço/Agência prioriza 10:00 e 20:00.
 - Mantenha o tom "${tomObrigatorio}" em 100% dos roteiros e legendas${diferenciaisRegra}
 - O post da Manhã e o da Tarde do mesmo dia devem abordar ângulos diferentes, não o mesmo gancho reescrito.
-- VARIE A REDAÇÃO: nunca repita a mesma frase, expressão ou construção entre hook/roteiro/legenda do mesmo dia, nem entre dias/períodos diferentes. Cada texto deve soar único, mesmo falando do mesmo serviço ou tom.
+- VARIE A REDAÇÃO: nunca repita a mesma frase, expressão ou construção entre hook/roteiro/legenda do mesmo dia, nem entre dias/períodos diferentes. Cada texto deve soar único, mesmo falando do mesmo serviço ou tom.${memoriaBloco}
 
 Responda apenas com o objeto JSON, sem texto adicional.`
 }
@@ -156,7 +178,7 @@ async function handler(request: Request): Promise<Response> {
       )
     }
 
-    const { nicho, tom, qtdPosts, instagram, servicos, tomMarca, cta, diferenciais, voz } = await request.json()
+    const { nicho, tom, qtdPosts, instagram, servicos, tomMarca, cta, diferenciais, voz, hooksAnteriores } = await request.json()
 
     if (!nicho || typeof nicho !== 'string') {
       return new Response(
@@ -182,6 +204,14 @@ async function handler(request: Request): Promise<Response> {
     const vozForcada = VOZES_VALIDAS.includes(s(voz)) ? s(voz) : ''
     const vozesPermitidas = vozForcada ? [vozForcada] : ['Zephyr', 'Puck']
 
+    // Memória da marca: sanitiza no servidor em vez de confiar no cliente. O teto
+    // aqui é o que protege a chamada — prompt inchado atrasa uma requisição que
+    // já morre em 45s, e o Gemini anda instável.
+    const memoria: string[] = (Array.isArray(hooksAnteriores) ? hooksAnteriores : [])
+      .filter((h: unknown): h is string => typeof h === 'string' && h.trim().length > 0)
+      .map((h: string) => h.trim().slice(0, 120))
+      .slice(0, MAX_HOOKS_MEMORIA)
+
     const response = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`,
       {
@@ -190,7 +220,7 @@ async function handler(request: Request): Promise<Response> {
         body: JSON.stringify({
           contents: [
             {
-              parts: [{ text: buildPrompt(nicho, tomFinal, qtdFinal, marca) }]
+              parts: [{ text: buildPrompt(nicho, tomFinal, qtdFinal, marca, memoria) }]
             }
           ],
           generationConfig: {
