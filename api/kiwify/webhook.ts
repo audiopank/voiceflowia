@@ -21,6 +21,41 @@ function resolvePlanFromProductName(name: string): string | null {
 // lapsar entre cobranças mensais da Kiwify (webhook chega a cada renovação).
 const RADAR_DAYS = 32
 
+// Rede de segurança: avisa o admin por email quando uma compra do Radar precisa
+// de atenção. NUNCA lança — se o Resend falhar, o webhook segue e responde 200
+// (um não-2xx faria a Kiwify reenviar o evento e duplicar o processamento).
+// Obs: o Resend está em modo teste (sem domínio verificado), o que só entrega
+// pro dono da conta — aqui o destinatário É o admin, então funciona mesmo assim.
+async function notifyAdmin(subject: string, html: string): Promise<void> {
+  const apiKey = process.env.RESEND_API_KEY
+  const from = process.env.RESEND_FROM
+  const to =
+    process.env.ADMIN_ALERT_EMAIL || process.env.VITE_ADMIN_EMAIL || 'novaaudiopank@gmail.com'
+  if (!apiKey || !from) {
+    // Sem provider configurado o aviso morre aqui — deixa rastro no log, senão
+    // a rede de segurança falha em silêncio justo quando é mais necessária.
+    console.warn(`[kiwify-webhook] RESEND_API_KEY/RESEND_FROM ausentes — email não enviado: ${subject}`)
+    return
+  }
+  try {
+    const res = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+      body: JSON.stringify({ from, to, subject, html }),
+      signal: AbortSignal.timeout(10_000),
+    })
+    // Resend recusa em silêncio (domínio não verificado, from inválido) com um
+    // 4xx. Sem este log, o admin acharia que foi avisado e não foi. Usa text()
+    // porque a resposta de erro nem sempre é JSON.
+    if (!res.ok) {
+      const detalhe = await res.text().catch(() => '')
+      console.error(`[kiwify-webhook] Resend recusou o email (${res.status}): ${detalhe}`)
+    }
+  } catch {
+    // falha de email não pode derrubar o webhook
+  }
+}
+
 // Path exato do parametro de rastreio (s1) no payload da Kiwify ainda NAO
 // esta confirmado pra esta conta — checa candidatos plausiveis e loga o
 // corpo bruto ate confirmar no primeiro teste real (ver MIGRATION_REFERRALS.sql
@@ -127,11 +162,24 @@ export default async function handler(request: Request): Promise<Response> {
     resolvedAgentSlug = agent?.slug ?? null
   }
 
-  const { data: existingProfile } = await supabaseAdmin
+  let { data: existingProfile } = await supabaseAdmin
     .from('profiles')
     .select('id, referred_by_agent_slug')
     .eq('email', customerEmail)
     .maybeSingle()
+
+  // A Kiwify pode devolver o email como o cliente digitou ("Fulano@Gmail.com"),
+  // enquanto profiles.email vem do auth do Supabase, sempre normalizado. Sem
+  // este segundo tiro, um cliente COM conta cairia no fluxo de "sem cadastro".
+  // Só roda quando o match exato falhou, então nunca piora o resultado.
+  if (!existingProfile && customerEmail !== customerEmail.toLowerCase()) {
+    const { data: byLowercase } = await supabaseAdmin
+      .from('profiles')
+      .select('id, referred_by_agent_slug')
+      .eq('email', customerEmail.toLowerCase())
+      .maybeSingle()
+    existingProfile = byLowercase
+  }
 
   // RADAR PRO é add-on: concede o entitlement do Radar (radar_expires_at) SEM
   // tocar no subscription_plan (o cliente mantém Dominação/Crescimento etc).
@@ -148,11 +196,50 @@ export default async function handler(request: Request): Promise<Response> {
       }
       console.log(`[kiwify-webhook] RADAR PRO ativado para ${customerEmail} até ${expires}`)
     } else {
-      // Fase 1: reconciliação pré-cadastro do Radar não é suportada (raro comprar
-      // add-on premium antes de ter conta). O admin concede via grant_radar_access
-      // depois que o cliente se cadastrar. Não gravamos pending pra não corromper
-      // o subscription_plan na reconciliação do handle_new_user.
-      console.warn(`[kiwify-webhook] RADAR PRO comprado por ${customerEmail} sem conta — conceder manualmente via grant_radar_access após cadastro.`)
+      // Comprou o Radar antes de ter conta. Entra numa fila PRÓPRIA
+      // (pending_radar_purchases) — não a pending_kiwify_purchases, cujo
+      // subscription_plan é NOT NULL e é aplicado direto no profile pelo
+      // handle_new_user: gravar 'radar_pro' ali sobrescreveria o plano de
+      // conteúdo do cliente. O trigger on_auth_user_created_radar concede o
+      // acesso sozinho no cadastro. Ver MIGRATION_RADAR_PENDING.sql.
+      const emailNormalizado = customerEmail.toLowerCase()
+      const { error } = await supabaseAdmin
+        .from('pending_radar_purchases')
+        .upsert(
+          {
+            email: emailNormalizado,
+            radar_days: RADAR_DAYS,
+            kiwify_order_id: orderId ?? null,
+            raw_payload: body,
+            processed: false,
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: 'email' }
+        )
+
+      if (error) {
+        // Aqui o cliente pagou e NÃO vai receber nada sozinho: é o caso que
+        // exige ação humana. Grita no log e no email, mas responde 200 —
+        // reenvio da Kiwify não resolveria (a migração é que provavelmente
+        // não rodou) e só duplicaria eventos.
+        console.error('[kiwify-webhook] FALHA ao enfileirar Radar pendente:', error)
+        await notifyAdmin(
+          `🚨 AÇÃO MANUAL: compra do Radar não registrada (${customerEmail})`,
+          `<p><strong>${customerEmail}</strong> pagou o VoiceFlow RADAR, não tem conta no app e a fila de pendentes FALHOU.</p>
+           <p>Erro: <code>${error.message}</code></p>
+           <p>Causa provável: <code>MIGRATION_RADAR_PENDING.sql</code> ainda não rodou no Supabase.</p>
+           <p><strong>O que fazer:</strong> rode a migração, peça pro cliente se cadastrar e, se ele já tiver se cadastrado, conceda com <code>grant_radar_access('${customerEmail}', 32)</code>.</p>`
+        )
+        return new Response(JSON.stringify({ ok: true }), { status: 200 })
+      }
+
+      console.log(`[kiwify-webhook] Radar pendente enfileirado para ${emailNormalizado} (sem cadastro ainda)`)
+      await notifyAdmin(
+        `Radar vendido para ${customerEmail} — falta o cadastro`,
+        `<p><strong>${customerEmail}</strong> comprou o VoiceFlow RADAR mas ainda não tem conta no app.</p>
+         <p>O acesso (${RADAR_DAYS} dias) já está na fila e é liberado <strong>sozinho</strong> assim que essa pessoa se cadastrar com esse mesmo email — não precisa fazer nada.</p>
+         <p>Vale só um empurrão: se ela não se cadastrar, não usa o que pagou.</p>`
+      )
     }
     return new Response(JSON.stringify({ ok: true }), { status: 200 })
   }
