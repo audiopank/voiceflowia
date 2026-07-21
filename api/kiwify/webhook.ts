@@ -77,6 +77,22 @@ function extractAgentSlug(body: any): string | null {
   return found ? found.trim().toLowerCase() : null
 }
 
+// Reembolso de verdade = timestamp que PARSEIA. Checar só "truthy" aceitaria a
+// data-zero do MySQL ("0000-00-00"), que vaza em serialização de campo nulo e é
+// truthy — e aí bloquearíamos uma compra legítima. Isso reintroduziria pela
+// porta dos fundos exatamente o "cliente paga e não recebe" que a denylist
+// existe pra evitar. Date.parse devolve NaN nesses casos.
+function foiReembolsado(valor: unknown): boolean {
+  if (typeof valor !== 'string') return false
+  // Mínimo de 8 caracteres: uma data é "2026-07-21" (10) ou "20260721" (8).
+  // Sem isto, Date.parse("0") vira ano 2000 — truthy e no passado, ou seja,
+  // "0" seria lido como reembolso e bloquearia uma venda boa.
+  const v = valor.trim()
+  if (v.length < 8) return false
+  const t = Date.parse(v)
+  return Number.isFinite(t) && t > 0
+}
+
 async function hmacHex(rawBody: string, secret: string, hash: 'SHA-1' | 'SHA-256'): Promise<string> {
   const key = await crypto.subtle.importKey(
     'raw',
@@ -180,13 +196,20 @@ export default async function handler(request: Request): Promise<Response> {
   // rastreio s1) é atendido pelas CHAVES e pelos candidatos, sem os valores
   // pessoais. O payload completo continua disponível em raw_payload no Supabase,
   // que é nosso e tem RLS.
+  // Resolvido ANTES do log de propósito: o log precisa mostrar exatamente o
+  // valor que o filtro abaixo vai julgar. Logar `order_status` direto enquanto o
+  // filtro lê `status ?? order_status` faria o log mentir justamente no payload
+  // atípico (os dois campos presentes e diferentes) — e é nesse caso que o log é
+  // a única pista que temos.
+  const status = body.status ?? body.order_status ?? body.Status
+
   console.log(
     '[kiwify-webhook] evento recebido |',
-    `chaves: ${Object.keys(body).join(', ')} |`,
+    `webhook_event_type: ${body.webhook_event_type ?? '(ausente)'} |`,
+    `status: ${status ?? '(ausente)'} |`,
     `rastreio s1 encontrado: ${extractAgentSlug(body) ? 'sim' : 'não'}`
   )
 
-  const status = body.status ?? body.order_status ?? body.Status
   const customerEmail: string | undefined = body.customer?.email ?? body.Customer?.email
   const productName: string | undefined = body.product?.name ?? body.Product?.product_name
   const orderId: string | undefined = body.order_id ?? body.OrderId
@@ -195,7 +218,45 @@ export default async function handler(request: Request): Promise<Response> {
     console.warn('[kiwify-webhook] payload sem customer/product no formato esperado')
     return new Response(JSON.stringify({ ok: true }), { status: 200 })
   }
-  if (!['APPROVED', 'ACTIVE', 'paid'].includes(status)) {
+  // BLOQUEIO DE EVENTO DE SAÍDA — precisa vir ANTES da checagem de status.
+  // `order_status` descreve a ORDEM, não o EVENTO: num reembolso ou chargeback a
+  // ordem continua "paid" e o que muda é `refunded_at`. Sem esta guarda, um
+  // reembolso entraria no caminho de ativação e CONCEDERIA acesso (no Radar,
+  // renovaria +32 dias). Era inofensivo enquanto a assinatura barrava tudo;
+  // passou a ser real agora que o webhook autentica.
+  //
+  // Denylist, não allowlist, de propósito: ainda não sabemos o valor exato de
+  // webhook_event_type numa compra aprovada. Uma allowlist erraria pro lado de
+  // recusar compra legítima ("cliente paga e não recebe"), que é pior do que
+  // "quem pediu reembolso mantém acesso" — este último a gente corta na mão.
+  // `refunded_at` sozinho já fecha o caso do reembolso, qualquer que seja o
+  // nome do evento.
+  const evento = String(body.webhook_event_type ?? '').trim().toLowerCase()
+  const eventoDeSaida = ['order_refunded', 'chargeback', 'subscription_canceled', 'subscription_late'].includes(evento)
+  if (foiReembolsado(body.refunded_at) || eventoDeSaida) {
+    console.log(
+      '[kiwify-webhook] evento de saída — NÃO concede acesso |',
+      `webhook_event_type: ${evento || '(ausente)'} |`,
+      `refunded_at presente: ${body.refunded_at ? 'sim' : 'não'} |`,
+      `order_id: ${orderId ?? '(ausente)'}`
+    )
+    return new Response(JSON.stringify({ ok: true }), { status: 200 })
+  }
+
+  // Comparação insensível a maiúsculas: a lista original ('APPROVED', 'ACTIVE',
+  // 'paid') já misturava caixas, sinal de que ninguém tinha visto um evento real
+  // — e de fato nenhum chegava, porque a assinatura barrava tudo antes. Um
+  // "approved" minúsculo era descartado em silêncio, com 200 e sem log: compra
+  // aprovada de verdade sumiria sem deixar rastro.
+  const statusNormalizado = String(status ?? '').trim().toLowerCase()
+  if (!['approved', 'active', 'paid'].includes(statusNormalizado)) {
+    // Status e tipo de evento não são dado pessoal, e são exatamente o que
+    // precisamos pra escrever a revogação por reembolso/chargeback depois.
+    console.log(
+      '[kiwify-webhook] evento ignorado |',
+      `status: ${statusNormalizado || '(vazio)'} |`,
+      `webhook_event_type: ${body.webhook_event_type ?? '(ausente)'}`
+    )
     return new Response(JSON.stringify({ ok: true }), { status: 200 })
   }
 
