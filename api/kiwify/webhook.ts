@@ -92,10 +92,13 @@ async function verifySignature(rawBody: string, signature: string | null, secret
     .map((b) => b.toString(16).padStart(2, '0'))
     .join('')
 
-  if (digestHex.length !== signature.length) return false
+  // Normaliza antes de comparar: hex maiúsculo ou com espaço em volta é a mesma
+  // assinatura, e reprovar por isso seria rejeitar evento legítimo.
+  const recebida = signature.trim().toLowerCase()
+  if (digestHex.length !== recebida.length) return false
   let diff = 0
   for (let i = 0; i < digestHex.length; i++) {
-    diff |= digestHex.charCodeAt(i) ^ signature.charCodeAt(i)
+    diff |= digestHex.charCodeAt(i) ^ recebida.charCodeAt(i)
   }
   return diff === 0
 }
@@ -106,11 +109,30 @@ export default async function handler(request: Request): Promise<Response> {
   }
 
   const rawBody = await request.text()
-  const signature = request.headers.get('x-kiwify-signature')
   const secret = process.env.KIWIFY_WEBHOOK_SECRET
 
+  // A Kiwify não documenta publicamente ONDE manda a assinatura, e o teste do
+  // painel chegou aqui como 401. Aceitamos as duas formas usadas no mercado: o
+  // cabeçalho e o parâmetro ?signature= na URL. Isto NÃO enfraquece nada — o
+  // HMAC do corpo cru continua sendo exigido e conferido igual; só mudamos de
+  // ONDE lemos a assinatura que vamos verificar.
+  const sigHeader = request.headers.get('x-kiwify-signature')
+  const sigQuery = new URL(request.url).searchParams.get('signature')
+  const signature = sigHeader || sigQuery
+
   if (!secret || !(await verifySignature(rawBody, signature, secret))) {
-    console.warn('[kiwify-webhook] assinatura inválida ou ausente')
+    // Diagnóstico sem vazar segredo: só a ORIGEM e o TAMANHO da assinatura, e
+    // os NOMES dos cabeçalhos recebidos. Sem isto, "assinatura inválida" não
+    // distingue segredo errado de assinatura em outro lugar — foi exatamente
+    // essa ambiguidade que travou a configuração do webhook.
+    console.warn(
+      '[kiwify-webhook] assinatura inválida ou ausente |',
+      `secret configurado: ${secret ? 'sim' : 'NÃO'} |`,
+      `header x-kiwify-signature: ${sigHeader ? `sim (${sigHeader.length} chars)` : 'ausente'} |`,
+      `query ?signature: ${sigQuery ? `sim (${sigQuery.length} chars)` : 'ausente'} |`,
+      `corpo: ${rawBody.length} bytes |`,
+      `headers recebidos: ${Array.from(request.headers.keys()).join(', ')}`
+    )
     return new Response(JSON.stringify({ error: 'Assinatura inválida' }), { status: 401 })
   }
 
@@ -121,9 +143,19 @@ export default async function handler(request: Request): Promise<Response> {
     return new Response(JSON.stringify({ error: 'JSON inválido' }), { status: 400 })
   }
 
-  // Log temporário e deliberado para o primeiro teste real — reduzir depois
-  // de confirmar o path do parâmetro de rastreio (extractAgentSlug).
-  console.log('[kiwify-webhook] payload recebido:', rawBody)
+  // Diagnóstico de ESTRUTURA, não de conteúdo. Antes isto logava o rawBody
+  // inteiro — inofensivo enquanto o webhook nunca recebeu nada, mas a partir do
+  // primeiro evento real seriam nome, email, telefone, CPF e endereço do cliente
+  // despejados no log da Vercel, um armazenamento de terceiro com retenção
+  // própria. O propósito original (descobrir onde a Kiwify manda o parâmetro de
+  // rastreio s1) é atendido pelas CHAVES e pelos candidatos, sem os valores
+  // pessoais. O payload completo continua disponível em raw_payload no Supabase,
+  // que é nosso e tem RLS.
+  console.log(
+    '[kiwify-webhook] evento recebido |',
+    `chaves: ${Object.keys(body).join(', ')} |`,
+    `rastreio s1 encontrado: ${extractAgentSlug(body) ? 'sim' : 'não'}`
+  )
 
   const status = body.status ?? body.order_status ?? body.Status
   const customerEmail: string | undefined = body.customer?.email ?? body.Customer?.email
@@ -263,11 +295,17 @@ export default async function handler(request: Request): Promise<Response> {
 
     console.log(`[kiwify-webhook] plano ${plan} ativado para ${customerEmail}`)
   } else {
+    // Email SEMPRE normalizado aqui. O handle_new_user() reconcilia com
+    // `WHERE email = NEW.email`, comparação sensível a maiúsculas, e o
+    // NEW.email vem do auth do Supabase já em minúsculas. Se a Kiwify mandar
+    // o email como o cliente digitou ("Fulano@Gmail.com"), a linha nunca casa
+    // no cadastro: o cliente paga o plano e ele simplesmente não chega, sem
+    // erro em lugar nenhum. Normalizar na escrita fecha isso.
     const { error } = await supabaseAdmin
       .from('pending_kiwify_purchases')
       .upsert(
         {
-          email: customerEmail,
+          email: customerEmail.toLowerCase(),
           subscription_plan: plan,
           subscription_status: 'active',
           referred_by_agent_slug: resolvedAgentSlug,
