@@ -9,6 +9,7 @@ import { BackButton } from '../components/BackButton'
 import { EditableText } from '../components/EditableText'
 import { buildIcsCalendar, downloadIcsFile, postDateTime } from '../lib/ics'
 import { convertToWhatsAppOgg } from '../lib/audioConvert'
+import { TONS, TOM_PADRAO } from '../lib/tons'
 
 // Data de hoje em yyyy-mm-dd, pro input type="date" (padrão: "Dia 1" = hoje).
 function todayIso(): string {
@@ -33,7 +34,7 @@ interface Post {
 function Agente() {
   const { hasAccess, loading: loadingSubscription, trial, refresh } = useSubscription()
   const [nicho, setNicho] = useState('')
-  const [tom, setTom] = useState('Profissional')
+  const [tom, setTom] = useState(TOM_PADRAO)
   // Fluxo de 2 posts/dia (Manhã + Tarde): este campo é quantidade de DIAS, não de posts —
   // o total de cards gerados é o dobro.
   const [qtdDias, setQtdDias] = useState(15)
@@ -277,9 +278,9 @@ function Agente() {
                 onChange={(e) => setTom(e.target.value)}
                 className="w-full p-3 bg-[#1A1A1A] border border-gray-700 rounded-lg text-white focus:outline-none focus:border-[#8B5CF6]"
               >
-                <option value="Profissional">Profissional</option>
-                <option value="Divertido">Divertido</option>
-                <option value="Vendedor">Vendedor</option>
+                {TONS.map((t) => (
+                  <option key={t.value} value={t.value}>{t.value} [{t.dica}]</option>
+                ))}
               </select>
             </div>
             <div>

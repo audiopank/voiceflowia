@@ -5,7 +5,7 @@ import { toPng } from 'html-to-image'
 import {
   Lock, Loader2, AlertCircle, Rocket, Volume2, Download, Play, Package,
   Users, Target, Hash, Clock, Megaphone, CheckCircle2, Copy, Check, ImagePlus, X, Pencil,
-  ChevronDown, ChevronUp, CalendarDays, Share2
+  ChevronDown, ChevronUp, CalendarDays, Share2, Sparkles
 } from 'lucide-react'
 import { useSubscription } from '../lib/useSubscription'
 import { supabase } from '../lib/supabase'
@@ -17,6 +17,7 @@ import { buildIcsCalendar, downloadIcsFile, postDateTime } from '../lib/ics'
 import { convertToWhatsAppOgg } from '../lib/audioConvert'
 import { RedesSociais } from '../components/RedesSociais'
 import { SOCIAL_NETWORKS, socialKey, loadSocialLinks, saveSocialLinks, type SocialLinks } from '../lib/socialLinks'
+import { TONS, TOM_PADRAO, TONS_VALIDOS } from '../lib/tons'
 
 // Espaça as gerações de voz para não estourar o limite/minuto do free tier.
 const VOICE_THROTTLE_MS = 3500
@@ -235,7 +236,7 @@ async function buscarHooksAnteriores(nicho: string): Promise<string[]> {
 function SuperAgente() {
   const { hasAccess, loading: loadingSubscription, trial, refresh } = useSubscription()
   const [nicho, setNicho] = useState('')
-  const [tom, setTom] = useState('Profissional')
+  const [tom, setTom] = useState(TOM_PADRAO)
   // Fluxo de 2 posts/dia (Manhã + Tarde): este campo é quantidade de DIAS, não de posts —
   // o total de cards gerados é o dobro.
   const [qtdDias, setQtdDias] = useState(4)
@@ -251,6 +252,16 @@ function SuperAgente() {
 
   // V1.6 Seletor de voz. '' = Automático (IA decide entre Zephyr/Puck).
   const [voz, setVoz] = useState('')
+
+  // "Preencher com IA": material bruto colado pelo cliente (site, bio, conversa) que
+  // vira briefing. Encurta o caminho até a primeira geração — a tela em branco de 10
+  // campos é onde o trial costuma morrer, não a qualidade do roteiro.
+  const [briefingBruto, setBriefingBruto] = useState('')
+  const [extraindo, setExtraindo] = useState(false)
+  const [extrairErro, setExtrairErro] = useState('')
+  // Resultado da última extração: o que foi preenchido e o que o texto não sustentava.
+  // O cliente precisa saber QUAIS campos vieram da IA pra conferir só esses.
+  const [extracao, setExtracao] = useState<{ preenchidos: string[]; vazios: string[] } | null>(null)
 
   // Copiar texto (pedido de cliente): guarda a chave do campo copiado p/ feedback.
   const [copied, setCopied] = useState('')
@@ -298,6 +309,74 @@ function SuperAgente() {
   const [isZipping, setIsZipping] = useState(false)
   // Aviso amigável quando bate o limite da API e o app espera/re-tenta sozinho.
   const [rateNotice, setRateNotice] = useState('')
+
+  // Lê o material colado e preenche o formulário. NÃO consome geração do trial:
+  // preencher briefing não é gerar conteúdo, e cobrar por isso mataria o trial antes
+  // do cliente ver o produto.
+  async function handleExtrairBriefing() {
+    if (!briefingBruto.trim() || extraindo) return
+
+    setExtraindo(true)
+    setExtrairErro('')
+    setExtracao(null)
+
+    try {
+      const response = await fetchWithRetry(
+        '/api/gemini/extrair-briefing',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ texto: briefingBruto })
+        },
+        { onWait: (s) => setRateNotice(`⏳ Muita procura agora — tentando de novo em ${s}s...`) },
+      )
+      setRateNotice('')
+
+      if (!response.ok) {
+        const errData = await response.json().catch(() => null)
+        throw new Error(friendlyApiError(response.status, errData?.error))
+      }
+
+      const data = await safeJson(response)
+      const b = data.briefing || {}
+
+      // Campo que a IA não encontrou no material fica VAZIO e é anunciado como tal.
+      // Nunca sobrescrevemos com um valor plausível: briefing chutado vira um mês de
+      // roteiro errado que o cliente só descobre depois de gerar tudo.
+      // Tom só entra se for uma das opções do select — valor fora da lista renderiza
+      // o select em branco e o cliente não entende o que aconteceu.
+      const tomExtraido = TONS_VALIDOS.includes(b.tom) ? b.tom : ''
+
+      const campos: Array<{ nome: string; valor: unknown; aplicar: (v: string) => void }> = [
+        { nome: 'Nicho', valor: b.nicho, aplicar: setNicho },
+        { nome: 'Tom de Voz', valor: tomExtraido, aplicar: setTom },
+        { nome: '@ Instagram', valor: b.instagram, aplicar: setInstagram },
+        { nome: 'Serviços', valor: b.servicos, aplicar: setServicos },
+        { nome: 'Tom da Marca', valor: b.tomMarca, aplicar: setTomMarca },
+        { nome: 'CTA', valor: b.cta, aplicar: setCta },
+        { nome: 'Diferenciais', valor: b.diferenciais, aplicar: setDiferenciais },
+      ]
+
+      const preenchidos: string[] = []
+      const vazios: string[] = []
+      for (const campo of campos) {
+        const texto = typeof campo.valor === 'string' ? campo.valor.trim() : ''
+        if (texto) {
+          campo.aplicar(texto)
+          preenchidos.push(campo.nome)
+        } else {
+          vazios.push(campo.nome)
+        }
+      }
+
+      setExtracao({ preenchidos, vazios })
+    } catch (err) {
+      setRateNotice('')
+      setExtrairErro(err instanceof Error ? err.message : 'Não consegui ler esse material.')
+    } finally {
+      setExtraindo(false)
+    }
+  }
 
   async function handleGenerate() {
     if (!nicho.trim()) return
@@ -670,6 +749,67 @@ function SuperAgente() {
 
         {/* Formulário */}
         <div className="bg-[#111111] border border-gray-800 rounded-2xl p-6 space-y-6 mb-8">
+          {/* Atalho de entrada: cola o material bruto e a IA preenche os campos abaixo.
+              Existe pra tirar o cliente da tela em branco — tudo continua editável. */}
+          <div className="bg-[#8B5CF6]/5 border border-[#8B5CF6]/30 rounded-xl p-4">
+            <div className="flex items-center gap-2 mb-1">
+              <Sparkles className="w-4 h-4 text-[#8B5CF6]" />
+              <h3 className="text-sm font-bold text-white">Comece rápido <span className="text-gray-500 font-normal">(opcional)</span></h3>
+            </div>
+            <p className="text-xs text-gray-500 mb-3">
+              Cole qualquer coisa sobre a marca — o site do cliente, a bio do Instagram, o que ele te mandou no WhatsApp — e a IA preenche o briefing abaixo pra você conferir.
+            </p>
+            <textarea
+              value={briefingBruto}
+              onChange={(e) => setBriefingBruto(e.target.value)}
+              rows={4}
+              placeholder="Ex: Somos a OtoBel, trabalhamos com aparelhos auditivos há 12 anos em Belo Horizonte. Fazemos adaptação, manutenção e teste de audição. Todo cliente tem acompanhamento com fonoaudióloga e retorno gratuito..."
+              className="w-full p-3 bg-[#1A1A1A] border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-[#8B5CF6] resize-none"
+            />
+            <div className="flex flex-wrap items-center gap-3 mt-3">
+              <Button
+                onClick={handleExtrairBriefing}
+                disabled={!briefingBruto.trim() || extraindo}
+                className="bg-[#8B5CF6] hover:bg-[#7C3AED] disabled:opacity-40"
+              >
+                {extraindo ? (
+                  <><Loader2 className="w-4 h-4 animate-spin" /> Lendo o material...</>
+                ) : (
+                  <><Sparkles className="w-4 h-4" /> Preencher com IA</>
+                )}
+              </Button>
+              <span className="text-xs text-gray-600">Não gasta geração do seu plano.</span>
+            </div>
+
+            {extrairErro && (
+              <div className="mt-3 flex items-start gap-2 text-sm text-red-300">
+                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                <span>{extrairErro}</span>
+              </div>
+            )}
+
+            {extracao && (
+              <div className="mt-3 space-y-1 text-xs">
+                {extracao.preenchidos.length > 0 ? (
+                  <p className="text-green-400 flex items-start gap-2">
+                    <CheckCircle2 className="w-4 h-4 shrink-0 mt-px" />
+                    <span>Preenchi: <strong>{extracao.preenchidos.join(', ')}</strong>. Confira abaixo e ajuste o que quiser.</span>
+                  </p>
+                ) : (
+                  <p className="text-yellow-400 flex items-start gap-2">
+                    <AlertCircle className="w-4 h-4 shrink-0 mt-px" />
+                    <span>Não consegui tirar nada desse material. Tente colar algo mais descritivo sobre a marca.</span>
+                  </p>
+                )}
+                {extracao.vazios.length > 0 && (
+                  <p className="text-gray-500 pl-6">
+                    Não estava no material: {extracao.vazios.join(', ')} — deixei em branco de propósito, preencha na mão se for importante.
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-2">Nicho da Agência</label>
@@ -688,10 +828,11 @@ function SuperAgente() {
                 onChange={(e) => setTom(e.target.value)}
                 className="w-full p-3 bg-[#1A1A1A] border border-gray-700 rounded-lg text-white focus:outline-none focus:border-[#8B5CF6]"
               >
-                <option value="Profissional">Profissional</option>
-                <option value="Divertido">Divertido</option>
-                <option value="Vendedor">Vendedor</option>
+                {TONS.map((t) => (
+                  <option key={t.value} value={t.value}>{t.value} [{t.dica}]</option>
+                ))}
               </select>
+              <p className="text-xs text-gray-600 mt-1">Como o texto fala. Se você preencher "Tom da Marca" abaixo, ele manda neste.</p>
             </div>
             {/* V1.6 Seletor manual de voz. Automático = IA decide. */}
             <div>
