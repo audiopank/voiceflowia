@@ -5,17 +5,26 @@ import { BackButton } from '../components/BackButton'
 import { TRIAL_INTENT_KEY } from '../lib/trial'
 
 export const Route = createFileRoute("/cadastro")({
+  // O router faz JSON.parse de cada valor da query. Um link escrito à mão —
+  // "/cadastro?trial=1", que é como um link de divulgação sempre vai ser digitado —
+  // chega aqui como o NÚMERO 1, não como a string "1". Exigir string descartava o
+  // parâmetro em silêncio: a pessoa se cadastrava, não ganhava trial nenhum e batia
+  // na tela trancada. Normaliza para texto e aceita as duas formas.
   validateSearch: (search: Record<string, unknown>): { plano?: string; trial?: string } => ({
-    plano: typeof search.plano === 'string' ? search.plano : undefined,
-    trial: typeof search.trial === 'string' ? search.trial : undefined,
+    plano: search.plano == null ? undefined : String(search.plano),
+    trial: search.trial == null ? undefined : String(search.trial),
   }),
   component: Cadastro,
 })
 
+// Formas que valem como "quero o trial" — cobre ?trial=1 e ?trial=true, digitados
+// à mão ou gerados pelo app.
+const VALORES_DE_TRIAL = ['1', 'true', 'sim']
+
 function Cadastro() {
   const search = useSearch({ from: "/cadastro" })
   const navigate = useNavigate()
-  const isTrial = search.trial === '1'
+  const isTrial = VALORES_DE_TRIAL.includes((search.trial || '').toLowerCase())
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
