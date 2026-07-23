@@ -5,6 +5,15 @@ export const TRIAL_PLAN = 'User_7_dias_Free'
 export const TRIAL_DAYS = 7
 export const TRIAL_GENERATIONS = 10
 
+// Planos pagos — quem já assinou não é candidato a trial em nenhuma hipótese.
+const PLANOS_PAGOS = ['crescimento', 'dominacao']
+
+// Marca no user_metadata do Supabase Auth de que a pessoa se cadastrou PEDINDO o
+// trial. Fica no usuário (não no localStorage) porque o caminho que mais quebra é
+// justamente o de trocar de contexto: cadastra no celular, confirma o e-mail no
+// desktop, e qualquer coisa guardada no navegador do cadastro se perde.
+export const TRIAL_INTENT_KEY = 'trial_intent'
+
 const DAY_MS = 24 * 60 * 60 * 1000
 
 export interface TrialState {
@@ -23,6 +32,15 @@ interface ProfileLike {
   subscription_plan?: string | null
   trial_started_at?: string | null
   trial_generations_used?: number | null
+}
+
+// Quem ainda pode INICIAR um trial: nunca iniciou um antes e não é assinante pago.
+// Espelha a regra anti-abuso do start_trial() no banco — aqui só serve para decidir
+// se mostramos o botão; a decisão que vale é sempre a do servidor.
+export function podeIniciarTrial(profile: ProfileLike | null | undefined): boolean {
+  if (!profile) return false
+  if (profile.trial_started_at) return false
+  return !PLANOS_PAGOS.includes(profile.subscription_plan || '')
 }
 
 export function computeTrial(profile: ProfileLike | null | undefined): TrialState {

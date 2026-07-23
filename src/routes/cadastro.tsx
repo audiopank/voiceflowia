@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { createFileRoute, useNavigate, useSearch } from "@tanstack/react-router"
 import { supabase } from '../lib/supabase'
 import { BackButton } from '../components/BackButton'
+import { TRIAL_INTENT_KEY } from '../lib/trial'
 
 export const Route = createFileRoute("/cadastro")({
   validateSearch: (search: Record<string, unknown>): { plano?: string; trial?: string } => ({
@@ -23,7 +24,18 @@ function Cadastro() {
     e.preventDefault()
     setLoading(true)
 
-    const { data, error } = await supabase.auth.signUp({ email, password })
+    // A intencao de trial vai gravada NO USUARIO, nao so nesta aba: se o Supabase
+    // exigir confirmacao de email, o start_trial abaixo nao roda, e o resgate no
+    // useSubscription precisa saber (em qualquer dispositivo) que esta pessoa pediu
+    // o trial. Sem isso, ela confirma o email, entra e ve "Acesso Restrito".
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        ...(isTrial ? { data: { [TRIAL_INTENT_KEY]: true } } : {}),
+        emailRedirectTo: `${window.location.origin}/login`,
+      },
+    })
 
     if (error) {
       setLoading(false)
@@ -31,10 +43,14 @@ function Cadastro() {
     }
 
     // Sem sessao = confirmacao de email ligada no Supabase. O trial precisa de
-    // sessao ativa para iniciar; avisa e manda pro login.
+    // sessao ativa para iniciar, entao ele so comeca quando a pessoa entrar.
     if (!data?.session) {
       setLoading(false)
-      alert('Cadastro realizado! Confirme seu email para entrar e ativar o trial.')
+      alert(
+        isTrial
+          ? 'Cadastro realizado! Confirme seu email e faca login — seus 7 dias gratis comecam assim que voce entrar.'
+          : 'Cadastro realizado! Confirme seu email para entrar.',
+      )
       navigate({ to: '/login' })
       return
     }
@@ -42,8 +58,15 @@ function Cadastro() {
     if (isTrial) {
       // Ativa o plano User_7_dias_Free (RPC anti-abuso no banco).
       const { error: trialError } = await supabase.rpc('start_trial')
-      if (trialError) console.error('Erro ao iniciar trial:', trialError)
       setLoading(false)
+      if (trialError) {
+        // Nao some com o erro: sem trial a pessoa cai numa tela bloqueada sem
+        // entender por que. O painel tem o botao de ativar como segunda chance.
+        console.error('Erro ao iniciar trial:', trialError)
+        alert('Sua conta foi criada, mas nao consegui ativar o trial agora. Abra o painel e clique em "Ativar meus 7 dias gratis".')
+        navigate({ to: '/dashboard' })
+        return
+      }
       // Vai direto pro Super Agente, onde o Agente Guia abre sozinho.
       navigate({ to: '/super-agente' })
       return

@@ -5,6 +5,7 @@ import { useSubscription } from '../lib/useSubscription'
 import { fetchWithRetry, friendlyApiError } from '../lib/apiRetry'
 import { Button } from '../components/ui/button'
 import { BackButton } from '../components/BackButton'
+import { AtivarTrial } from '../components/AtivarTrial'
 import { ELEVENLABS_VOICES, GEMINI_VOICES_TEXTO_LONGO, type Voice, type Provider } from '../lib/voices'
 import { convertToWhatsAppOgg, convertMixToMp3 } from '../lib/audioConvert'
 import { blobToAudioBuffer, renderMix, audioBufferToWav, enhanceVoiceBuffer } from '../lib/audioMix'
@@ -25,7 +26,7 @@ const PRESET_TRACKS = [
 ] as const
 
 function Editor() {
-  const { hasAccess, loading: loadingSubscription } = useSubscription()
+  const { hasAccess, loading: loadingSubscription, canStartTrial, startTrial } = useSubscription()
   const [text, setText] = useState('Olá, isso é um teste de voz.')
   // Padrao Gemini: as vozes da ElevenLabs sao de biblioteca e retornam 402
   // (paid_plan_required) em contas free. Gemini (Zephyr/Puck/...) funciona no free.
@@ -312,7 +313,8 @@ function Editor() {
           <p className="text-gray-400 mb-6">
             O Editor de Voz está disponível apenas nos planos <span className="text-[#8B5CF6] font-bold">Crescimento</span> e <span className="text-[#22C55E] font-bold">Dominação</span>.
           </p>
-          <Button 
+          {canStartTrial && <AtivarTrial onAtivar={startTrial} className="mb-4" />}
+          <Button
             className="bg-[#8B5CF6] hover:bg-[#7C3AED]"
             onClick={() => window.location.href = '/precos'}
           >

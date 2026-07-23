@@ -6,6 +6,7 @@ import { supabase } from '../lib/supabase'
 import { fetchWithRetry, friendlyApiError } from '../lib/apiRetry'
 import { Button } from '../components/ui/button'
 import { BackButton } from '../components/BackButton'
+import { AtivarTrial } from '../components/AtivarTrial'
 import { ALL_VOICES, GEMINI_VOICES, ELEVENLABS_VOICES, type CatalogVoice } from '../lib/voices'
 
 export const Route = createFileRoute('/biblioteca')({
@@ -16,7 +17,7 @@ const DEFAULT_SAMPLE = 'Olá! Esta é uma amostra da minha voz para o seu projet
 const FAV_KEY_PREFIX = 'vfia:voz-favoritas'
 
 function Biblioteca() {
-  const { hasAccess, loading: loadingSubscription } = useSubscription()
+  const { hasAccess, loading: loadingSubscription, canStartTrial, startTrial } = useSubscription()
 
   const [sampleText, setSampleText] = useState(DEFAULT_SAMPLE)
   const [favorites, setFavorites] = useState<string[]>([])
@@ -157,6 +158,7 @@ function Biblioteca() {
           <p className="text-gray-400 mb-6">
             A Biblioteca de Vozes está disponível apenas nos planos <span className="text-[#8B5CF6] font-bold">Crescimento</span> e <span className="text-[#22C55E] font-bold">Dominação</span>.
           </p>
+          {canStartTrial && <AtivarTrial onAtivar={startTrial} className="mb-4" />}
           <Button className="bg-[#8B5CF6] hover:bg-[#7C3AED]" onClick={() => (window.location.href = '/precos')}>
             Ver Planos
           </Button>

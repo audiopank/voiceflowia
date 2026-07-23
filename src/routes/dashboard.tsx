@@ -2,8 +2,9 @@ import { useEffect, useState } from 'react'
 import { createFileRoute, useNavigate } from "@tanstack/react-router"
 import { supabase } from '../lib/supabase'
 import { useSubscription } from '../lib/useSubscription'
-import { Lock, Volume2, Settings, Rocket, Radar as RadarIcon } from 'lucide-react'
+import { Lock, Volume2, Settings, Rocket, Radar as RadarIcon, ArrowRight } from 'lucide-react'
 import { BackButton } from '../components/BackButton'
+import { AtivarTrial } from '../components/AtivarTrial'
 import { ADMIN_EMAIL } from '../lib/plans'
 import { TRIAL_GENERATIONS } from '../lib/trial'
 
@@ -31,6 +32,8 @@ function mesAtual(): string {
 function Dashboard() {
   const [user, setUser] = useState<any>(null)
   const [stats, setStats] = useState({ projetos: 0, posts: 0 })
+  // A leitura de `contents` falhou: stats fica em 0 sem que isso seja verdade.
+  const [statsIndisponivel, setStatsIndisponivel] = useState(false)
   const [loading, setLoading] = useState(true)
   const subscription = useSubscription()
   const navigate = useNavigate()
@@ -44,6 +47,13 @@ function Dashboard() {
   const geracoesRestantes = trial.isTrial
     ? `${trial.generationsLeft} de ${TRIAL_GENERATIONS}`
     : hasContentAgentFeature ? 'Ilimitado' : '—'
+
+  // Primeira geração ainda não aconteceu: é aqui que o trial morre calado hoje —
+  // a pessoa entra, vê "0 projetos / 0 posts" e não sabe por onde começar.
+  // Só afirma "você ainda não gerou nada" quando a consulta REALMENTE respondeu:
+  // se ela falhou, zero não é um dado, é a ausência dele.
+  const primeiraGeracaoPendente =
+    !loading && !statsIndisponivel && stats.projetos === 0 && hasContentAgentFeature
 
   useEffect(() => {
     checkUser()
@@ -68,7 +78,9 @@ function Dashboard() {
 
     if (error) {
       console.error('Erro ao buscar conteúdos:', error)
+      setStatsIndisponivel(true)
     } else if (data) {
+      setStatsIndisponivel(false)
       const projetos = data.length
       const posts = data.reduce(
         (sum, row) => sum + (Array.isArray(row.posts_json) ? row.posts_json.length : 0),
@@ -129,13 +141,15 @@ function Dashboard() {
             <h3 className="text-sm font-medium text-gray-400 mb-1">Mês</h3>
             <p className="text-2xl font-bold">{mesAtual()}</p>
           </div>
+          {/* "—" quando a consulta falhou: zero seria uma afirmação falsa sobre o
+              trabalho do cliente, não um número que apuramos. */}
           <div className="bg-[#111111] border border-gray-800 rounded-lg p-6 shadow-sm">
             <h3 className="text-sm font-medium text-gray-400 mb-1">Projetos Criados</h3>
-            <p className="text-2xl font-bold">{stats.projetos}</p>
+            <p className="text-2xl font-bold">{statsIndisponivel ? '—' : stats.projetos}</p>
           </div>
           <div className="bg-[#111111] border border-gray-800 rounded-lg p-6 shadow-sm">
             <h3 className="text-sm font-medium text-gray-400 mb-1">Posts Gerados</h3>
-            <p className="text-2xl font-bold">{stats.posts}</p>
+            <p className="text-2xl font-bold">{statsIndisponivel ? '—' : stats.posts}</p>
           </div>
           <div className="bg-[#111111] border border-gray-800 rounded-lg p-6 shadow-sm">
             <h3 className="text-sm font-medium text-gray-400 mb-1">Gerações Restantes</h3>
@@ -144,8 +158,50 @@ function Dashboard() {
           <div className="bg-[#111111] border border-gray-800 rounded-lg p-6 shadow-sm">
             <h3 className="text-sm font-medium text-gray-400 mb-1">Plano Atual</h3>
             <p className="text-2xl font-bold text-[#8B5CF6]">{planLabel(subscription.plan)}</p>
+            {/* Prazo é o outro lado da cota: quem só vê gerações restantes não
+                percebe que o relógio dos 7 dias corre mesmo sem gerar nada. */}
+            {trial.isTrial && (
+              <p className="text-xs text-gray-500 mt-1">
+                {trial.daysLeft > 0
+                  ? `Faltam ${trial.daysLeft} ${trial.daysLeft === 1 ? 'dia' : 'dias'}`
+                  : 'Prazo encerrado'}
+              </p>
+            )}
           </div>
         </div>
+
+        {/* Sem plano e sem trial usado: oferece o teste em vez de empurrar preços. */}
+        {subscription.canStartTrial && !hasContentAgentFeature && (
+          <div className="mb-8 max-w-xl">
+            <AtivarTrial onAtivar={subscription.startTrial} />
+          </div>
+        )}
+
+        {/* Primeira geração: caminho único e explícito até o primeiro resultado. */}
+        {primeiraGeracaoPendente && (
+          <div className="mb-8 bg-gradient-to-r from-[#8B5CF6]/10 to-transparent border border-[#8B5CF6]/40 rounded-xl p-6">
+            <h2 className="text-xl font-bold text-white mb-1">
+              Comece por aqui: seu primeiro kit sai em ~2 minutos 🚀
+            </h2>
+            <p className="text-gray-400 text-sm mb-4">
+              Você ainda não gerou nada. Não precisa preencher formulário nenhum: cole o site do
+              cliente, a bio do Instagram ou o que ele te mandou no WhatsApp, e a IA monta o
+              briefing pra você conferir.
+            </p>
+            <ol className="text-sm text-gray-300 space-y-1.5 mb-5">
+              <li><b className="text-[#8B5CF6]">1.</b> Cole o material do cliente no Super Agente</li>
+              <li><b className="text-[#8B5CF6]">2.</b> Clique em "Preencher com IA" — não gasta geração</li>
+              <li><b className="text-[#8B5CF6]">3.</b> Gere a estratégia + roteiros + locução do mês</li>
+            </ol>
+            <button
+              onClick={() => navigate({ to: '/super-agente' })}
+              className="bg-[#8B5CF6] hover:bg-[#7C3AED] text-white font-bold py-3 px-6 rounded-lg transition-colors flex items-center gap-2"
+            >
+              Criar meu primeiro kit
+              <ArrowRight className="w-4 h-4" />
+            </button>
+          </div>
+        )}
 
         {/* Botão Principal - Editor de Voz */}
         <div className="mb-8">

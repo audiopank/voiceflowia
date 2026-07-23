@@ -7,11 +7,12 @@ import {
   Users, Target, Hash, Clock, Megaphone, CheckCircle2, Copy, Check, ImagePlus, X, Pencil,
   ChevronDown, ChevronUp, CalendarDays, Share2, Sparkles
 } from 'lucide-react'
-import { useSubscription } from '../lib/useSubscription'
+import { useSubscription, devolverGeracaoTrial } from '../lib/useSubscription'
 import { supabase } from '../lib/supabase'
 import { fetchWithRetry, sleep, safeJson, friendlyApiError } from '../lib/apiRetry'
 import { Button } from '../components/ui/button'
 import { BackButton } from '../components/BackButton'
+import { AtivarTrial } from '../components/AtivarTrial'
 import { SuperAgenteGuia } from '../components/SuperAgenteGuia'
 import { buildIcsCalendar, downloadIcsFile, postDateTime } from '../lib/ics'
 import { convertToWhatsAppOgg } from '../lib/audioConvert'
@@ -234,7 +235,7 @@ async function buscarHooksAnteriores(nicho: string): Promise<string[]> {
 }
 
 function SuperAgente() {
-  const { hasAccess, loading: loadingSubscription, trial, refresh } = useSubscription()
+  const { hasAccess, loading: loadingSubscription, trial, refresh, canStartTrial, startTrial } = useSubscription()
   const [nicho, setNicho] = useState('')
   const [tom, setTom] = useState(TOM_PADRAO)
   // Fluxo de 2 posts/dia (Manhã + Tarde): este campo é quantidade de DIAS, não de posts —
@@ -442,6 +443,13 @@ function SuperAgente() {
       if (trial.isTrial) void refresh()
     } catch (err) {
       console.error('=== ERRO ao gerar estratégia ===', err)
+      // Não entregamos nada: a geração debitada lá em cima volta pra cota. Num
+      // trial de 10, deixar erro de cota da Gemini comer o teste do cliente é
+      // perder a venda por um problema que não é dele.
+      if (trial.isTrial) {
+        await devolverGeracaoTrial()
+        void refresh()
+      }
       setError(err instanceof Error ? err.message : 'Erro ao gerar estratégia')
     } finally {
       setIsGenerating(false)
@@ -700,6 +708,9 @@ function SuperAgente() {
   }
 
   if (!hasAccess) {
+    // Quem nunca teve trial não é um caso de upgrade — é alguém que ainda não
+    // conheceu o produto. Mandar essa pessoa pra página de preços é onde o funil
+    // perdia gente: ela nem chegou a gerar o primeiro conteúdo.
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#0A0A0A] relative">
         <BackButton to="/dashboard" label="Voltar ao Painel" className="absolute top-6 left-6" />
@@ -711,6 +722,7 @@ function SuperAgente() {
             <span className="text-[#8B5CF6] font-bold">Crescimento</span> e{' '}
             <span className="text-[#22C55E] font-bold">Dominação</span>.
           </p>
+          {canStartTrial && <AtivarTrial onAtivar={startTrial} className="mb-4" />}
           <Button className="bg-[#8B5CF6] hover:bg-[#7C3AED]" onClick={() => (window.location.href = '/precos')}>
             Ver Planos
           </Button>

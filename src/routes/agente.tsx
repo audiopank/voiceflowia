@@ -1,11 +1,12 @@
 import { useState } from 'react'
 import { createFileRoute } from '@tanstack/react-router'
 import { Lock, Loader2, AlertCircle, Sparkles, Volume2, Download, Play, CalendarDays } from 'lucide-react'
-import { useSubscription } from '../lib/useSubscription'
+import { useSubscription, devolverGeracaoTrial } from '../lib/useSubscription'
 import { supabase } from '../lib/supabase'
 import { fetchWithRetry, safeJson, friendlyApiError } from '../lib/apiRetry'
 import { Button } from '../components/ui/button'
 import { BackButton } from '../components/BackButton'
+import { AtivarTrial } from '../components/AtivarTrial'
 import { EditableText } from '../components/EditableText'
 import { buildIcsCalendar, downloadIcsFile, postDateTime } from '../lib/ics'
 import { convertToWhatsAppOgg } from '../lib/audioConvert'
@@ -32,7 +33,7 @@ interface Post {
 }
 
 function Agente() {
-  const { hasAccess, loading: loadingSubscription, trial, refresh } = useSubscription()
+  const { hasAccess, loading: loadingSubscription, trial, refresh, canStartTrial, startTrial } = useSubscription()
   const [nicho, setNicho] = useState('')
   const [tom, setTom] = useState(TOM_PADRAO)
   // Fluxo de 2 posts/dia (Manhã + Tarde): este campo é quantidade de DIAS, não de posts —
@@ -106,6 +107,11 @@ function Agente() {
       if (trial.isTrial) void refresh()
     } catch (err) {
       console.error('=== ERRO ao gerar conteúdo ===', err)
+      // Nada foi entregue: devolve a geração debitada antes da chamada à IA.
+      if (trial.isTrial) {
+        await devolverGeracaoTrial()
+        void refresh()
+      }
       setError(err instanceof Error ? err.message : 'Erro ao gerar conteúdo')
     } finally {
       setIsGenerating(false)
@@ -221,6 +227,7 @@ function Agente() {
           <p className="text-gray-400 mb-6">
             O Agente de Conteúdo IA está disponível apenas nos planos <span className="text-[#8B5CF6] font-bold">Crescimento</span> e <span className="text-[#22C55E] font-bold">Dominação</span>.
           </p>
+          {canStartTrial && <AtivarTrial onAtivar={startTrial} className="mb-4" />}
           <Button
             className="bg-[#8B5CF6] hover:bg-[#7C3AED]"
             onClick={() => (window.location.href = '/precos')}

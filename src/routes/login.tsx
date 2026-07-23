@@ -12,47 +12,25 @@ function Login() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
-  const [isSignUp, setIsSignUp] = useState(false)
   const navigate = useNavigate()
 
+  // Esta tela SÓ faz login. O cadastro que existia aqui era um segundo caminho
+  // paralelo ao /cadastro que nunca chamava start_trial: quem entrava por ele
+  // criava conta com subscription_plan NULL e batia direto na tela "Upgrade para
+  // Crescimento", sem nunca ter tido o teste grátis a que tinha direito.
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setLoading(true)
-    console.log('Iniciando processo...', { email, password, isSignUp })
-    
-    if (isSignUp) {
-      console.log('Tentando cadastrar usuário...')
-      const { data, error } = await supabase.auth.signUp({ email, password })
-      console.log('Resposta do cadastro:', { data, error })
-      
-      if (error) {
-        setLoading(false)
-        console.error('Erro no cadastro:', error)
-        return alert(`Erro no cadastro: ${error.message}\n\nVerifique o console para mais detalhes.`)
-      }
-      
-      // Se o usuário foi criado sem precisar confirmar email, faz login automático
-      if (data?.user) {
-        console.log('Usuário criado com sucesso!')
-        alert('Cadastro realizado com sucesso! Redirecionando...')
-        navigate({ to: '/dashboard' })
-      } else {
-        alert('Cadastro realizado! Verifique seu email para confirmar a conta.')
-      }
-    } else {
-      console.log('Tentando fazer login...')
-      const { data, error } = await supabase.auth.signInWithPassword({ email, password })
-      console.log('Resposta do login:', { data, error })
-      
-      if (error) {
-        setLoading(false)
-        console.error('Erro no login:', error)
-        return alert(`Erro no login: ${error.message}\n\nDica: Verifique se a conta existe no Supabase Auth e se o email foi confirmado.`)
-      }
-      console.log('Login realizado com sucesso:', data)
-      navigate({ to: '/dashboard' })
+
+    const { error } = await supabase.auth.signInWithPassword({ email, password })
+
+    if (error) {
+      setLoading(false)
+      console.error('Erro no login:', error)
+      return alert(`Erro no login: ${error.message}`)
     }
-    
+
+    navigate({ to: '/dashboard' })
     setLoading(false)
   }
 
@@ -79,28 +57,28 @@ function Login() {
           placeholder="Sua senha" 
           required
         />
-        <button 
-          disabled={loading} 
+        <button
+          disabled={loading}
           className="w-full bg-[#22C55E] text-white font-bold py-3 rounded-lg hover:bg-[#16A34A] disabled:opacity-50"
         >
-          {loading ? (isSignUp ? 'Cadastrando...' : 'Entrando...') : (isSignUp ? 'Cadastrar' : 'Entrar')}
+          {loading ? 'Entrando...' : 'Entrar'}
+        </button>
+        {/* Quem não tem conta vai pro cadastro COM trial — o único caminho que
+            entrega os 7 dias grátis. */}
+        <button
+          type="button"
+          onClick={() => navigate({ to: '/cadastro', search: { trial: '1' } })}
+          className="w-full text-gray-400 text-sm hover:text-white"
+        >
+          Não tem conta? Comece com 7 dias grátis
         </button>
         <button
           type="button"
-          onClick={() => setIsSignUp(!isSignUp)}
-          className="w-full text-gray-400 text-sm hover:text-white"
+          onClick={() => navigate({ to: '/esqueci-senha' })}
+          className="w-full text-gray-500 text-xs hover:text-gray-300"
         >
-          {isSignUp ? 'Já tem conta? Entre aqui' : 'Não tem conta? Cadastre-se'}
+          Esqueci minha senha
         </button>
-        {!isSignUp && (
-          <button
-            type="button"
-            onClick={() => navigate({ to: '/esqueci-senha' })}
-            className="w-full text-gray-500 text-xs hover:text-gray-300"
-          >
-            Esqueci minha senha
-          </button>
-        )}
       </form>
     </div>
   )
