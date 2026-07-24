@@ -56,13 +56,21 @@ async function sendReminder(to: string, appUrl: string): Promise<boolean> {
 }
 
 async function handler(request: Request): Promise<Response> {
+  const url = new URL(request.url)
+
   // Segurança: a Vercel manda Authorization: Bearer <CRON_SECRET> quando a env existe.
+  // Também aceitamos ?key=<CRON_SECRET> na query, pra permitir o disparo manual do
+  // MODO TESTE pelo navegador (que não manda header Authorization).
+  // FAIL-CLOSED: sem CRON_SECRET setado, ninguém entra (o modo teste envia e-mail,
+  // então nada de abrir a porta se a env sumir). Em produção o CRON_SECRET existe.
   const cronSecret = process.env.CRON_SECRET
-  if (cronSecret) {
-    const auth = request.headers.get('authorization') || ''
-    if (auth !== `Bearer ${cronSecret}`) {
-      return new Response(JSON.stringify({ error: 'Não autorizado' }), { status: 401, headers: { 'Content-Type': 'application/json' } })
-    }
+  if (!cronSecret) {
+    return new Response(JSON.stringify({ error: 'CRON_SECRET não configurado' }), { status: 401, headers: { 'Content-Type': 'application/json' } })
+  }
+  const auth = request.headers.get('authorization') || ''
+  const keyParam = url.searchParams.get('key') || ''
+  if (auth !== `Bearer ${cronSecret}` && keyParam !== cronSecret) {
+    return new Response(JSON.stringify({ error: 'Não autorizado' }), { status: 401, headers: { 'Content-Type': 'application/json' } })
   }
 
   const supabaseUrl = process.env.VITE_SUPABASE_URL
@@ -86,7 +94,23 @@ async function handler(request: Request): Promise<Response> {
 
   // A URL do app vem da própria origem em que a Vercel invocou o cron (domínio de
   // produção), com override opcional por env — sem hardcode de domínio.
-  const appUrl = process.env.APP_URL || new URL(request.url).origin
+  const appUrl = process.env.APP_URL || url.origin
+
+  // MODO TESTE: ?teste=<email> manda UM e-mail de exemplo pro endereço indicado e
+  // encerra — NÃO lê nem toca em profiles/clientes, NÃO mexe no anti-spam. Serve pra
+  // conferir o visual/entrega antes de liberar pra geral. Atenção: com o Resend em
+  // modo teste (sem domínio verificado), só chega no e-mail DONO da conta Resend.
+  const testeEmail = (url.searchParams.get('teste') || '').trim()
+  if (testeEmail) {
+    if (!testeEmail.includes('@')) {
+      return new Response(JSON.stringify({ ok: false, motivo: 'email_invalido' }), { status: 400, headers: { 'Content-Type': 'application/json' } })
+    }
+    const ok = await sendReminder(testeEmail, appUrl)
+    return new Response(
+      JSON.stringify({ ok, modo: 'teste', para: testeEmail, enviado: ok, aviso: ok ? undefined : 'Resend recusou o envio (provável modo teste: só entrega no e-mail dono da conta Resend).' }),
+      { headers: { 'Content-Type': 'application/json' } },
+    )
+  }
 
   // Pagos e ativos, com e-mail. Selecionar reminder_last_sent_at aqui é de propósito:
   // se a coluna ainda não existe (migração não rodada), este select ERRA e a gente
