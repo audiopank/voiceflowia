@@ -5,7 +5,7 @@ import { toPng } from 'html-to-image'
 import {
   Lock, Loader2, AlertCircle, Rocket, Volume2, Download, Play, Package,
   Users, Target, Hash, Clock, Megaphone, CheckCircle2, Copy, Check, ImagePlus, X, Pencil,
-  ChevronDown, ChevronUp, CalendarDays, Share2, Sparkles
+  ChevronDown, ChevronUp, CalendarDays, Share2, Sparkles, Brain
 } from 'lucide-react'
 import { useSubscription, devolverGeracaoTrial } from '../lib/useSubscription'
 import { supabase } from '../lib/supabase'
@@ -234,6 +234,53 @@ async function buscarHooksAnteriores(nicho: string): Promise<string[]> {
   }
 }
 
+// Data curta (DD/MM) pra exibir "último kit em ..." no painel de Memória da Marca.
+function formatarDataMemoria(iso: string): string {
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return ''
+  return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })
+}
+
+// Estatísticas REAIS da Memória da Marca pra ESTE nicho, pra exibir na UI (não vai pro
+// prompt — quem alimenta a IA é o buscarHooksAnteriores acima). Conta quantos kits o
+// usuário já gerou pra a marca e quantos ganchos foram memorizados. Nunca inventa: se a
+// consulta FALHAR, devolve null e o painel some — importante NÃO devolver zeros aqui,
+// senão um cliente que TEM histórico veria "Primeira vez com..." (afirmação falsa) num
+// hiccup de rede. kits===0 só vale quando a consulta deu certo e não há histórico mesmo.
+async function carregarMemoriaMarca(nicho: string): Promise<{ kits: number; hooks: number; ultima: string | null } | null> {
+  try {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return null
+
+    const { data, error } = await supabase
+      .from('contents')
+      .select('nicho, posts_json, created_at')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false })
+      .limit(50)
+
+    if (error || !Array.isArray(data)) return null
+
+    const alvo = chaveNicho(nicho)
+    let kits = 0
+    let hooks = 0
+    let ultima: string | null = null
+
+    for (const linha of data) {
+      if (typeof linha?.nicho !== 'string' || chaveNicho(linha.nicho) !== alvo) continue
+      kits++
+      if (!ultima && typeof linha?.created_at === 'string') ultima = linha.created_at
+      const posts = Array.isArray(linha?.posts_json) ? linha.posts_json : []
+      for (const p of posts) {
+        if (typeof p?.hook === 'string' && p.hook.trim()) hooks++
+      }
+    }
+    return { kits, hooks, ultima }
+  } catch {
+    return null
+  }
+}
+
 function SuperAgente() {
   const { hasAccess, loading: loadingSubscription, trial, refresh, canStartTrial, startTrial } = useSubscription()
   const [nicho, setNicho] = useState('')
@@ -243,6 +290,11 @@ function SuperAgente() {
   const [qtdDias, setQtdDias] = useState(4)
   // Data em que "Dia 1" cai de verdade — pro export do Google Agenda. Padrão: hoje.
   const [dataInicio, setDataInicio] = useState(todayIso)
+
+  // Memória da Marca (Fase 1) VISÍVEL: dado real de quantos kits a IA já gerou pra este
+  // nicho e quantos ganchos memorizou. É o custo de troca de quem pensa em cancelar —
+  // cancelou, some o histórico. null = ainda não carregado / nicho curto (painel oculto).
+  const [memoria, setMemoria] = useState<{ kits: number; hooks: number; ultima: string | null } | null>(null)
 
   // V1.5 Estudo de Marca — opcionais. Vazios = gera igual hoje.
   const [instagram, setInstagram] = useState('')
@@ -379,6 +431,21 @@ function SuperAgente() {
     }
   }
 
+  // Carrega a Memória da Marca com debounce enquanto a pessoa digita o nicho. Nicho
+  // curto (< 2 chars) esconde o painel; a última resposta vence (flag cancelado).
+  useEffect(() => {
+    const alvo = nicho.trim()
+    if (alvo.length < 2) {
+      setMemoria(null)
+      return
+    }
+    let cancelado = false
+    const t = setTimeout(() => {
+      carregarMemoriaMarca(alvo).then((m) => { if (!cancelado) setMemoria(m) })
+    }, 500)
+    return () => { cancelado = true; clearTimeout(t) }
+  }, [nicho])
+
   async function handleGenerate() {
     if (!nicho.trim()) return
 
@@ -438,6 +505,10 @@ function SuperAgente() {
           console.error('Erro ao salvar conteúdo no Supabase:', insertError)
         }
       }
+
+      // Acabou de nascer mais um kit pra esta marca: atualiza o painel de memória
+      // pra a contagem subir na hora (o custo de troca cresce na frente do cliente).
+      void carregarMemoriaMarca(nicho).then(setMemoria)
 
       // Atualiza a contagem do trial no banner do topo.
       if (trial.isTrial) void refresh()
@@ -883,6 +954,39 @@ function SuperAgente() {
               <p className="text-xs text-gray-600 mt-1">Em que dia "Dia 1" cai de verdade — usado no export pro Google Agenda.</p>
             </div>
           </div>
+
+          {/* Memória da Marca (Fase 1) VISÍVEL — custo de troca com dado real. Só aparece
+              quando há nicho digitado; o texto muda se já existe histórico ou é a 1ª vez. */}
+          {memoria && (
+            memoria.kits > 0 ? (
+              <div className="border border-[#8B5CF6]/40 bg-gradient-to-r from-[#8B5CF6]/10 to-transparent rounded-xl p-4 flex gap-3">
+                <Brain className="w-6 h-6 text-[#8B5CF6] shrink-0 mt-0.5" />
+                <div className="text-sm">
+                  <p className="text-white font-semibold">A IA já conhece {nicho.trim()} 🧠</p>
+                  <p className="text-gray-300 mt-1">
+                    {memoria.kits} {memoria.kits === 1 ? 'kit já gerado' : 'kits já gerados'} pra esta marca
+                    {memoria.hooks > 0 && <> · {memoria.hooks} ganchos memorizados</>}
+                    {memoria.ultima && formatarDataMemoria(memoria.ultima) && <> · último em {formatarDataMemoria(memoria.ultima)}</>}.
+                    {' '}Neste kit ela evita repetir os ângulos que você já usou — <b className="text-white">quanto mais meses, mais afiada</b>.
+                  </p>
+                  <p className="text-gray-500 text-xs mt-1.5">
+                    Esse aprendizado é da sua conta. Se cancelar, a IA esquece a sua marca e volta à estaca zero.
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <div className="border border-gray-800 bg-[#141414] rounded-xl p-4 flex gap-3">
+                <Brain className="w-6 h-6 text-gray-500 shrink-0 mt-0.5" />
+                <div className="text-sm">
+                  <p className="text-white font-semibold">Primeira vez com {nicho.trim()} ✨</p>
+                  <p className="text-gray-400 mt-1">
+                    A partir deste kit, a IA começa a memorizar os ângulos da sua marca pra{' '}
+                    <b className="text-gray-200">nunca repetir</b> nos próximos meses. Quanto mais você gera, mais ela te conhece.
+                  </p>
+                </div>
+              </div>
+            )
+          )}
 
           {/* V1.5 — Estudo de Marca (opcional). Deixa o output na cara do cliente. */}
           <div className="border-t border-gray-800 pt-6">
