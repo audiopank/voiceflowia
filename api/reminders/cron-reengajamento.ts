@@ -146,17 +146,22 @@ async function handler(request: Request): Promise<Response> {
     const lastReminder = p.reminder_last_sent_at ? new Date(p.reminder_last_sent_at).getTime() : 0
     if (lastReminder >= lastGen) continue
 
-    // MARCA ANTES de enviar: se o UPDATE falhar, não mandamos e-mail (evita reenvio
-    // no dia seguinte). Se o e-mail falhar depois, o cliente só perde ESTE lembrete
-    // do ciclo — preferível a spam. Segurança > garantia de entrega.
-    const { error: updErr } = await supabaseAdmin
+    // ENVIA PRIMEIRO; só marca o anti-spam se o e-mail REALMENTE saiu (res.ok).
+    // Por que não marcar antes: com o Resend em MODO TESTE (sem domínio verificado)
+    // o envio pra cliente falha e retorna false. Se marcássemos antes, a coorte
+    // dormente inteira ficaria "já avisada" sem NUNCA ter recebido nada — pulada
+    // até gerar de novo. Marcando só no sucesso, um envio falho apenas re-tenta no
+    // próximo dia (nada entregue = nada de spam). O risco oposto (envio ok + update
+    // falho => 1 e-mail repetido no dia seguinte) é raro e muito menor que queimar
+    // toda a coorte em silêncio.
+    const ok = await sendReminder(p.email, appUrl)
+    if (!ok) continue
+
+    await supabaseAdmin
       .from('profiles')
       .update({ reminder_last_sent_at: new Date(agora).toISOString() })
       .eq('id', p.id)
-    if (updErr) continue
-
-    const ok = await sendReminder(p.email, appUrl)
-    if (ok) enviados++
+    enviados++
   }
 
   return new Response(JSON.stringify({ ok: true, candidatos: elegiveis.length, enviados }), { headers: { 'Content-Type': 'application/json' } })
