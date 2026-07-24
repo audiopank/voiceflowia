@@ -17,6 +17,7 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as EsqueciSenhaRouteImport } from './routes/esqueci-senha'
 import { Route as EditorRouteImport } from './routes/editor'
 import { Route as DashboardRouteImport } from './routes/dashboard'
+import { Route as CardMagicoRouteImport } from './routes/card-magico'
 import { Route as CadastroRouteImport } from './routes/cadastro'
 import { Route as BibliotecaRouteImport } from './routes/biblioteca'
 import { Route as AgenteRouteImport } from './routes/agente'
@@ -63,6 +64,11 @@ const DashboardRoute = DashboardRouteImport.update({
   path: '/dashboard',
   getParentRoute: () => rootRouteImport,
 } as any)
+const CardMagicoRoute = CardMagicoRouteImport.update({
+  id: '/card-magico',
+  path: '/card-magico',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const CadastroRoute = CadastroRouteImport.update({
   id: '/cadastro',
   path: '/cadastro',
@@ -95,6 +101,7 @@ export interface FileRoutesByFullPath {
   '/agente': typeof AgenteRoute
   '/biblioteca': typeof BibliotecaRoute
   '/cadastro': typeof CadastroRoute
+  '/card-magico': typeof CardMagicoRoute
   '/dashboard': typeof DashboardRoute
   '/editor': typeof EditorRoute
   '/esqueci-senha': typeof EsqueciSenhaRoute
@@ -110,6 +117,7 @@ export interface FileRoutesByTo {
   '/agente': typeof AgenteRoute
   '/biblioteca': typeof BibliotecaRoute
   '/cadastro': typeof CadastroRoute
+  '/card-magico': typeof CardMagicoRoute
   '/dashboard': typeof DashboardRoute
   '/editor': typeof EditorRoute
   '/esqueci-senha': typeof EsqueciSenhaRoute
@@ -126,6 +134,7 @@ export interface FileRoutesById {
   '/agente': typeof AgenteRoute
   '/biblioteca': typeof BibliotecaRoute
   '/cadastro': typeof CadastroRoute
+  '/card-magico': typeof CardMagicoRoute
   '/dashboard': typeof DashboardRoute
   '/editor': typeof EditorRoute
   '/esqueci-senha': typeof EsqueciSenhaRoute
@@ -143,6 +152,7 @@ export interface FileRouteTypes {
     | '/agente'
     | '/biblioteca'
     | '/cadastro'
+    | '/card-magico'
     | '/dashboard'
     | '/editor'
     | '/esqueci-senha'
@@ -158,6 +168,7 @@ export interface FileRouteTypes {
     | '/agente'
     | '/biblioteca'
     | '/cadastro'
+    | '/card-magico'
     | '/dashboard'
     | '/editor'
     | '/esqueci-senha'
@@ -173,6 +184,7 @@ export interface FileRouteTypes {
     | '/agente'
     | '/biblioteca'
     | '/cadastro'
+    | '/card-magico'
     | '/dashboard'
     | '/editor'
     | '/esqueci-senha'
@@ -189,6 +201,7 @@ export interface RootRouteChildren {
   AgenteRoute: typeof AgenteRoute
   BibliotecaRoute: typeof BibliotecaRoute
   CadastroRoute: typeof CadastroRoute
+  CardMagicoRoute: typeof CardMagicoRoute
   DashboardRoute: typeof DashboardRoute
   EditorRoute: typeof EditorRoute
   EsqueciSenhaRoute: typeof EsqueciSenhaRoute
@@ -257,6 +270,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/card-magico': {
+      id: '/card-magico'
+      path: '/card-magico'
+      fullPath: '/card-magico'
+      preLoaderRoute: typeof CardMagicoRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/cadastro': {
       id: '/cadastro'
       path: '/cadastro'
@@ -301,6 +321,7 @@ const rootRouteChildren: RootRouteChildren = {
   AgenteRoute: AgenteRoute,
   BibliotecaRoute: BibliotecaRoute,
   CadastroRoute: CadastroRoute,
+  CardMagicoRoute: CardMagicoRoute,
   DashboardRoute: DashboardRoute,
   EditorRoute: EditorRoute,
   EsqueciSenhaRoute: EsqueciSenhaRoute,

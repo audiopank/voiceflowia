@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { createFileRoute, useNavigate } from "@tanstack/react-router"
 import { supabase } from '../lib/supabase'
 import { useSubscription } from '../lib/useSubscription'
-import { Lock, Volume2, Settings, Rocket, Radar as RadarIcon, ArrowRight } from 'lucide-react'
+import { Lock, Volume2, Settings, Rocket, Radar as RadarIcon, ArrowRight, Wand2 } from 'lucide-react'
 import { BackButton } from '../components/BackButton'
 import { AtivarTrial } from '../components/AtivarTrial'
 import { ADMIN_EMAIL } from '../lib/plans'
@@ -241,6 +241,27 @@ function Dashboard() {
             >
               <Lock className="w-9 h-9" />
               Super Agente 🔒 - Upgrade para Crescimento
+            </button>
+          )}
+        </div>
+
+        {/* Card Mágico — foto do produto vira legenda + card pronto pra postar. */}
+        <div className="mb-8">
+          {hasContentAgentFeature ? (
+            <button
+              onClick={() => navigate({ to: '/card-magico' })}
+              className="w-full bg-gradient-to-r from-[#EC4899] to-[#8B5CF6] hover:from-[#DB2777] hover:to-[#7C3AED] text-white font-bold py-6 px-8 rounded-xl text-2xl flex items-center justify-center gap-3 transition-all hover:scale-[1.02] shadow-lg shadow-[#EC4899]/30"
+            >
+              <Wand2 className="w-9 h-9" />
+              Card Mágico — Foto do Produto vira Post Pronto ✨
+            </button>
+          ) : (
+            <button
+              disabled
+              className="w-full bg-gray-800 text-gray-500 font-bold py-6 px-8 rounded-xl text-2xl flex items-center justify-center gap-3 cursor-not-allowed border border-gray-700"
+            >
+              <Lock className="w-9 h-9" />
+              Card Mágico 🔒 - Upgrade para Crescimento
             </button>
           )}
         </div>
