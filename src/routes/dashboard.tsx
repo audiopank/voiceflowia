@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { createFileRoute, useNavigate } from "@tanstack/react-router"
 import { supabase } from '../lib/supabase'
 import { useSubscription } from '../lib/useSubscription'
-import { Lock, Volume2, Settings, Rocket, Radar as RadarIcon, ArrowRight, Wand2 } from 'lucide-react'
+import { Lock, Volume2, Settings, Rocket, Radar as RadarIcon, ArrowRight, Wand2, CalendarDays } from 'lucide-react'
+import { proximasDatasSazonais, textoContagem } from '../lib/datasSazonais'
 import { BackButton } from '../components/BackButton'
 import { AtivarTrial } from '../components/AtivarTrial'
 import { ADMIN_EMAIL } from '../lib/plans'
@@ -37,6 +38,10 @@ function Dashboard() {
   const [loading, setLoading] = useState(true)
   const subscription = useSubscription()
   const navigate = useNavigate()
+
+  // Ganchos sazonais: a data comercial mais próxima (até 30 dias) vira um convite
+  // pra voltar e gerar conteúdo temático no meio do ciclo. Data real, calculada.
+  const proximaData = useMemo(() => proximasDatasSazonais(30)[0] ?? null, [])
 
   const hasContentAgentFeature = subscription.hasContentAgentFeature
   const hasRadar = subscription.hasRadar
@@ -198,6 +203,29 @@ function Dashboard() {
               className="bg-[#8B5CF6] hover:bg-[#7C3AED] text-white font-bold py-3 px-6 rounded-lg transition-colors flex items-center gap-2"
             >
               Criar meu primeiro kit
+              <ArrowRight className="w-4 h-4" />
+            </button>
+          </div>
+        )}
+
+        {/* Gancho sazonal — data comercial chegando puxa o cliente pra gerar conteúdo
+            temático no meio do ciclo (retenção). Só pra quem pode gerar. */}
+        {hasContentAgentFeature && proximaData && (
+          <div className="mb-8 bg-gradient-to-r from-[#EC4899]/10 to-transparent border border-[#EC4899]/40 rounded-xl p-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <CalendarDays className="w-8 h-8 text-[#EC4899] shrink-0" />
+              <div>
+                <p className="text-white font-bold">
+                  {proximaData.emoji} {proximaData.nome} {textoContagem(proximaData.diasFaltando)} — seu público já está pensando nisso.
+                </p>
+                <p className="text-gray-400 text-sm">Gere agora alguns posts sobre a data e saia na frente da concorrência.</p>
+              </div>
+            </div>
+            <button
+              onClick={() => navigate({ to: '/super-agente' })}
+              className="bg-[#EC4899] hover:bg-[#DB2777] text-white font-bold py-2.5 px-5 rounded-lg transition-colors flex items-center justify-center gap-2 whitespace-nowrap"
+            >
+              Gerar conteúdo da data
               <ArrowRight className="w-4 h-4" />
             </button>
           </div>

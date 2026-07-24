@@ -72,7 +72,7 @@ interface Marca {
 
 // qtdDias = quantidade de DIAS de conteúdo; cada dia gera 2 posts (Manhã + Tarde) — pedido de
 // cliente: fluxo de 2 posts/dia, não 1.
-function buildPrompt(nicho: string, tom: string, qtdDias: number, marca: Marca, hooksAnteriores: string[]): string {
+function buildPrompt(nicho: string, tom: string, qtdDias: number, marca: Marca, hooksAnteriores: string[], campanha: string): string {
   // MEMÓRIA DA MARCA: hooks já entregues a este cliente em gerações passadas.
   // Sem isto o mês 2 sai como releitura do mês 1 — o cliente percebe na hora e
   // conclui que a ferramenta não aprendeu nada sobre o negócio dele.
@@ -87,7 +87,13 @@ por outra porta: outro momento da jornada, outra objeção, outro formato de pro
 Este mês precisa parecer continuação do trabalho, não recomeço.`
     : ''
 
-  return buildPromptBase(nicho, tom, qtdDias, marca, memoriaBloco)
+  // GANCHO SAZONAL: data/campanha em destaque (ex: "Dia dos Pais"). Quando vem,
+  // parte do calendário fica temática, mas o mês não vira 100% sobre isso.
+  const campanhaBloco = campanha
+    ? `\n\nCAMPANHA SAZONAL EM DESTAQUE: "${campanha}". Dedique de 20% a 40% dos posts do calendário a esta data/campanha — ganchos, ofertas e CTAs conectados a ela, adaptados ao nicho "${nicho}". Os demais posts seguem o plano normal do mês. NÃO transforme o calendário inteiro na campanha, e mantenha TODAS as regras acima (produto sem vídeo, CTA por período, variação de redação, memória da marca).`
+    : ''
+
+  return buildPromptBase(nicho, tom, qtdDias, marca, memoriaBloco + campanhaBloco)
 }
 
 function buildPromptBase(nicho: string, tom: string, qtdDias: number, marca: Marca, memoriaBloco: string): string {
@@ -178,7 +184,7 @@ async function handler(request: Request): Promise<Response> {
       )
     }
 
-    const { nicho, tom, qtdPosts, instagram, servicos, tomMarca, cta, diferenciais, voz, hooksAnteriores } = await request.json()
+    const { nicho, tom, qtdPosts, instagram, servicos, tomMarca, cta, diferenciais, voz, hooksAnteriores, campanha } = await request.json()
 
     if (!nicho || typeof nicho !== 'string') {
       return new Response(
@@ -200,6 +206,9 @@ async function handler(request: Request): Promise<Response> {
       diferenciais: s(diferenciais),
     }
 
+    // Ganchos sazonais: data/campanha opcional, limitada pra não inchar o prompt.
+    const campanhaFinal = s(campanha).slice(0, 120)
+
     // V1.6: voz forçada. Só aceita as vozes válidas; qualquer outra coisa = automático.
     const vozForcada = VOZES_VALIDAS.includes(s(voz)) ? s(voz) : ''
     const vozesPermitidas = vozForcada ? [vozForcada] : ['Zephyr', 'Puck']
@@ -220,7 +229,7 @@ async function handler(request: Request): Promise<Response> {
         body: JSON.stringify({
           contents: [
             {
-              parts: [{ text: buildPrompt(nicho, tomFinal, qtdFinal, marca, memoria) }]
+              parts: [{ text: buildPrompt(nicho, tomFinal, qtdFinal, marca, memoria, campanhaFinal) }]
             }
           ],
           generationConfig: {

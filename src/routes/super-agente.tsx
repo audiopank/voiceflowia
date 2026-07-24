@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useRef, useState } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import { createFileRoute } from '@tanstack/react-router'
 import JSZip from 'jszip'
 import { toPng } from 'html-to-image'
@@ -19,6 +19,7 @@ import { convertToWhatsAppOgg } from '../lib/audioConvert'
 import { RedesSociais } from '../components/RedesSociais'
 import { SOCIAL_NETWORKS, socialKey, loadSocialLinks, saveSocialLinks, type SocialLinks } from '../lib/socialLinks'
 import { TONS, TOM_PADRAO, TONS_VALIDOS } from '../lib/tons'
+import { proximasDatasSazonais, textoContagem } from '../lib/datasSazonais'
 
 // Espaça as gerações de voz para não estourar o limite/minuto do free tier.
 const VOICE_THROTTLE_MS = 3500
@@ -296,6 +297,11 @@ function SuperAgente() {
   // cancelou, some o histórico. null = ainda não carregado / nicho curto (painel oculto).
   const [memoria, setMemoria] = useState<{ kits: number; hooks: number; ultima: string | null } | null>(null)
 
+  // Ganchos sazonais: data/campanha opcional que a IA destaca em parte do mês.
+  // As datas chegando saem do calendário real (não recalcula a cada tecla).
+  const [campanha, setCampanha] = useState('')
+  const datasProximas = useMemo(() => proximasDatasSazonais(45), [])
+
   // V1.5 Estudo de Marca — opcionais. Vazios = gera igual hoje.
   const [instagram, setInstagram] = useState('')
   const [servicos, setServicos] = useState('')
@@ -479,7 +485,7 @@ function SuperAgente() {
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ nicho, tom, qtdPosts: qtdDias, instagram, servicos, tomMarca, cta, diferenciais, voz, hooksAnteriores }) // V1.6: voz forçada ('' = automático)
+          body: JSON.stringify({ nicho, tom, qtdPosts: qtdDias, instagram, servicos, tomMarca, cta, diferenciais, voz, hooksAnteriores, campanha }) // V1.6: voz forçada ('' = automático)
         },
         { onWait: (s) => setRateNotice(`⏳ Muita procura agora — tentando de novo em ${s}s...`) },
       )
@@ -987,6 +993,44 @@ function SuperAgente() {
               </div>
             )
           )}
+
+          {/* Ganchos sazonais (opcional) — datas comerciais chegando. Clicar numa data
+              injeta a campanha na geração; parte do mês fica temática. Motivo pra o
+              cliente voltar no meio do ciclo. As datas são calculadas de verdade. */}
+          <div className="border border-gray-800 rounded-xl p-4 bg-[#141414]">
+            <div className="flex items-center gap-2 mb-1">
+              <CalendarDays className="w-4 h-4 text-[#8B5CF6]" />
+              <h3 className="text-sm font-bold text-white">Ganchos sazonais <span className="text-gray-500 font-normal">(opcional)</span></h3>
+            </div>
+            <p className="text-xs text-gray-500 mb-3">Datas que vendem chegando. Clique numa pra a IA dedicar parte do mês a ela.</p>
+            {datasProximas.length > 0 && (
+              <div className="flex flex-wrap gap-2 mb-3">
+                {datasProximas.map((d) => {
+                  const ativo = campanha.trim() === d.nome
+                  return (
+                    <button
+                      key={d.nome}
+                      type="button"
+                      onClick={() => setCampanha(ativo ? '' : d.nome)}
+                      className={`text-sm px-3 py-1.5 rounded-full border transition-colors ${ativo ? 'bg-[#8B5CF6] border-[#8B5CF6] text-white' : 'bg-[#1A1A1A] border-gray-700 text-gray-300 hover:border-[#8B5CF6]'}`}
+                    >
+                      {d.emoji} {d.nome} <span className="opacity-70">· {textoContagem(d.diasFaltando)}</span>
+                    </button>
+                  )
+                })}
+              </div>
+            )}
+            <input
+              type="text"
+              value={campanha}
+              onChange={(e) => setCampanha(e.target.value)}
+              placeholder="Ou escreva a sua: Aniversário da loja, Liquidação de inverno..."
+              className="w-full p-3 bg-[#1A1A1A] border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-[#8B5CF6] text-sm"
+            />
+            {campanha.trim() && (
+              <p className="text-xs text-[#8B5CF6] mt-2">✨ A IA vai dedicar parte do mês a "{campanha.trim()}".</p>
+            )}
+          </div>
 
           {/* V1.5 — Estudo de Marca (opcional). Deixa o output na cara do cliente. */}
           <div className="border-t border-gray-800 pt-6">
