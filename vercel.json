@@ -3,6 +3,7 @@
     { "source": "/((?!api/).*)", "destination": "/index.html" }
   ],
   "crons": [
-    { "path": "/api/radar/cron-alerts", "schedule": "0 12 * * *" }
+    { "path": "/api/radar/cron-alerts", "schedule": "0 12 * * *" },
+    { "path": "/api/reminders/cron-reengajamento", "schedule": "0 13 * * *" }
   ]
 }
