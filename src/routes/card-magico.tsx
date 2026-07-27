@@ -17,8 +17,6 @@ export const Route = createFileRoute('/card-magico')({
 // Card final no formato retrato 4:5 (o que mais aparece no feed do Instagram sem corte).
 const CARD_W = 1080
 const CARD_H = 1350
-// Altura da faixa da foto no topo; o resto (abaixo) é a área da legenda.
-const IMG_H = 820
 // Ao subir, redimensionamos a imagem pra no máx. 1080px no maior lado: mantém o card
 // nítido e deixa o payload pro Gemini pequeno (evita estourar o limite de body da Edge).
 const MAX_UPLOAD_DIM = 1080
@@ -51,14 +49,16 @@ function redimensionarImagem(file: File): Promise<string> {
   })
 }
 
-// Desenha a foto cobrindo o retângulo (object-fit: cover) com corte central.
-function drawCover(ctx: CanvasRenderingContext2D, img: HTMLImageElement, x: number, y: number, w: number, h: number) {
-  const escala = Math.max(w / img.width, h / img.height)
-  const dw = img.width * escala
-  const dh = img.height * escala
-  const dx = x + (w - dw) / 2
-  const dy = y + (h - dh) / 2
-  ctx.drawImage(img, dx, dy, dw, dh)
+// Traça um caminho de retângulo com cantos arredondados (pra recortar/contornar a foto).
+function roundRectPath(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
+  const rr = Math.min(r, w / 2, h / 2)
+  ctx.beginPath()
+  ctx.moveTo(x + rr, y)
+  ctx.arcTo(x + w, y, x + w, y + h, rr)
+  ctx.arcTo(x + w, y + h, x, y + h, rr)
+  ctx.arcTo(x, y + h, x, y, rr)
+  ctx.arcTo(x, y, x + w, y, rr)
+  ctx.closePath()
 }
 
 // Quebra o texto em linhas que cabem em `maxWidth`, respeitando quebras manuais (\n).
@@ -181,52 +181,69 @@ function CardMagico() {
       canvas.width = CARD_W
       canvas.height = CARD_H
 
-      // Fundo escuro elegante.
-      ctx.fillStyle = '#0F0F10'
+      // Fundo preto premium.
+      ctx.fillStyle = '#0B0B0D'
       ctx.fillRect(0, 0, CARD_W, CARD_H)
 
-      // Foto do produto cobrindo a faixa superior.
-      drawCover(ctx, img, 0, 0, CARD_W, IMG_H)
+      // MOLDURA DA FOTO: adapta ao formato da imagem (contain, SEM cortar e SEM barras
+      // feias — o cartão "abraça" a foto), cantos arredondados, flutuando no preto com
+      // margem. Resolve o card antigo, que colava a foto full-bleed nas bordas.
+      const M = 56 // margem externa
+      const areaW = CARD_W - M * 2
+      const areaMaxH = 720 // teto da altura da foto, pra sobrar espaço pra legenda
+      const escala = Math.min(areaW / img.width, areaMaxH / img.height)
+      const frameW = Math.round(img.width * escala)
+      const frameH = Math.round(img.height * escala)
+      const frameX = Math.round((CARD_W - frameW) / 2)
+      const frameY = M
+      const raio = 28
 
-      // Degradê suave da foto pro fundo (transição sem corte seco).
-      const grad = ctx.createLinearGradient(0, IMG_H - 160, 0, IMG_H)
-      grad.addColorStop(0, 'rgba(15,15,16,0)')
-      grad.addColorStop(1, 'rgba(15,15,16,1)')
-      ctx.fillStyle = grad
-      ctx.fillRect(0, IMG_H - 160, CARD_W, 160)
+      ctx.save()
+      roundRectPath(ctx, frameX, frameY, frameW, frameH, raio)
+      ctx.clip()
+      ctx.drawImage(img, frameX, frameY, frameW, frameH)
+      ctx.restore()
 
-      // Área da legenda (abaixo da foto).
+      // Contorno sutil, pra separar a foto do fundo quando ela tem bordas escuras.
+      roundRectPath(ctx, frameX, frameY, frameW, frameH, raio)
+      ctx.lineWidth = 2
+      ctx.strokeStyle = 'rgba(255,255,255,0.08)'
+      ctx.stroke()
+
+      // LEGENDA: centralizada, auto-ajuste de fonte, centrada verticalmente no espaço
+      // abaixo da foto, com bom espaçamento entre linhas.
       const padding = 72
-      const areaX = padding
-      const areaTop = IMG_H + 40
-      const areaBottom = CARD_H - 96 // deixa espaço pra assinatura
+      const capTop = frameY + frameH + 56
+      const capBottom = CARD_H - 92 // deixa espaço pra assinatura
       const maxWidth = CARD_W - padding * 2
 
-      // Auto-ajuste: começa grande e diminui a fonte até a legenda caber na área.
-      let fontSize = 48
+      let fontSize = 46
       let linhas: string[] = []
       let lineHeight = 0
-      while (fontSize >= 24) {
+      while (fontSize >= 22) {
         ctx.font = `500 ${fontSize}px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif`
-        lineHeight = Math.round(fontSize * 1.3)
+        lineHeight = Math.round(fontSize * 1.4)
         linhas = wrapText(ctx, legenda, maxWidth)
-        if (linhas.length * lineHeight <= areaBottom - areaTop) break
+        if (linhas.length * lineHeight <= capBottom - capTop) break
         fontSize -= 2
       }
 
-      ctx.fillStyle = '#F2F2F2'
+      ctx.fillStyle = '#F3F3F3'
+      ctx.textAlign = 'center'
       ctx.textBaseline = 'top'
-      let y = areaTop
+      const totalTextH = linhas.length * lineHeight
+      let y = capTop + Math.max(0, (capBottom - capTop - totalTextH) / 2)
       for (const linha of linhas) {
-        ctx.fillText(linha, areaX, y)
+        ctx.fillText(linha, CARD_W / 2, y)
         y += lineHeight
       }
 
-      // Assinatura discreta (marca d'água) no rodapé.
-      ctx.font = '600 26px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif'
+      // Assinatura discreta, centralizada no rodapé.
+      ctx.font = '600 24px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif'
       ctx.fillStyle = 'rgba(139,92,246,0.9)'
       ctx.textBaseline = 'alphabetic'
-      ctx.fillText('VoiceFlow IA', padding, CARD_H - 44)
+      ctx.fillText('VoiceFlow IA', CARD_W / 2, CARD_H - 52)
+      ctx.textAlign = 'left' // reset pro próximo desenho
     }
     img.src = imagemDataUrl
   }, [imagemDataUrl, legenda])
