@@ -302,6 +302,10 @@ function SuperAgente() {
   const [campanha, setCampanha] = useState('')
   const datasProximas = useMemo(() => proximasDatasSazonais(45), [])
 
+  // First-run: guia aparece só pra quem NUNCA gerou (ativação — o cliente que
+  // "não sabe usar" trava justamente aqui). Só liga quando a consulta confirma 0.
+  const [primeiraVez, setPrimeiraVez] = useState(false)
+
   // V1.5 Estudo de Marca — opcionais. Vazios = gera igual hoje.
   const [instagram, setInstagram] = useState('')
   const [servicos, setServicos] = useState('')
@@ -451,6 +455,23 @@ function SuperAgente() {
     }, 500)
     return () => { cancelado = true; clearTimeout(t) }
   }, [nicho])
+
+  // Descobre se é a primeira vez (0 conteúdos gerados). Erro na consulta => NÃO
+  // assume primeira vez (mostrar o guia pra veterano por engano é pior que não mostrar).
+  useEffect(() => {
+    if (!hasAccess) return
+    let cancelado = false
+    ;(async () => {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user || cancelado) return
+      const { count, error } = await supabase
+        .from('contents')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', user.id)
+      if (!cancelado && !error && typeof count === 'number') setPrimeiraVez(count === 0)
+    })()
+    return () => { cancelado = true }
+  }, [hasAccess])
 
   async function handleGenerate() {
     if (!nicho.trim()) return
@@ -833,6 +854,43 @@ function SuperAgente() {
           <div className="mb-6 p-4 bg-yellow-900/20 border border-yellow-700/50 rounded-xl flex items-center gap-3">
             <Loader2 className="w-5 h-5 text-yellow-400 shrink-0 animate-spin" />
             <span className="text-yellow-300">{rateNotice}</span>
+          </div>
+        )}
+
+        {/* FIRST-RUN: guia ativo pra quem nunca gerou. Caminho único (colar → Preencher
+            com IA → Gerar), sem jargão, com o passo 1 se marcando quando o nicho é
+            preenchido. Some assim que o cliente gera pela 1ª vez (posts != null). */}
+        {primeiraVez && !posts && !isGenerating && (
+          <div className="mb-6 rounded-2xl border border-[#8B5CF6]/40 bg-gradient-to-br from-[#8B5CF6]/12 to-transparent p-5 md:p-6">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-full bg-[#8B5CF6] flex items-center justify-center shrink-0 text-xl">👋</div>
+              <div className="flex-1">
+                <h2 className="text-lg md:text-xl font-bold text-white">Primeira vez? Relaxa — seu primeiro kit sai em 3 passos</h2>
+                <p className="text-gray-400 text-sm mt-1">
+                  Você <b className="text-gray-200">não precisa preencher formulário nenhum</b>. Cole o material do cliente (ou do seu negócio), a IA faz o resto, e você baixa o mês inteiro. 🚀
+                </p>
+                <ol className="mt-4 space-y-2.5">
+                  <li className="flex items-start gap-3">
+                    {nicho.trim() ? (
+                      <span className="w-6 h-6 rounded-full bg-[#22C55E] text-white flex items-center justify-center shrink-0 mt-0.5"><Check className="w-4 h-4" /></span>
+                    ) : (
+                      <span className="w-6 h-6 rounded-full bg-[#8B5CF6] text-white text-xs font-bold flex items-center justify-center shrink-0 mt-0.5">1</span>
+                    )}
+                    <span className="text-sm text-gray-300">
+                      No campo <b className="text-white">"Comece rápido"</b> logo abaixo, cole o site ou o @ do Instagram e clique em <b className="text-[#8B5CF6]">✨ Preencher com IA</b> — não gasta geração.
+                    </span>
+                  </li>
+                  <li className="flex items-start gap-3">
+                    <span className="w-6 h-6 rounded-full bg-[#8B5CF6] text-white text-xs font-bold flex items-center justify-center shrink-0 mt-0.5">2</span>
+                    <span className="text-sm text-gray-300">Confira o que a IA preencheu (pode ajustar, mas não precisa).</span>
+                  </li>
+                  <li className="flex items-start gap-3">
+                    <span className="w-6 h-6 rounded-full bg-[#8B5CF6] text-white text-xs font-bold flex items-center justify-center shrink-0 mt-0.5">3</span>
+                    <span className="text-sm text-gray-300">Clique em <b className="text-[#22C55E]">Gerar Estratégia + Conteúdo</b> — seu kit fica pronto em ~2 minutos.</span>
+                  </li>
+                </ol>
+              </div>
+            </div>
           </div>
         )}
 
