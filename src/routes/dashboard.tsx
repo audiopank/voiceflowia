@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { createFileRoute, useNavigate } from "@tanstack/react-router"
 import { supabase } from '../lib/supabase'
 import { useSubscription } from '../lib/useSubscription'
-import { Lock, Volume2, Settings, Rocket, Radar as RadarIcon, ArrowRight, Wand2, CalendarDays } from 'lucide-react'
+import { Lock, Volume2, Settings, Rocket, Radar as RadarIcon, ArrowRight, Wand2, CalendarDays, Clock } from 'lucide-react'
 import { proximasDatasSazonais, textoContagem } from '../lib/datasSazonais'
 import { BackButton } from '../components/BackButton'
 import { AtivarTrial } from '../components/AtivarTrial'
@@ -30,9 +30,19 @@ function mesAtual(): string {
   return s.charAt(0).toUpperCase() + s.slice(1)
 }
 
+// Dias inteiros desde uma data ISO (pra "faz X dias que você não gera"). null se inválida.
+function diasDesde(iso: string | null): number | null {
+  if (!iso) return null
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return null
+  return Math.floor((Date.now() - d.getTime()) / (24 * 60 * 60 * 1000))
+}
+
 function Dashboard() {
   const [user, setUser] = useState<any>(null)
   const [stats, setStats] = useState({ projetos: 0, posts: 0 })
+  // Data da última geração (mais recente em contents) — alimenta o "Ritmo de conteúdo".
+  const [ultimaGeracao, setUltimaGeracao] = useState<string | null>(null)
   // A leitura de `contents` falhou: stats fica em 0 sem que isso seja verdade.
   const [statsIndisponivel, setStatsIndisponivel] = useState(false)
   const [loading, setLoading] = useState(true)
@@ -42,6 +52,9 @@ function Dashboard() {
   // Ganchos sazonais: a data comercial mais próxima (até 30 dias) vira um convite
   // pra voltar e gerar conteúdo temático no meio do ciclo. Data real, calculada.
   const proximaData = useMemo(() => proximasDatasSazonais(30)[0] ?? null, [])
+  const diasSemGerar = diasDesde(ultimaGeracao)
+  // Quantos mini-cards a agenda vai mostrar (pra card solto ocupar largura total).
+  const cardsAgenda = (ultimaGeracao ? 1 : 0) + (proximaData ? 1 : 0)
 
   const hasContentAgentFeature = subscription.hasContentAgentFeature
   const hasRadar = subscription.hasRadar
@@ -78,7 +91,7 @@ function Dashboard() {
     // Dado REAL: conteúdos gerados pelo próprio usuário (tabela contents).
     const { data, error } = await supabase
       .from('contents')
-      .select('posts_json')
+      .select('posts_json, created_at')
       .eq('user_id', user.id)
 
     if (error) {
@@ -92,6 +105,14 @@ function Dashboard() {
         0,
       )
       setStats({ projetos, posts })
+
+      // Geração mais recente (created_at ISO — comparação de string funciona no formato).
+      const ultima = data.reduce((max: string | null, row: any) => {
+        const t = typeof row.created_at === 'string' ? row.created_at : null
+        if (!t) return max
+        return !max || t > max ? t : max
+      }, null)
+      setUltimaGeracao(ultima)
     }
     setLoading(false)
   }
@@ -208,26 +229,65 @@ function Dashboard() {
           </div>
         )}
 
-        {/* Gancho sazonal — data comercial chegando puxa o cliente pra gerar conteúdo
-            temático no meio do ciclo (retenção). Só pra quem pode gerar. */}
-        {hasContentAgentFeature && proximaData && (
-          <div className="mb-8 bg-gradient-to-r from-[#EC4899]/10 to-transparent border border-[#EC4899]/40 rounded-xl p-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-            <div className="flex items-center gap-3">
-              <CalendarDays className="w-8 h-8 text-[#EC4899] shrink-0" />
-              <div>
-                <p className="text-white font-bold">
-                  {proximaData.emoji} {proximaData.nome} {textoContagem(proximaData.diasFaltando)} — seu público já está pensando nisso.
-                </p>
-                <p className="text-gray-400 text-sm">Gere agora alguns posts sobre a data e saia na frente da concorrência.</p>
-              </div>
+        {/* COCKPIT "Sua Agenda de Conteúdo" (Nível 1 do agente proativo): junta os sinais
+            que já temos — ritmo de geração + próxima data comercial — cada um com 1 clique.
+            Só pra quem gera e já passou da primeira vez (o novato tem o bloco de onboarding).
+            HONESTIDADE: falamos "não gera conteúdo AQUI", não "não posta" — não vemos o IG dele. */}
+        {hasContentAgentFeature && !primeiraGeracaoPendente && (ultimaGeracao || proximaData) && (
+          <div className="mb-8 bg-[#111111] border border-gray-800 rounded-2xl p-5 md:p-6">
+            <div className="flex items-center gap-2 mb-4">
+              <CalendarDays className="w-5 h-5 text-[#8B5CF6]" />
+              <h2 className="text-lg font-bold text-white">Sua Agenda de Conteúdo</h2>
             </div>
-            <button
-              onClick={() => navigate({ to: '/super-agente' })}
-              className="bg-[#EC4899] hover:bg-[#DB2777] text-white font-bold py-2.5 px-5 rounded-lg transition-colors flex items-center justify-center gap-2 whitespace-nowrap"
-            >
-              Gerar conteúdo da data
-              <ArrowRight className="w-4 h-4" />
-            </button>
+            <div className={`grid gap-4 ${cardsAgenda >= 2 ? 'md:grid-cols-2' : 'grid-cols-1'}`}>
+              {/* Ritmo de geração — fica âmbar quando passa de 14 dias parado. */}
+              {ultimaGeracao && (
+                <div className={`rounded-xl border p-4 flex flex-col justify-between gap-3 ${(diasSemGerar ?? 0) >= 14 ? 'border-amber-500/40 bg-amber-500/5' : 'border-gray-800 bg-[#0F0F0F]'}`}>
+                  <div>
+                    <div className="flex items-center gap-2 mb-1">
+                      <Clock className={`w-4 h-4 ${(diasSemGerar ?? 0) >= 14 ? 'text-amber-400' : 'text-[#8B5CF6]'}`} />
+                      <span className="text-xs font-bold uppercase tracking-wide text-gray-400">Ritmo de conteúdo</span>
+                    </div>
+                    <p className="text-white font-semibold">
+                      {diasSemGerar === 0
+                        ? 'Você gerou conteúdo hoje 🎉'
+                        : `Faz ${diasSemGerar} ${diasSemGerar === 1 ? 'dia' : 'dias'} que você não gera conteúdo aqui.`}
+                    </p>
+                    {(diasSemGerar ?? 0) >= 14 && (
+                      <p className="text-amber-300/80 text-sm mt-0.5">O feed não espera — que tal já deixar o próximo kit pronto?</p>
+                    )}
+                  </div>
+                  <button
+                    onClick={() => navigate({ to: '/super-agente' })}
+                    className="self-start text-sm font-bold text-[#8B5CF6] hover:text-[#A78BFA] flex items-center gap-1"
+                  >
+                    Gerar o próximo <ArrowRight className="w-4 h-4" />
+                  </button>
+                </div>
+              )}
+
+              {/* Próxima data comercial. */}
+              {proximaData && (
+                <div className="rounded-xl border border-[#EC4899]/40 bg-[#EC4899]/5 p-4 flex flex-col justify-between gap-3">
+                  <div>
+                    <div className="flex items-center gap-2 mb-1">
+                      <CalendarDays className="w-4 h-4 text-[#EC4899]" />
+                      <span className="text-xs font-bold uppercase tracking-wide text-gray-400">Data comercial chegando</span>
+                    </div>
+                    <p className="text-white font-semibold">
+                      {proximaData.emoji} {proximaData.nome} — {textoContagem(proximaData.diasFaltando)}
+                    </p>
+                    <p className="text-gray-400 text-sm mt-0.5">Seu público já está pensando nisso.</p>
+                  </div>
+                  <button
+                    onClick={() => navigate({ to: '/super-agente' })}
+                    className="self-start text-sm font-bold text-[#EC4899] hover:text-[#F472B6] flex items-center gap-1"
+                  >
+                    Gerar conteúdo da data <ArrowRight className="w-4 h-4" />
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         )}
 
