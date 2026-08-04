@@ -6,6 +6,7 @@ import { fetchAllPlans, ADMIN_EMAIL, type Plan } from '../lib/plans'
 import { Button } from '../components/ui/button'
 import { BackButton } from '../components/BackButton'
 import { AgentesExpansores } from '../components/admin/AgentesExpansores'
+import { Trials } from '../components/admin/Trials'
 import { Field, inputClass } from '../components/admin/shared'
 
 export const Route = createFileRoute('/admin')({
@@ -33,7 +34,7 @@ function Admin() {
   const navigate = useNavigate()
   const [checkingAuth, setCheckingAuth] = useState(true)
   const [isAdmin, setIsAdmin] = useState(false)
-  const [tab, setTab] = useState<'planos' | 'agentes'>('planos')
+  const [tab, setTab] = useState<'planos' | 'agentes' | 'trials'>('planos')
   const [plans, setPlans] = useState<Plan[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -196,7 +197,9 @@ function Admin() {
             <p className="text-gray-400">
               {tab === 'planos'
                 ? 'Edite preços, features e cole os links da Kiwify. Sem precisar de deploy.'
-                : 'Gerencie os Agentes Expansores do programa de indicação.'}
+                : tab === 'agentes'
+                ? 'Gerencie os Agentes Expansores do programa de indicação.'
+                : 'Acompanhe quem pediu, ativou e converteu no trial de 7 dias.'}
             </p>
           </div>
           {tab === 'planos' && (
@@ -224,9 +227,18 @@ function Admin() {
           >
             Agentes Expansores
           </button>
+          <button
+            onClick={() => setTab('trials')}
+            className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
+              tab === 'trials' ? 'border-[#8B5CF6] text-white' : 'border-transparent text-gray-500 hover:text-gray-300'
+            }`}
+          >
+            Trials
+          </button>
         </div>
 
         {tab === 'agentes' && <AgentesExpansores />}
+        {tab === 'trials' && <Trials />}
 
         {tab === 'planos' && (
         <>
