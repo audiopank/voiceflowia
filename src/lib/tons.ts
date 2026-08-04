@@ -7,14 +7,16 @@
 export interface TomOption {
   value: string
   dica: string
+  /** Ícone do card clicável (Card Mágico); telas com <select> simplesmente ignoram. */
+  emoji: string
 }
 
 export const TONS: TomOption[] = [
-  { value: 'Profissional', dica: 'Sério e confiável' },
-  { value: 'Divertido', dica: 'Leve e descontraído' },
-  { value: 'Vendedor', dica: 'Direto, foco em conversão' },
-  { value: 'Inspirador', dica: 'Motivacional, fala com a emoção' },
-  { value: 'Técnico', dica: 'Autoridade, explica o porquê' },
+  { value: 'Profissional', dica: 'Sério e confiável', emoji: '💼' },
+  { value: 'Divertido', dica: 'Leve e descontraído', emoji: '😄' },
+  { value: 'Vendedor', dica: 'Direto, foco em conversão', emoji: '💰' },
+  { value: 'Inspirador', dica: 'Motivacional, fala com a emoção', emoji: '✨' },
+  { value: 'Técnico', dica: 'Autoridade, explica o porquê', emoji: '🎓' },
 ]
 
 // Padrão das duas telas. Os endpoints usam o mesmo fallback quando `tom` vem vazio.

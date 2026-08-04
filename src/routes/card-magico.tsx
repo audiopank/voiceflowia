@@ -23,6 +23,24 @@ const MAX_UPLOAD_DIM = 1080
 
 const MIMES_OK = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp']
 
+// Slider de tamanho da LEGENDA do post (o texto do card é sempre gancho + headline).
+const TAMANHOS = [
+  { value: 'curta', label: 'Curta', dica: 'direto ao ponto' },
+  { value: 'ideal', label: 'Ideal', dica: 'equilíbrio' },
+  { value: 'longa', label: 'Longa', dica: 'storytelling' },
+] as const
+
+// Atalhos de contexto: um toque adiciona/remove o trecho no campo (mata a página em
+// branco pra quem não sabe o que escrever).
+const CHIPS_CONTEXTO = [
+  'Promoção por tempo limitado',
+  'Lançamento',
+  'Frete grátis',
+  'Entrega rápida',
+  'Feito sob medida',
+  'Atendimento pelo WhatsApp',
+]
+
 // Lê o arquivo, redimensiona no navegador e devolve uma data URL JPEG (menor e universal).
 function redimensionarImagem(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -88,7 +106,10 @@ function CardMagico() {
   const [imagemDataUrl, setImagemDataUrl] = useState<string | null>(null)
   const [tom, setTom] = useState(TOM_PADRAO)
   const [contexto, setContexto] = useState('')
+  const [tamanhoIdx, setTamanhoIdx] = useState(1) // começa no "Ideal"
   const [legenda, setLegenda] = useState('')
+  const [gancho, setGancho] = useState('')
+  const [headline, setHeadline] = useState('')
   const [gerando, setGerando] = useState(false)
   const [erro, setErro] = useState('')
   const [uploadErro, setUploadErro] = useState('')
@@ -113,10 +134,26 @@ function CardMagico() {
       const dataUrl = await redimensionarImagem(file)
       setImagemDataUrl(dataUrl)
       setLegenda('')
+      setGancho('')
+      setHeadline('')
       setErro('')
     } catch (err) {
       setUploadErro(err instanceof Error ? err.message : 'Não consegui processar essa imagem.')
     }
+  }
+
+  // Chip clicado: adiciona o trecho ao contexto (ou remove, se já está lá).
+  function toggleChip(chip: string) {
+    setContexto((atual) => {
+      if (atual.includes(chip)) {
+        return atual
+          .split(/,\s*/)
+          .filter((parte) => parte.trim() !== chip)
+          .join(', ')
+          .trim()
+      }
+      return atual.trim() ? `${atual.trim().replace(/,$/, '')}, ${chip}` : chip
+    })
   }
 
   async function handleGerar() {
@@ -142,7 +179,7 @@ function CardMagico() {
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ imagemBase64: imagemDataUrl, mimeType: 'image/jpeg', tom, contexto }),
+          body: JSON.stringify({ imagemBase64: imagemDataUrl, mimeType: 'image/jpeg', tom, contexto, tamanho: TAMANHOS[tamanhoIdx].value }),
         },
         { onWait: (s) => setRateNotice(`⏳ Muita procura agora — tentando de novo em ${s}s...`) },
       )
@@ -150,29 +187,36 @@ function CardMagico() {
 
       if (!response.ok) {
         const errData = await response.json().catch(() => null)
-        // A IA não entregou nada: devolve a geração pro trial não queimar à toa.
-        if (trial.isTrial) await devolverGeracaoTrial()
         throw new Error(friendlyApiError(response.status, errData?.error))
       }
 
       const data = await safeJson(response)
       if (!data.legenda) {
-        if (trial.isTrial) await devolverGeracaoTrial()
         throw new Error('A IA não retornou uma legenda. Tente de novo.')
       }
       setLegenda(data.legenda)
+      setGancho(typeof data.gancho === 'string' ? data.gancho : '')
+      // O endpoint sempre manda headline, mas se um dia falhar a 1ª linha da legenda salva o card.
+      setHeadline(typeof data.headline === 'string' && data.headline ? data.headline : data.legenda.split('\n')[0])
     } catch (err) {
       setRateNotice('')
+      // Nada foi entregue: devolve a geração debitada antes da chamada à IA.
+      // No catch (e não inline em cada erro) pra cobrir TODOS os caminhos de falha,
+      // inclusive queda de rede — mesmo padrão do Agente e do Super Agente.
+      if (trial.isTrial) {
+        await devolverGeracaoTrial()
+        void refresh()
+      }
       setErro(err instanceof Error ? err.message : 'Não foi possível gerar a legenda agora.')
     } finally {
       setGerando(false)
     }
   }
 
-  // (Re)desenha o card sempre que a imagem ou a legenda mudarem.
+  // (Re)desenha o card sempre que a imagem ou os textos do card mudarem.
   useEffect(() => {
     const canvas = canvasRef.current
-    if (!canvas || !imagemDataUrl || !legenda) return
+    if (!canvas || !imagemDataUrl || !headline) return
     const ctx = canvas.getContext('2d')
     if (!ctx) return
 
@@ -185,23 +229,26 @@ function CardMagico() {
       ctx.fillStyle = '#0B0B0D'
       ctx.fillRect(0, 0, CARD_W, CARD_H)
 
-      // MOLDURA DA FOTO: adapta ao formato da imagem (contain, SEM cortar e SEM barras
-      // feias — o cartão "abraça" a foto), cantos arredondados, flutuando no preto com
-      // margem. Resolve o card antigo, que colava a foto full-bleed nas bordas.
+      // MOLDURA DA FOTO: a LARGURA manda — a foto ocupa sempre a mesma largura do
+      // bloco de texto (pedido do Mestre: foto retrato em "contain" encolhia pra
+      // ~576px e o card ficava com barras pretas enormes dos lados). Foto mais alta
+      // que o teto é recortada estilo "cover" com viés pro topo (produto/rosto
+      // quase sempre está na metade de cima); foto deitada segue inteira, sem corte.
       const M = 56 // margem externa
-      const areaW = CARD_W - M * 2
+      const frameW = CARD_W - M * 2
       const areaMaxH = 720 // teto da altura da foto, pra sobrar espaço pra legenda
-      const escala = Math.min(areaW / img.width, areaMaxH / img.height)
-      const frameW = Math.round(img.width * escala)
-      const frameH = Math.round(img.height * escala)
-      const frameX = Math.round((CARD_W - frameW) / 2)
+      const alturaProporcional = frameW * (img.height / img.width)
+      const frameH = Math.round(Math.min(areaMaxH, alturaProporcional))
+      const frameX = M
       const frameY = M
       const raio = 28
+      // Excesso vertical do "cover": 30% sai por cima, 70% por baixo.
+      const offsetY = Math.max(0, (alturaProporcional - frameH) * 0.3)
 
       ctx.save()
       roundRectPath(ctx, frameX, frameY, frameW, frameH, raio)
       ctx.clip()
-      ctx.drawImage(img, frameX, frameY, frameW, frameH)
+      ctx.drawImage(img, frameX, frameY - offsetY, frameW, Math.round(alturaProporcional))
       ctx.restore()
 
       // Contorno sutil, pra separar a foto do fundo quando ela tem bordas escuras.
@@ -210,29 +257,54 @@ function CardMagico() {
       ctx.strokeStyle = 'rgba(255,255,255,0.08)'
       ctx.stroke()
 
-      // LEGENDA: centralizada, auto-ajuste de fonte, centrada verticalmente no espaço
-      // abaixo da foto, com bom espaçamento entre linhas.
+      // TEXTO DO CARD: gancho pequeno (curiosidade) + headline grande (impacto) —
+      // formato de post de feed. A legenda completa NÃO vai no card: ela é copiada
+      // pra caixa de texto do post. O bloco todo centra verticalmente sob a foto,
+      // e a headline auto-ajusta a fonte pra NUNCA estourar o card.
       const padding = 72
       const capTop = frameY + frameH + 56
       const capBottom = CARD_H - 92 // deixa espaço pra assinatura
       const maxWidth = CARD_W - padding * 2
+      const fontStack = 'system-ui, -apple-system, "Segoe UI", Roboto, sans-serif'
 
-      let fontSize = 46
+      // Gancho: fonte fixa menor, cor suave.
+      const ganchoFont = 34
+      const ganchoLineH = Math.round(ganchoFont * 1.35)
+      let ganchoLinhas: string[] = []
+      if (gancho.trim()) {
+        ctx.font = `500 ${ganchoFont}px ${fontStack}`
+        ganchoLinhas = wrapText(ctx, gancho.trim(), maxWidth)
+      }
+      const ganchoH = ganchoLinhas.length * ganchoLineH
+      const gapGancho = ganchoLinhas.length ? 28 : 0
+
+      // Headline: começa grande e desce até o bloco inteiro caber.
+      let fontSize = 64
       let linhas: string[] = []
       let lineHeight = 0
-      while (fontSize >= 22) {
-        ctx.font = `500 ${fontSize}px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif`
-        lineHeight = Math.round(fontSize * 1.4)
-        linhas = wrapText(ctx, legenda, maxWidth)
-        if (linhas.length * lineHeight <= capBottom - capTop) break
+      while (fontSize >= 30) {
+        ctx.font = `800 ${fontSize}px ${fontStack}`
+        lineHeight = Math.round(fontSize * 1.22)
+        linhas = wrapText(ctx, headline, maxWidth)
+        if (ganchoH + gapGancho + linhas.length * lineHeight <= capBottom - capTop) break
         fontSize -= 2
       }
 
-      ctx.fillStyle = '#F3F3F3'
       ctx.textAlign = 'center'
       ctx.textBaseline = 'top'
-      const totalTextH = linhas.length * lineHeight
+      const totalTextH = ganchoH + gapGancho + linhas.length * lineHeight
       let y = capTop + Math.max(0, (capBottom - capTop - totalTextH) / 2)
+
+      ctx.font = `500 ${ganchoFont}px ${fontStack}`
+      ctx.fillStyle = 'rgba(243,243,243,0.72)'
+      for (const linha of ganchoLinhas) {
+        ctx.fillText(linha, CARD_W / 2, y)
+        y += ganchoLineH
+      }
+      y += gapGancho
+
+      ctx.font = `800 ${fontSize}px ${fontStack}`
+      ctx.fillStyle = '#F3F3F3'
       for (const linha of linhas) {
         ctx.fillText(linha, CARD_W / 2, y)
         y += lineHeight
@@ -246,7 +318,7 @@ function CardMagico() {
       ctx.textAlign = 'left' // reset pro próximo desenho
     }
     img.src = imagemDataUrl
-  }, [imagemDataUrl, legenda])
+  }, [imagemDataUrl, headline, gancho])
 
   function handleDownload() {
     const canvas = canvasRef.current
@@ -340,7 +412,7 @@ function CardMagico() {
                   <img src={imagemDataUrl} alt="Produto enviado" className="w-full max-h-72 object-contain bg-black" />
                   <button
                     type="button"
-                    onClick={() => { setImagemDataUrl(null); setLegenda(''); if (fileInputRef.current) fileInputRef.current.value = '' }}
+                    onClick={() => { setImagemDataUrl(null); setLegenda(''); setGancho(''); setHeadline(''); if (fileInputRef.current) fileInputRef.current.value = '' }}
                     className="absolute top-2 right-2 bg-black/70 hover:bg-black text-white rounded-full p-1.5"
                     aria-label="Remover imagem"
                   >
@@ -365,21 +437,35 @@ function CardMagico() {
               )}
             </div>
 
-            {/* Tom de voz */}
+            {/* Tom de voz: cards clicáveis (um toque, feedback visual claro) */}
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">Tom de voz</label>
-              <select
-                value={tom}
-                onChange={(e) => setTom(e.target.value)}
-                className="w-full bg-[#111111] border border-gray-800 rounded-lg px-3 py-2.5 text-white focus:border-[#8B5CF6] focus:outline-none"
-              >
-                {TONS.map((t) => (
-                  <option key={t.value} value={t.value}>{t.value} — {t.dica}</option>
-                ))}
-              </select>
+              <label className="block text-sm font-medium text-gray-300 mb-2">🎭 Tom do texto</label>
+              <div className="space-y-2">
+                {TONS.map((t) => {
+                  const ativo = tom === t.value
+                  return (
+                    <button
+                      key={t.value}
+                      type="button"
+                      onClick={() => setTom(t.value)}
+                      aria-pressed={ativo}
+                      className={`w-full flex items-center gap-3 rounded-xl border px-4 py-3 text-left transition-colors ${
+                        ativo
+                          ? 'border-[#8B5CF6] bg-[#8B5CF6]/10'
+                          : 'border-gray-800 bg-[#111111] hover:border-gray-600'
+                      }`}
+                    >
+                      <span className="text-lg" aria-hidden>{t.emoji}</span>
+                      <span className="font-semibold">{t.value}</span>
+                      <span className="text-xs text-gray-500 flex-1">{t.dica}</span>
+                      {ativo && <Check className="w-4 h-4 text-[#8B5CF6] shrink-0" />}
+                    </button>
+                  )
+                })}
+              </div>
             </div>
 
-            {/* Contexto opcional */}
+            {/* Contexto opcional + chips de um toque */}
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-2">
                 Contexto do produto <span className="text-gray-500 font-normal">(opcional)</span>
@@ -391,9 +477,52 @@ function CardMagico() {
                 placeholder="Ex: tênis de corrida masculino, promoção de R$ 199, entrega grátis na região"
                 className="w-full bg-[#111111] border border-gray-800 rounded-lg px-3 py-2.5 text-white placeholder-gray-600 focus:border-[#8B5CF6] focus:outline-none resize-none"
               />
-              <p className="text-xs text-gray-500 mt-1">
+              <div className="flex flex-wrap gap-2 mt-2">
+                {CHIPS_CONTEXTO.map((chip) => {
+                  const ativo = contexto.includes(chip)
+                  return (
+                    <button
+                      key={chip}
+                      type="button"
+                      onClick={() => toggleChip(chip)}
+                      aria-pressed={ativo}
+                      className={`text-xs rounded-full border px-3 py-1.5 transition-colors ${
+                        ativo
+                          ? 'border-[#8B5CF6] bg-[#8B5CF6]/15 text-white'
+                          : 'border-gray-700 bg-[#111111] text-gray-400 hover:border-gray-500 hover:text-white'
+                      }`}
+                    >
+                      {chip}
+                    </button>
+                  )
+                })}
+              </div>
+              <p className="text-xs text-gray-500 mt-2">
                 Quanto mais específico, menos genérica a legenda fica.
               </p>
+            </div>
+
+            {/* Tamanho da legenda do post */}
+            <div className="bg-[#111111] border border-gray-800 rounded-xl px-4 py-3.5">
+              <div className="flex items-center justify-between mb-2">
+                <label htmlFor="tamanho-legenda" className="text-sm font-medium text-gray-300">🕐 Tamanho da legenda</label>
+                <span className="text-[#8B5CF6] font-bold">{TAMANHOS[tamanhoIdx].label}</span>
+              </div>
+              <input
+                id="tamanho-legenda"
+                type="range"
+                min={0}
+                max={TAMANHOS.length - 1}
+                step={1}
+                value={tamanhoIdx}
+                onChange={(e) => setTamanhoIdx(Number(e.target.value))}
+                className="w-full accent-[#8B5CF6]"
+              />
+              <div className="flex justify-between text-xs text-gray-500 mt-1">
+                {TAMANHOS.map((t) => (
+                  <span key={t.value}>{t.label} ({t.dica})</span>
+                ))}
+              </div>
             </div>
 
             <Button
@@ -402,9 +531,9 @@ function CardMagico() {
               className="w-full bg-[#8B5CF6] hover:bg-[#7C3AED] py-6 text-lg font-bold disabled:opacity-50"
             >
               {gerando ? (
-                <><Loader2 className="w-5 h-5 mr-2 animate-spin" /> Gerando legenda...</>
+                <><Loader2 className="w-5 h-5 mr-2 animate-spin" /> Gerando card + legenda...</>
               ) : (
-                <><Sparkles className="w-5 h-5 mr-2" /> {legenda ? 'Gerar de novo' : 'Gerar legenda'}</>
+                <><Sparkles className="w-5 h-5 mr-2" /> {legenda ? 'Gerar de novo' : 'Gerar card + legenda'}</>
               )}
             </Button>
 
@@ -421,8 +550,28 @@ function CardMagico() {
             {legenda ? (
               <>
                 <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">Texto do card (pode editar)</label>
+                  <div className="space-y-2">
+                    <input
+                      type="text"
+                      value={gancho}
+                      onChange={(e) => setGancho(e.target.value)}
+                      placeholder="Gancho (linha pequena, opcional)"
+                      className="w-full bg-[#111111] border border-gray-800 rounded-lg px-3 py-2 text-white placeholder-gray-600 focus:border-[#8B5CF6] focus:outline-none text-sm"
+                    />
+                    <input
+                      type="text"
+                      value={headline}
+                      onChange={(e) => setHeadline(e.target.value)}
+                      placeholder="Frase de impacto (aparece grande no card)"
+                      className="w-full bg-[#111111] border border-gray-800 rounded-lg px-3 py-2 text-white placeholder-gray-600 focus:border-[#8B5CF6] focus:outline-none text-sm font-semibold"
+                    />
+                  </div>
+                </div>
+
+                <div>
                   <div className="flex items-center justify-between mb-2">
-                    <label className="text-sm font-medium text-gray-300">Legenda (pode editar)</label>
+                    <label className="text-sm font-medium text-gray-300">Legenda do post (pode editar)</label>
                     <button
                       type="button"
                       onClick={handleCopiar}
@@ -437,6 +586,9 @@ function CardMagico() {
                     rows={6}
                     className="w-full bg-[#111111] border border-gray-800 rounded-lg px-3 py-2.5 text-white focus:border-[#8B5CF6] focus:outline-none resize-none text-sm"
                   />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Ela não vai impressa no card: é o texto que você cola na caixa de legenda ao publicar.
+                  </p>
                 </div>
 
                 <div>
@@ -454,7 +606,7 @@ function CardMagico() {
               <div className="border border-gray-800 rounded-xl h-full min-h-[320px] flex flex-col items-center justify-center text-center p-8 text-gray-500">
                 <Sparkles className="w-10 h-10 mb-3 text-gray-700" />
                 <p className="font-medium text-gray-400">Seu card aparece aqui</p>
-                <p className="text-sm mt-1">Envie uma foto, escolha o tom e clique em “Gerar legenda”.</p>
+                <p className="text-sm mt-1">Envie uma foto, escolha o tom e clique em “Gerar card + legenda”.</p>
               </div>
             )}
           </div>
