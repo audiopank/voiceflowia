@@ -12,6 +12,16 @@ import { blobToAudioBuffer, enhanceVoiceBuffer, renderMix, audioBufferToWav } fr
 // (mesma referência ~0.25 usada no Estúdio de Mixagem do Editor).
 export const TRILHA_VOL_PADRAO = 25
 
+// Trilhas prontas: as MESMAS camas royalty-free do Editor (public/trilhas/*.mp3,
+// lista espelhada de PRESET_TRACKS em editor.tsx — mudou lá, mude aqui).
+export const TRILHAS_PRONTAS = [
+  { id: 'corporativa', label: 'Corporativa', emoji: '💼', file: 'corporativa.mp3' },
+  { id: 'business', label: 'Business', emoji: '🏢', file: 'business.mp3' },
+  { id: 'global', label: 'Global', emoji: '🌎', file: 'global.mp3' },
+  { id: 'pop', label: 'Pop', emoji: '🎵', file: 'pop.mp3' },
+] as const
+export type TrilhaPronta = (typeof TRILHAS_PRONTAS)[number]
+
 // Masteriza a locução crua (trim + EQ + compressor + reverb sutil) e devolve WAV.
 // Falhou? Devolve o blob original — o cliente recebe a voz crua, nunca nada.
 export async function realcarVoz(blob: Blob): Promise<Blob> {
