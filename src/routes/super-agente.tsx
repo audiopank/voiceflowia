@@ -20,6 +20,8 @@ import { RedesSociais } from '../components/RedesSociais'
 import { SOCIAL_NETWORKS, socialKey, loadSocialLinks, saveSocialLinks, type SocialLinks } from '../lib/socialLinks'
 import { TONS, TOM_PADRAO, TONS_VALIDOS } from '../lib/tons'
 import { proximasDatasSazonais, textoContagem } from '../lib/datasSazonais'
+import { realcarVoz, aplicarTrilha } from '../lib/estudioCards'
+import { useTrilhaFundo, TrilhaFundoPanel } from '../components/TrilhaFundo'
 
 // Espaça as gerações de voz para não estourar o limite/minuto do free tier.
 const VOICE_THROTTLE_MS = 3500
@@ -366,6 +368,8 @@ function SuperAgente() {
   const [error, setError] = useState('')
 
   const [audioBlobs, setAudioBlobs] = useState<Record<number, Blob>>({})
+  // Estúdio: trilha de fundo única do kit (aplicada em todas as locuções).
+  const estudio = useTrilhaFundo()
   const [audioErrors, setAudioErrors] = useState<Record<number, string>>({})
   const [generatingAll, setGeneratingAll] = useState(false)
   const [audioProgress, setAudioProgress] = useState({ done: 0, total: 0 })
@@ -568,7 +572,9 @@ function SuperAgente() {
       const data = await response.json().catch(() => null)
       throw new Error(friendlyApiError(response.status, data?.error))
     }
-    return response.blob()
+    // Estúdio: masteriza a locução (Realce Profissional) já na geração — prévia,
+    // download e ZIP saem todos polidos. Falhou? Voz crua, nunca nada.
+    return realcarVoz(await response.blob())
   }
 
   async function handleGenerateAllAudio() {
@@ -604,10 +610,13 @@ function SuperAgente() {
     setGeneratingAll(false)
   }
 
-  function handlePlayAudio(index: number) {
+  async function handlePlayAudio(index: number) {
     const blob = audioBlobs[index]
     if (!blob) return
-    const audio = new Audio(URL.createObjectURL(blob))
+    // O "Ouvir" toca o resultado FINAL (voz + trilha no volume atual): o que o
+    // cliente escuta é exatamente o que sai no ZIP — sem surpresa no export.
+    const final = await aplicarTrilha(blob, estudio.trilha.buffer, estudio.trilha.volume)
+    const audio = new Audio(URL.createObjectURL(final))
     audio.play()
   }
 
@@ -734,7 +743,8 @@ function SuperAgente() {
         roteiros?.file(`${diaTag(p.dia, p.periodo, p.horario)}.txt`, buildPostText(p))
         const blob = audioBlobs[index]
         if (blob) {
-          const oggBlob = await convertToWhatsAppOgg(blob, 'wav')
+          const comTrilha = await aplicarTrilha(blob, estudio.trilha.buffer, estudio.trilha.volume)
+          const oggBlob = await convertToWhatsAppOgg(comTrilha, 'wav')
           audios?.file(`${diaTag(p.dia, p.periodo, p.horario)}.ogg`, oggBlob)
         }
         const img = postImages[index]
@@ -1342,6 +1352,8 @@ function SuperAgente() {
         {/* Posts */}
         {posts && (
           <Fragment>
+          {/* Estúdio: trilha de fundo única do kit + aviso do Realce automático. */}
+          <TrilhaFundoPanel estudio={estudio} />
           {/* Redes sociais do cliente: postar o conteúdo em 1 clique, sem sair do app. */}
           <RedesSociais
             links={socialLinks}

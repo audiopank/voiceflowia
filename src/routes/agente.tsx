@@ -11,6 +11,8 @@ import { EditableText } from '../components/EditableText'
 import { buildIcsCalendar, downloadIcsFile, postDateTime } from '../lib/ics'
 import { convertToWhatsAppOgg } from '../lib/audioConvert'
 import { TONS, TOM_PADRAO } from '../lib/tons'
+import { realcarVoz, aplicarTrilha } from '../lib/estudioCards'
+import { useTrilhaFundo, TrilhaFundoPanel } from '../components/TrilhaFundo'
 
 // Data de hoje em yyyy-mm-dd, pro input type="date" (padrão: "Dia 1" = hoje).
 function todayIso(): string {
@@ -47,6 +49,8 @@ function Agente() {
 
   const [audioBlobs, setAudioBlobs] = useState<Record<number, Blob>>({})
   const [audioErrors, setAudioErrors] = useState<Record<number, string>>({})
+  // Estúdio: trilha de fundo única do kit (aplicada em todas as locuções).
+  const estudio = useTrilhaFundo()
   const [generatingAudioFor, setGeneratingAudioFor] = useState<number | null>(null)
   const [convertingIndex, setConvertingIndex] = useState<number | null>(null)
   const [rateNotice, setRateNotice] = useState('')
@@ -146,7 +150,10 @@ function Agente() {
       }
 
       const blob = await response.blob()
-      setAudioBlobs((prev) => ({ ...prev, [index]: blob }))
+      // Estúdio: masteriza a locução (Realce Profissional) já na geração — prévia,
+      // download e mixagem com trilha saem todos polidos. Falhou? Voz crua, nunca nada.
+      const polida = await realcarVoz(blob)
+      setAudioBlobs((prev) => ({ ...prev, [index]: polida }))
     } catch (err) {
       console.error('=== ERRO ao gerar áudio ===', err)
       setAudioErrors((prev) => ({
@@ -164,10 +171,13 @@ function Agente() {
     )
   }
 
-  function handlePlayAudio(index: number) {
+  async function handlePlayAudio(index: number) {
     const blob = audioBlobs[index]
     if (!blob) return
-    const url = URL.createObjectURL(blob)
+    // O "Ouvir" toca o resultado FINAL (voz + trilha no volume atual): o que o
+    // cliente escuta é exatamente o que vai baixar — sem surpresa no export.
+    const final = await aplicarTrilha(blob, estudio.trilha.buffer, estudio.trilha.volume)
+    const url = URL.createObjectURL(final)
     const audio = new Audio(url)
     audio.play()
   }
@@ -179,7 +189,8 @@ function Agente() {
     if (!blob) return
     setConvertingIndex(index)
     try {
-      const oggBlob = await convertToWhatsAppOgg(blob, 'wav')
+      const comTrilha = await aplicarTrilha(blob, estudio.trilha.buffer, estudio.trilha.volume)
+      const oggBlob = await convertToWhatsAppOgg(comTrilha, 'wav')
       const url = URL.createObjectURL(oggBlob)
       const a = document.createElement('a')
       a.href = url
@@ -344,6 +355,8 @@ function Agente() {
             </Button>
           </div>
         )}
+
+        {posts && <TrilhaFundoPanel estudio={estudio} />}
 
         {posts && (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
