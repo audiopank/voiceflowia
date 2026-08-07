@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { createFileRoute } from '@tanstack/react-router'
-import { Lock, Loader2, AlertCircle, Sparkles, Volume2, Download, Play, CalendarDays } from 'lucide-react'
+import { Lock, Loader2, AlertCircle, Sparkles, Volume2, Download, Play, CalendarDays, RefreshCw } from 'lucide-react'
 import { useSubscription, devolverGeracaoTrial } from '../lib/useSubscription'
 import { supabase } from '../lib/supabase'
 import { fetchWithRetry, safeJson, friendlyApiError } from '../lib/apiRetry'
@@ -417,6 +417,21 @@ function Agente() {
                         <Download className="w-4 h-4" />
                       )}
                       Baixar
+                    </Button>
+                    {/* Refaz a locução por cima (ex.: cliente editou o roteiro). Voz não
+                        consome geração do trial, então regerar é livre. */}
+                    <Button
+                      onClick={() => handleGenerateAudio(post, index)}
+                      disabled={generatingAudioFor === index}
+                      title="Gerar a locução de novo (ex.: depois de editar o roteiro)"
+                      className="bg-[#1A1A1A] hover:bg-[#252525] disabled:opacity-50 flex items-center justify-center gap-2 px-3"
+                    >
+                      {generatingAudioFor === index ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <RefreshCw className="w-4 h-4" />
+                      )}
+                      Refazer
                     </Button>
                   </div>
                 ) : (

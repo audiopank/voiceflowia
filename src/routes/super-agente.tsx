@@ -5,7 +5,7 @@ import { toPng } from 'html-to-image'
 import {
   Lock, Loader2, AlertCircle, Rocket, Volume2, Download, Play, Package,
   Users, Target, Hash, Clock, Megaphone, CheckCircle2, Copy, Check, ImagePlus, X, Pencil,
-  ChevronDown, ChevronUp, CalendarDays, Share2, Sparkles, Brain
+  ChevronDown, ChevronUp, CalendarDays, Share2, Sparkles, Brain, RefreshCw
 } from 'lucide-react'
 import { useSubscription, devolverGeracaoTrial } from '../lib/useSubscription'
 import { supabase } from '../lib/supabase'
@@ -372,6 +372,8 @@ function SuperAgente() {
   const estudio = useTrilhaFundo()
   const [audioErrors, setAudioErrors] = useState<Record<number, string>>({})
   const [generatingAll, setGeneratingAll] = useState(false)
+  // Card refazendo a locução individualmente (ex.: cliente editou o roteiro).
+  const [regeneratingIndex, setRegeneratingIndex] = useState<number | null>(null)
   const [audioProgress, setAudioProgress] = useState({ done: 0, total: 0 })
   const [isZipping, setIsZipping] = useState(false)
   // Aviso amigável quando bate o limite da API e o app espera/re-tenta sozinho.
@@ -608,6 +610,27 @@ function SuperAgente() {
 
     setRateNotice('')
     setGeneratingAll(false)
+  }
+
+  // Refaz a locução de UM card por cima da existente (o lote pula cards com áudio
+  // pronto de propósito, então sem isto quem edita o roteiro fica preso à voz velha).
+  // Voz não consome geração do trial — regerar é livre.
+  async function handleRegenerateAudio(index: number) {
+    if (!posts || regeneratingIndex !== null || generatingAll) return
+    setRegeneratingIndex(index)
+    setAudioErrors((prev) => ({ ...prev, [index]: '' }))
+    try {
+      const blob = await generateAudioFor(posts[index])
+      setAudioBlobs((prev) => ({ ...prev, [index]: blob }))
+      setRateNotice('')
+    } catch (err) {
+      setAudioErrors((prev) => ({
+        ...prev,
+        [index]: err instanceof Error ? err.message : 'Erro ao gerar áudio',
+      }))
+    } finally {
+      setRegeneratingIndex(null)
+    }
   }
 
   async function handlePlayAudio(index: number) {
@@ -1466,7 +1489,7 @@ function SuperAgente() {
                   <p className="text-yellow-500 text-xs">{audioErrors[index]}</p>
                 )}
 
-                <div className="no-export flex gap-2">
+                <div className="no-export flex flex-wrap gap-2">
                   {audioBlobs[index] && (
                     <Button
                       onClick={() => handlePlayAudio(index)}
@@ -1474,6 +1497,21 @@ function SuperAgente() {
                     >
                       <Play className="w-4 h-4" />
                       Ouvir
+                    </Button>
+                  )}
+                  {audioBlobs[index] && (
+                    <Button
+                      onClick={() => handleRegenerateAudio(index)}
+                      disabled={regeneratingIndex !== null || generatingAll}
+                      title="Gerar a locução deste card de novo (ex.: depois de editar o roteiro)"
+                      className="bg-[#1A1A1A] hover:bg-[#252525] disabled:opacity-50 flex items-center justify-center gap-2 px-3"
+                    >
+                      {regeneratingIndex === index ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <RefreshCw className="w-4 h-4" />
+                      )}
+                      Refazer
                     </Button>
                   )}
                   <Button
