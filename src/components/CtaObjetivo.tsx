@@ -1,9 +1,18 @@
 import { useState, useEffect } from 'react'
-import { Loader2, Bookmark, Check } from 'lucide-react'
+import { Loader2, Bookmark, Check, Copy, Pencil } from 'lucide-react'
 import { fetchWithRetry, safeJson, friendlyApiError } from '../lib/apiRetry'
 import { supabase } from '../lib/supabase'
 import { salvarTemplate, listarTemplates, type Template } from '../lib/templates'
 import { OBJETIVOS_CTA, type ObjetivoCta } from '../lib/objetivosCta'
+import {
+  type BrandWhatsapp,
+  brandWhatsappKey,
+  loadBrandWhatsapp,
+  saveBrandWhatsapp,
+  onBrandWhatsappUpdated,
+  buildWaLink,
+  MENSAGEM_PADRAO,
+} from '../lib/brandWhatsapp'
 
 interface CtaObjetivoProps {
   /** Legenda atual do post/card (usada como contexto pra IA e alvo da substituição). */
@@ -24,6 +33,7 @@ interface CtaObjetivoProps {
  */
 export function CtaObjetivo({ legenda, tom, hook, onAplicar }: CtaObjetivoProps) {
   const [aberto, setAberto] = useState(false)
+  const [objetivoAtual, setObjetivoAtual] = useState<ObjetivoCta | null>(null)
   const [ctas, setCtas] = useState<string[] | null>(null)
   const [gerando, setGerando] = useState(false)
   const [erro, setErro] = useState('')
@@ -33,6 +43,16 @@ export function CtaObjetivo({ legenda, tom, hook, onAplicar }: CtaObjetivoProps)
   const [salvo, setSalvo] = useState<string | null>(null)
   const [erroSalvar, setErroSalvar] = useState('')
   const [templatesSalvos, setTemplatesSalvos] = useState<Template[]>([])
+
+  // whatsappSalvo = o que está persistido (usado pra montar/copiar o link).
+  // whatsappDraft = o que está sendo digitado no formulário — separados pra
+  // digitar o número não trocar a view antes de clicar "Salvar".
+  const WHATSAPP_VAZIO: BrandWhatsapp = { numero: '', mensagem: MENSAGEM_PADRAO }
+  const [whatsappSalvo, setWhatsappSalvo] = useState<BrandWhatsapp>(WHATSAPP_VAZIO)
+  const [whatsappDraft, setWhatsappDraft] = useState<BrandWhatsapp>(WHATSAPP_VAZIO)
+  const [whatsappKey, setWhatsappKey] = useState('')
+  const [editandoWhatsapp, setEditandoWhatsapp] = useState(false)
+  const [linkCopiado, setLinkCopiado] = useState(false)
 
   useEffect(() => {
     if (!aberto) return
@@ -51,7 +71,34 @@ export function CtaObjetivo({ legenda, tom, hook, onAplicar }: CtaObjetivoProps)
     }
   }, [aberto])
 
+  useEffect(() => {
+    if (!aberto) return
+    let cancelado = false
+    let key = ''
+
+    function carregar() {
+      if (cancelado || !key) return
+      const dados = loadBrandWhatsapp(key)
+      setWhatsappSalvo(dados)
+      setWhatsappDraft(dados)
+    }
+
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (cancelado) return
+      key = brandWhatsappKey(user?.id)
+      setWhatsappKey(key)
+      carregar()
+    })
+
+    const unsubscribe = onBrandWhatsappUpdated(carregar)
+    return () => {
+      cancelado = true
+      unsubscribe()
+    }
+  }, [aberto])
+
   async function gerarCtas(objetivo: ObjetivoCta) {
+    setObjetivoAtual(objetivo)
     setGerando(true)
     setErro('')
     setCtas(null)
@@ -71,6 +118,28 @@ export function CtaObjetivo({ legenda, tom, hook, onAplicar }: CtaObjetivoProps)
       setErro(err instanceof Error ? err.message : 'Erro ao gerar CTAs')
     } finally {
       setGerando(false)
+    }
+  }
+
+  function salvarWhatsapp() {
+    if (!whatsappKey || !whatsappDraft.numero.trim()) return
+    saveBrandWhatsapp(whatsappKey, whatsappDraft)
+    setWhatsappSalvo(whatsappDraft)
+    setEditandoWhatsapp(false)
+  }
+
+  function editarWhatsapp() {
+    setWhatsappDraft(whatsappSalvo)
+    setEditandoWhatsapp(true)
+  }
+
+  async function copiarLinkWhatsapp() {
+    try {
+      await navigator.clipboard.writeText(buildWaLink(whatsappSalvo.numero, whatsappSalvo.mensagem))
+      setLinkCopiado(true)
+      setTimeout(() => setLinkCopiado(false), 2000)
+    } catch {
+      // Clipboard bloqueado — sem feedback falso de "copiado".
     }
   }
 
@@ -129,6 +198,79 @@ export function CtaObjetivo({ legenda, tom, hook, onAplicar }: CtaObjetivoProps)
           </button>
         ))}
       </div>
+
+      {objetivoAtual === 'whatsapp' && (
+        <div className="p-2 bg-[#1A1A1A] border border-gray-800 rounded-lg space-y-2">
+          {whatsappSalvo.numero && !editandoWhatsapp ? (
+            <>
+              <p className="text-xs text-gray-500">
+                Cole esse link no link da bio do seu Instagram (legenda não deixa link clicável) — ou use direto em Stories, Threads, LinkedIn.
+              </p>
+              <div className="flex items-center gap-2">
+                <code className="flex-1 text-xs text-gray-300 truncate">
+                  {buildWaLink(whatsappSalvo.numero, whatsappSalvo.mensagem)}
+                </code>
+                <button
+                  type="button"
+                  onClick={copiarLinkWhatsapp}
+                  className="shrink-0 text-xs px-2 py-1 rounded-md bg-[#22C55E]/10 border border-[#22C55E] text-[#22C55E] hover:bg-[#22C55E]/20 transition-colors flex items-center gap-1"
+                >
+                  {linkCopiado ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                  {linkCopiado ? 'Copiado!' : 'Copiar link'}
+                </button>
+                <button
+                  type="button"
+                  onClick={editarWhatsapp}
+                  title="Editar número"
+                  className="shrink-0 text-gray-500 hover:text-[#8B5CF6] transition-colors p-1"
+                >
+                  <Pencil className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              <p className="text-xs text-gray-500">WhatsApp da marca (1x só — a gente lembra depois)</p>
+              <input
+                type="text"
+                value={whatsappDraft.numero}
+                onChange={(e) => setWhatsappDraft({ ...whatsappDraft, numero: e.target.value })}
+                placeholder="Número com DDI+DDD, ex: 5585992262297"
+                className="w-full p-2 bg-[#0F0F0F] border border-gray-700 rounded-lg text-white text-xs focus:outline-none focus:border-[#8B5CF6]"
+              />
+              <input
+                type="text"
+                value={whatsappDraft.mensagem}
+                onChange={(e) => setWhatsappDraft({ ...whatsappDraft, mensagem: e.target.value })}
+                placeholder="Mensagem pré-preenchida"
+                className="w-full p-2 bg-[#0F0F0F] border border-gray-700 rounded-lg text-white text-xs focus:outline-none focus:border-[#8B5CF6]"
+              />
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={salvarWhatsapp}
+                  disabled={!whatsappDraft.numero.trim()}
+                  className="text-xs px-3 py-1.5 rounded-lg bg-[#22C55E] hover:bg-[#16A34A] disabled:opacity-50 text-white font-medium"
+                >
+                  Salvar número
+                </button>
+                {whatsappSalvo.numero && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setWhatsappDraft(whatsappSalvo)
+                      setEditandoWhatsapp(false)
+                    }}
+                    className="text-xs px-3 py-1.5 rounded-lg bg-[#0F0F0F] border border-gray-700 text-gray-300"
+                  >
+                    Cancelar
+                  </button>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+      )}
 
       {templatesSalvos.length > 0 && (
         <select
