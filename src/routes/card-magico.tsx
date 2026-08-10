@@ -9,6 +9,9 @@ import { fetchWithRetry, safeJson, friendlyApiError } from '../lib/apiRetry'
 import { Button } from '../components/ui/button'
 import { BackButton } from '../components/BackButton'
 import { TONS, TOM_PADRAO } from '../lib/tons'
+import { CtaObjetivo } from '../components/CtaObjetivo'
+import { FeedPreview } from '../components/FeedPreview'
+import { HumanizarButton } from '../components/HumanizarButton'
 
 export const Route = createFileRoute('/card-magico')({
   component: CardMagico,
@@ -572,13 +575,16 @@ function CardMagico() {
                 <div>
                   <div className="flex items-center justify-between mb-2">
                     <label className="text-sm font-medium text-gray-300">Legenda do post (pode editar)</label>
-                    <button
-                      type="button"
-                      onClick={handleCopiar}
-                      className="text-xs text-gray-400 hover:text-white flex items-center gap-1"
-                    >
-                      {copiado ? <><Check className="w-3.5 h-3.5" /> Copiado</> : <><Copy className="w-3.5 h-3.5" /> Copiar</>}
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <HumanizarButton texto={legenda} campo="legenda" onHumanizado={setLegenda} />
+                      <button
+                        type="button"
+                        onClick={handleCopiar}
+                        className="text-xs text-gray-400 hover:text-white flex items-center gap-1"
+                      >
+                        {copiado ? <><Check className="w-3.5 h-3.5" /> Copiado</> : <><Copy className="w-3.5 h-3.5" /> Copiar</>}
+                      </button>
+                    </div>
                   </div>
                   <textarea
                     value={legenda}
@@ -590,6 +596,9 @@ function CardMagico() {
                     Ela não vai impressa no card: é o texto que você cola na caixa de legenda ao publicar.
                   </p>
                 </div>
+
+                <FeedPreview texto={legenda} />
+                <CtaObjetivo legenda={legenda} tom={tom} onAplicar={setLegenda} />
 
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-2">Card pronto (1080×1350)</label>

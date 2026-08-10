@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { createFileRoute, useNavigate } from "@tanstack/react-router"
 import { supabase } from '../lib/supabase'
 import { useSubscription } from '../lib/useSubscription'
-import { Lock, Volume2, Settings, Rocket, Radar as RadarIcon, ArrowRight, Wand2, CalendarDays, Clock, History } from 'lucide-react'
+import { Lock, Volume2, Settings, Rocket, Radar as RadarIcon, ArrowRight, Wand2, CalendarDays, Clock, History, Bookmark } from 'lucide-react'
 import { proximasDatasSazonais, textoContagem } from '../lib/datasSazonais'
 import { BackButton } from '../components/BackButton'
 import { AtivarTrial } from '../components/AtivarTrial'
@@ -458,6 +458,20 @@ function Dashboard() {
             </div>
             <p className="text-gray-400">
               Reveja e reaproveite tudo que você já gerou — é a memória da sua marca
+            </p>
+          </div>
+
+          {/* Meus Templates — CTAs/hooks salvos, sempre acessível (mesma lógica de RLS de Meus Conteúdos). */}
+          <div
+            className="border rounded-lg p-6 shadow-sm bg-[#111111] border-gray-800 hover:border-[#8B5CF6] cursor-pointer"
+            onClick={() => navigate({ to: '/meus-templates' })}
+          >
+            <div className="flex items-center gap-2 mb-3">
+              <Bookmark className="w-6 h-6 text-[#8B5CF6]" />
+              <h3 className="text-xl font-semibold">Meus Templates</h3>
+            </div>
+            <p className="text-gray-400">
+              CTAs e ganchos que já converteram, prontos pra reusar em 1 clique
             </p>
           </div>
         </div>

@@ -22,6 +22,9 @@ import { TONS, TOM_PADRAO, TONS_VALIDOS } from '../lib/tons'
 import { proximasDatasSazonais, textoContagem } from '../lib/datasSazonais'
 import { realcarVoz, aplicarTrilha } from '../lib/estudioCards'
 import { useTrilhaFundo, TrilhaFundoPanel } from '../components/TrilhaFundo'
+import { CtaObjetivo } from '../components/CtaObjetivo'
+import { FeedPreview } from '../components/FeedPreview'
+import { HumanizarButton } from '../components/HumanizarButton'
 
 // Espaça as gerações de voz para não estourar o limite/minuto do free tier.
 const VOICE_THROTTLE_MS = 3500
@@ -1416,39 +1419,57 @@ function SuperAgente() {
                     📅 Melhor horário: {post.horario}
                   </span>
                 )}
-                <div className={brandLogo ? 'pr-24' : ''}>
-                  <PostField
-                    label="🎙️ Hook (3s)"
-                    value={post.hook}
-                    copyKey={`${index}-hook`}
-                    copiedKey={copied}
-                    onCopy={() => handleCopy(`${index}-hook`, post.hook)}
-                    onSave={(v) => updatePostField(index, 'hook', v)}
-                    displayClassName="text-white font-medium"
-                  />
+                <div className={`flex items-start gap-1 ${brandLogo ? 'pr-24' : ''}`}>
+                  <div className="flex-1 min-w-0">
+                    <PostField
+                      label="🎙️ Hook (3s)"
+                      value={post.hook}
+                      copyKey={`${index}-hook`}
+                      copiedKey={copied}
+                      onCopy={() => handleCopy(`${index}-hook`, post.hook)}
+                      onSave={(v) => updatePostField(index, 'hook', v)}
+                      displayClassName="text-white font-medium"
+                    />
+                  </div>
+                  <HumanizarButton texto={post.hook} campo="hook" onHumanizado={(v) => updatePostField(index, 'hook', v)} />
                 </div>
-                <div>
-                  <PostField
-                    label="🎙️ Roteiro (20s)"
-                    value={post.roteiro}
-                    copyKey={`${index}-roteiro`}
-                    copiedKey={copied}
-                    onCopy={() => handleCopy(`${index}-roteiro`, post.roteiro)}
-                    onSave={(v) => updatePostField(index, 'roteiro', v)}
-                    displayClassName="text-gray-300 text-sm"
-                  />
+                <div className="flex items-start gap-1">
+                  <div className="flex-1 min-w-0">
+                    <PostField
+                      label="🎙️ Roteiro (20s)"
+                      value={post.roteiro}
+                      copyKey={`${index}-roteiro`}
+                      copiedKey={copied}
+                      onCopy={() => handleCopy(`${index}-roteiro`, post.roteiro)}
+                      onSave={(v) => updatePostField(index, 'roteiro', v)}
+                      displayClassName="text-gray-300 text-sm"
+                    />
+                  </div>
+                  <HumanizarButton texto={post.roteiro} campo="roteiro" onHumanizado={(v) => updatePostField(index, 'roteiro', v)} />
                 </div>
-                <div>
-                  <PostField
-                    label="📝 Legenda · não vira áudio"
-                    value={post.legenda}
-                    copyKey={`${index}-legenda`}
-                    copiedKey={copied}
-                    onCopy={() => handleCopy(`${index}-legenda`, post.legenda)}
-                    onSave={(v) => updatePostField(index, 'legenda', v)}
-                    displayClassName="text-gray-300 text-sm"
-                  />
+                <div className="flex items-start gap-1">
+                  <div className="flex-1 min-w-0">
+                    <PostField
+                      label="📝 Legenda · não vira áudio"
+                      value={post.legenda}
+                      copyKey={`${index}-legenda`}
+                      copiedKey={copied}
+                      onCopy={() => handleCopy(`${index}-legenda`, post.legenda)}
+                      onSave={(v) => updatePostField(index, 'legenda', v)}
+                      displayClassName="text-gray-300 text-sm"
+                    />
+                  </div>
+                  <HumanizarButton texto={post.legenda} campo="legenda" onHumanizado={(v) => updatePostField(index, 'legenda', v)} />
                 </div>
+                <div className="no-export">
+                  <FeedPreview texto={post.legenda} />
+                </div>
+                <CtaObjetivo
+                  legenda={post.legenda}
+                  tom={tom}
+                  hook={post.hook}
+                  onAplicar={(v) => updatePostField(index, 'legenda', v)}
+                />
                 <span className="inline-block text-xs px-2 py-1 rounded-full bg-gray-700/50 text-gray-300">
                   {post.periodo === 'Manhã' ? '🎯 Objetivo: Relacionamento' : '💰 Objetivo: Conversão/Venda'}
                 </span>

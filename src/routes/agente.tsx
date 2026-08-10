@@ -8,6 +8,9 @@ import { Button } from '../components/ui/button'
 import { BackButton } from '../components/BackButton'
 import { AtivarTrial } from '../components/AtivarTrial'
 import { EditableText } from '../components/EditableText'
+import { CtaObjetivo } from '../components/CtaObjetivo'
+import { FeedPreview } from '../components/FeedPreview'
+import { HumanizarButton } from '../components/HumanizarButton'
 import { buildIcsCalendar, downloadIcsFile, postDateTime } from '../lib/ics'
 import { convertToWhatsAppOgg } from '../lib/audioConvert'
 import { TONS, TOM_PADRAO } from '../lib/tons'
@@ -373,21 +376,43 @@ function Agente() {
                     📅 Melhor horário: {post.horario}
                   </span>
                 )}
-                <EditableText
-                  label="Hook (3s)"
-                  value={post.hook}
-                  onChange={(v) => updatePostField(index, 'hook', v)}
-                  displayClassName="text-white font-medium"
-                />
-                <EditableText
-                  label="Roteiro (20s)"
-                  value={post.roteiro}
-                  onChange={(v) => updatePostField(index, 'roteiro', v)}
-                />
-                <EditableText
-                  label="Legenda"
-                  value={post.legenda}
-                  onChange={(v) => updatePostField(index, 'legenda', v)}
+                <div className="flex items-start gap-1">
+                  <div className="flex-1 min-w-0">
+                    <EditableText
+                      label="Hook (3s)"
+                      value={post.hook}
+                      onChange={(v) => updatePostField(index, 'hook', v)}
+                      displayClassName="text-white font-medium"
+                    />
+                  </div>
+                  <HumanizarButton texto={post.hook} campo="hook" onHumanizado={(v) => updatePostField(index, 'hook', v)} />
+                </div>
+                <div className="flex items-start gap-1">
+                  <div className="flex-1 min-w-0">
+                    <EditableText
+                      label="Roteiro (20s)"
+                      value={post.roteiro}
+                      onChange={(v) => updatePostField(index, 'roteiro', v)}
+                    />
+                  </div>
+                  <HumanizarButton texto={post.roteiro} campo="roteiro" onHumanizado={(v) => updatePostField(index, 'roteiro', v)} />
+                </div>
+                <div className="flex items-start gap-1">
+                  <div className="flex-1 min-w-0">
+                    <EditableText
+                      label="Legenda"
+                      value={post.legenda}
+                      onChange={(v) => updatePostField(index, 'legenda', v)}
+                    />
+                  </div>
+                  <HumanizarButton texto={post.legenda} campo="legenda" onHumanizado={(v) => updatePostField(index, 'legenda', v)} />
+                </div>
+                <FeedPreview texto={post.legenda} />
+                <CtaObjetivo
+                  legenda={post.legenda}
+                  tom={tom}
+                  hook={post.hook}
+                  onAplicar={(v) => updatePostField(index, 'legenda', v)}
                 />
                 <span className="inline-block text-xs px-2 py-1 rounded-full bg-gray-700/50 text-gray-300">
                   {post.periodo === 'Manhã' ? '🎯 Objetivo: Relacionamento' : '💰 Objetivo: Conversão/Venda'}
