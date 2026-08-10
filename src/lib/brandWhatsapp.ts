@@ -6,12 +6,17 @@
 export interface BrandWhatsapp {
   numero: string
   mensagem: string
+  // Desmarcado por padrão: link só com o número (curto, sem cara de phishing).
+  // Marcado, entra a mensagem pré-preenchida via ?text= — deixa o link maior.
+  incluirMensagem: boolean
 }
 
 const KEY_PREFIX = 'voiceflow:brand-whatsapp'
 const EVENT_NAME = 'voiceflow:brand-whatsapp-updated'
 
 export const MENSAGEM_PADRAO = 'Vim pelo Instagram e quero testar o VoiceFlow IA grátis!'
+
+const WHATSAPP_VAZIO: BrandWhatsapp = { numero: '', mensagem: MENSAGEM_PADRAO, incluirMensagem: false }
 
 export function brandWhatsappKey(userId?: string | null): string {
   return `${KEY_PREFIX}:${userId ?? 'anon'}`
@@ -20,11 +25,13 @@ export function brandWhatsappKey(userId?: string | null): string {
 export function loadBrandWhatsapp(key: string): BrandWhatsapp {
   try {
     const raw = localStorage.getItem(key)
-    if (raw) return JSON.parse(raw)
+    // Merge com o default: registros salvos antes do checkbox existir não têm
+    // `incluirMensagem` no JSON e cairiam undefined sem isso.
+    if (raw) return { ...WHATSAPP_VAZIO, ...JSON.parse(raw) }
   } catch {
     // localStorage indisponível/JSON inválido — cai no default abaixo.
   }
-  return { numero: '', mensagem: MENSAGEM_PADRAO }
+  return WHATSAPP_VAZIO
 }
 
 export function saveBrandWhatsapp(key: string, data: BrandWhatsapp): void {
@@ -43,7 +50,8 @@ export function onBrandWhatsappUpdated(cb: () => void): () => void {
   return () => window.removeEventListener(EVENT_NAME, cb)
 }
 
-export function buildWaLink(numero: string, mensagem: string): string {
+export function buildWaLink(numero: string, mensagem: string, incluirMensagem: boolean): string {
   const digits = numero.replace(/\D/g, '') // wa.me exige só dígitos (DDI+DDD+número)
-  return `https://wa.me/${digits}?text=${encodeURIComponent(mensagem)}`
+  const base = `https://wa.me/${digits}`
+  return incluirMensagem ? `${base}?text=${encodeURIComponent(mensagem)}` : base
 }

@@ -47,7 +47,7 @@ export function CtaObjetivo({ legenda, tom, hook, onAplicar }: CtaObjetivoProps)
   // whatsappSalvo = o que está persistido (usado pra montar/copiar o link).
   // whatsappDraft = o que está sendo digitado no formulário — separados pra
   // digitar o número não trocar a view antes de clicar "Salvar".
-  const WHATSAPP_VAZIO: BrandWhatsapp = { numero: '', mensagem: MENSAGEM_PADRAO }
+  const WHATSAPP_VAZIO: BrandWhatsapp = { numero: '', mensagem: MENSAGEM_PADRAO, incluirMensagem: false }
   const [whatsappSalvo, setWhatsappSalvo] = useState<BrandWhatsapp>(WHATSAPP_VAZIO)
   const [whatsappDraft, setWhatsappDraft] = useState<BrandWhatsapp>(WHATSAPP_VAZIO)
   const [whatsappKey, setWhatsappKey] = useState('')
@@ -135,7 +135,7 @@ export function CtaObjetivo({ legenda, tom, hook, onAplicar }: CtaObjetivoProps)
 
   async function copiarLinkWhatsapp() {
     try {
-      await navigator.clipboard.writeText(buildWaLink(whatsappSalvo.numero, whatsappSalvo.mensagem))
+      await navigator.clipboard.writeText(buildWaLink(whatsappSalvo.numero, whatsappSalvo.mensagem, whatsappSalvo.incluirMensagem))
       setLinkCopiado(true)
       setTimeout(() => setLinkCopiado(false), 2000)
     } catch {
@@ -208,7 +208,7 @@ export function CtaObjetivo({ legenda, tom, hook, onAplicar }: CtaObjetivoProps)
               </p>
               <div className="flex items-center gap-2">
                 <code className="flex-1 text-xs text-gray-300 truncate">
-                  {buildWaLink(whatsappSalvo.numero, whatsappSalvo.mensagem)}
+                  {buildWaLink(whatsappSalvo.numero, whatsappSalvo.mensagem, whatsappSalvo.incluirMensagem)}
                 </code>
                 <button
                   type="button"
@@ -238,13 +238,24 @@ export function CtaObjetivo({ legenda, tom, hook, onAplicar }: CtaObjetivoProps)
                 placeholder="Número com DDI+DDD, ex: 5585992262297"
                 className="w-full p-2 bg-[#0F0F0F] border border-gray-700 rounded-lg text-white text-xs focus:outline-none focus:border-[#8B5CF6]"
               />
-              <input
-                type="text"
-                value={whatsappDraft.mensagem}
-                onChange={(e) => setWhatsappDraft({ ...whatsappDraft, mensagem: e.target.value })}
-                placeholder="Mensagem pré-preenchida"
-                className="w-full p-2 bg-[#0F0F0F] border border-gray-700 rounded-lg text-white text-xs focus:outline-none focus:border-[#8B5CF6]"
-              />
+              <label className="flex items-center gap-2 text-xs text-gray-400">
+                <input
+                  type="checkbox"
+                  checked={whatsappDraft.incluirMensagem}
+                  onChange={(e) => setWhatsappDraft({ ...whatsappDraft, incluirMensagem: e.target.checked })}
+                  className="accent-[#8B5CF6]"
+                />
+                Incluir mensagem pré-preenchida (deixa o link mais longo)
+              </label>
+              {whatsappDraft.incluirMensagem && (
+                <input
+                  type="text"
+                  value={whatsappDraft.mensagem}
+                  onChange={(e) => setWhatsappDraft({ ...whatsappDraft, mensagem: e.target.value })}
+                  placeholder="Mensagem pré-preenchida"
+                  className="w-full p-2 bg-[#0F0F0F] border border-gray-700 rounded-lg text-white text-xs focus:outline-none focus:border-[#8B5CF6]"
+                />
+              )}
               <div className="flex gap-2">
                 <button
                   type="button"
