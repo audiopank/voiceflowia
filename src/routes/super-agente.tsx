@@ -167,7 +167,7 @@ function ExportSlide({
             <img
               src={brandLogo}
               alt=""
-              style={{ width: 40, height: 40, objectFit: 'contain', background: '#FFFFFF', borderRadius: 8, padding: 4 }}
+              style={{ width: 60, height: 60, objectFit: 'contain', background: '#FFFFFF', borderRadius: 10, padding: 6 }}
             />
           </div>
         )}
