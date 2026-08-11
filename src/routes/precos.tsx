@@ -6,6 +6,7 @@ import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/componen
 import { Badge } from "@/components/ui/badge"
 import { fetchActivePlans, DEFAULT_PLANS, type Plan } from "../lib/plans"
 import { Logo } from "../components/Logo"
+import { VideosSection } from "../components/VideosSection"
 
 export const Route = createFileRoute("/precos")({
   component: Precos,
@@ -123,6 +124,9 @@ function Precos() {
           ))}
         </div>
       </section>
+
+      {/* Vídeos do fundador — some sozinha enquanto não houver vídeo publicado. */}
+      <VideosSection />
 
       {/* NOVO MÓDULO: VoiceFlow Radar */}
       <section className="container mx-auto px-6 pb-20">

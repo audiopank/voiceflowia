@@ -7,11 +7,21 @@ import { Button } from '../components/ui/button'
 import { BackButton } from '../components/BackButton'
 import { AgentesExpansores } from '../components/admin/AgentesExpansores'
 import { Trials } from '../components/admin/Trials'
+import { VideosFundador } from '../components/admin/VideosFundador'
 import { Field, inputClass } from '../components/admin/shared'
 
 export const Route = createFileRoute('/admin')({
   component: Admin,
 })
+
+const TABS = [
+  { key: 'planos', label: 'Planos', subtitulo: 'Edite preços, features e cole os links da Kiwify. Sem precisar de deploy.' },
+  { key: 'agentes', label: 'Agentes Expansores', subtitulo: 'Gerencie os Agentes Expansores do programa de indicação.' },
+  { key: 'trials', label: 'Trials', subtitulo: 'Acompanhe quem pediu, ativou e converteu no trial de 7 dias.' },
+  { key: 'videos', label: 'Vídeos', subtitulo: 'Seus vídeos como criador do VoiceFlow IA — aparecem na página de preços e em /videos.' },
+] as const
+
+type TabKey = (typeof TABS)[number]['key']
 
 function emptyPlan(order: number): Plan {
   return {
@@ -34,7 +44,7 @@ function Admin() {
   const navigate = useNavigate()
   const [checkingAuth, setCheckingAuth] = useState(true)
   const [isAdmin, setIsAdmin] = useState(false)
-  const [tab, setTab] = useState<'planos' | 'agentes' | 'trials'>('planos')
+  const [tab, setTab] = useState<TabKey>('planos')
   const [plans, setPlans] = useState<Plan[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -194,13 +204,7 @@ function Admin() {
         <div className="flex items-center justify-between mb-6 gap-4 flex-wrap">
           <div>
             <h1 className="text-3xl font-bold text-white mb-1">Painel Admin</h1>
-            <p className="text-gray-400">
-              {tab === 'planos'
-                ? 'Edite preços, features e cole os links da Kiwify. Sem precisar de deploy.'
-                : tab === 'agentes'
-                ? 'Gerencie os Agentes Expansores do programa de indicação.'
-                : 'Acompanhe quem pediu, ativou e converteu no trial de 7 dias.'}
-            </p>
+            <p className="text-gray-400">{TABS.find((t) => t.key === tab)?.subtitulo}</p>
           </div>
           {tab === 'planos' && (
             <Button onClick={addPlan} className="bg-[#1A1A1A] hover:bg-[#252525] flex items-center gap-2">
@@ -210,35 +214,23 @@ function Admin() {
           )}
         </div>
 
-        <div className="flex gap-2 mb-8 border-b border-gray-800">
-          <button
-            onClick={() => setTab('planos')}
-            className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
-              tab === 'planos' ? 'border-[#8B5CF6] text-white' : 'border-transparent text-gray-500 hover:text-gray-300'
-            }`}
-          >
-            Planos
-          </button>
-          <button
-            onClick={() => setTab('agentes')}
-            className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
-              tab === 'agentes' ? 'border-[#8B5CF6] text-white' : 'border-transparent text-gray-500 hover:text-gray-300'
-            }`}
-          >
-            Agentes Expansores
-          </button>
-          <button
-            onClick={() => setTab('trials')}
-            className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
-              tab === 'trials' ? 'border-[#8B5CF6] text-white' : 'border-transparent text-gray-500 hover:text-gray-300'
-            }`}
-          >
-            Trials
-          </button>
+        <div className="flex flex-wrap gap-2 mb-8 border-b border-gray-800">
+          {TABS.map((t) => (
+            <button
+              key={t.key}
+              onClick={() => setTab(t.key)}
+              className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
+                tab === t.key ? 'border-[#8B5CF6] text-white' : 'border-transparent text-gray-500 hover:text-gray-300'
+              }`}
+            >
+              {t.label}
+            </button>
+          ))}
         </div>
 
         {tab === 'agentes' && <AgentesExpansores />}
         {tab === 'trials' && <Trials />}
+        {tab === 'videos' && <VideosFundador />}
 
         {tab === 'planos' && (
         <>
