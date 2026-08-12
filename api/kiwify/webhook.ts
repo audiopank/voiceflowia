@@ -350,7 +350,7 @@ export default async function handler(request: Request): Promise<Response> {
           `<p><strong>${customerEmail}</strong> pagou o VoiceFlow RADAR, não tem conta no app e a fila de pendentes FALHOU.</p>
            <p>Erro: <code>${error.message}</code></p>
            <p>Causa provável: <code>MIGRATION_RADAR_PENDING.sql</code> ainda não rodou no Supabase.</p>
-           <p><strong>O que fazer:</strong> rode a migração, peça pro cliente se cadastrar e, se ele já tiver se cadastrado, conceda com <code>grant_radar_access('${customerEmail}', 32)</code>.</p>`
+           <p><strong>O que fazer:</strong> rode a migração e peça pro cliente se cadastrar. Depois que ele se cadastrar, libere em <strong>/admin → aba Radar</strong>, colando o e-mail <code>${customerEmail}</code> (não precisa mais de SQL).</p>`
         )
         return new Response(JSON.stringify({ ok: true }), { status: 200 })
       }

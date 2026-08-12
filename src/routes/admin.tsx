@@ -8,6 +8,7 @@ import { BackButton } from '../components/BackButton'
 import { AgentesExpansores } from '../components/admin/AgentesExpansores'
 import { Trials } from '../components/admin/Trials'
 import { VideosFundador } from '../components/admin/VideosFundador'
+import { RadarAcesso } from '../components/admin/RadarAcesso'
 import { Field, inputClass } from '../components/admin/shared'
 
 export const Route = createFileRoute('/admin')({
@@ -19,6 +20,7 @@ const TABS = [
   { key: 'agentes', label: 'Agentes Expansores', subtitulo: 'Gerencie os Agentes Expansores do programa de indicação.' },
   { key: 'trials', label: 'Trials', subtitulo: 'Acompanhe quem pediu, ativou e converteu no trial de 7 dias.' },
   { key: 'videos', label: 'Vídeos', subtitulo: 'Seus vídeos como criador do VoiceFlow IA — aparecem na página de preços e em /videos.' },
+  { key: 'radar', label: 'Radar', subtitulo: 'Libere o add-on RADAR PRO na mão — pra você testar, dar cortesia ou atender quem pagou por fora.' },
 ] as const
 
 type TabKey = (typeof TABS)[number]['key']
@@ -231,6 +233,7 @@ function Admin() {
         {tab === 'agentes' && <AgentesExpansores />}
         {tab === 'trials' && <Trials />}
         {tab === 'videos' && <VideosFundador />}
+        {tab === 'radar' && <RadarAcesso />}
 
         {tab === 'planos' && (
         <>
