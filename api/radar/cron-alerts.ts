@@ -202,10 +202,13 @@ async function handler(request: Request): Promise<Response> {
     }
   }
 
-  const serpKey = process.env.SERPER_API_KEY
+  // Aceita os dois nomes: a chave foi cadastrada como SERPER_KEY, e exigir só
+  // SERPER_API_KEY fazia o cron morrer no 500 sem o cliente perceber nada — nem
+  // alerta, nem resumo, e nenhum sinal na tela dele.
+  const serpKey = process.env.SERPER_API_KEY || process.env.SERPER_KEY
   const geminiKey = process.env.GEMINI_API_KEY
   if (!serpKey || !geminiKey) {
-    return new Response(JSON.stringify({ error: 'SERPER_API_KEY/GEMINI_API_KEY não configuradas' }), { status: 500, headers: { 'Content-Type': 'application/json' } })
+    return new Response(JSON.stringify({ error: 'SERPER_API_KEY (ou SERPER_KEY) / GEMINI_API_KEY não configuradas' }), { status: 500, headers: { 'Content-Type': 'application/json' } })
   }
 
   const supabaseAdmin = createClient(process.env.VITE_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, { auth: { persistSession: false } })

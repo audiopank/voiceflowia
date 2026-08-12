@@ -268,10 +268,11 @@ async function handler(request: Request): Promise<Response> {
   }
 
   try {
-    const serpKey = process.env.SERPER_API_KEY
+    // Aceita os dois nomes: a chave está cadastrada como SERPER_KEY.
+    const serpKey = process.env.SERPER_API_KEY || process.env.SERPER_KEY
     const geminiKey = process.env.GEMINI_API_KEY
     if (!geminiKey) return new Response(JSON.stringify({ error: 'GEMINI_API_KEY não configurada' }), { status: 500, headers: { 'Content-Type': 'application/json' } })
-    if (!serpKey) return new Response(JSON.stringify({ error: 'SERPER_API_KEY não configurada' }), { status: 500, headers: { 'Content-Type': 'application/json' } })
+    if (!serpKey) return new Response(JSON.stringify({ error: 'SERPER_API_KEY (ou SERPER_KEY) não configurada' }), { status: 500, headers: { 'Content-Type': 'application/json' } })
 
     const supabaseAdmin = createClient(process.env.VITE_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, { auth: { persistSession: false } })
 
