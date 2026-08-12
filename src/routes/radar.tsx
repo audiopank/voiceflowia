@@ -37,7 +37,20 @@ interface RadarConfig {
   concorrentes: string[]
   palavras_chave_alerta: string[]
   alert_email: string
+  frequencia_resumo: string
+  ultimo_resumo_at?: string | null
 }
+
+// De quanto em quanto tempo o resumo por e-mail sai. O cron roda 1x/dia e usa
+// essa escolha pra decidir se já venceu — por isso não existe opção menor que
+// diária (prometer "de hora em hora" seria mentira: o Hobby da Vercel só
+// permite 2 crons e os dois slots já estão ocupados).
+const FREQUENCIAS = [
+  { value: 'diario', label: 'Diário', dica: 'Todo dia' },
+  { value: 'semanal', label: 'Semanal', dica: 'A cada 7 dias' },
+  { value: 'mensal', label: 'Mensal', dica: 'A cada 30 dias' },
+  { value: 'nunca', label: 'Desligado', dica: 'Só alerta de crise' },
+] as const
 
 interface Mencao {
   fonte: string
@@ -125,6 +138,8 @@ function emptyConfig(email: string): RadarConfig {
     concorrentes: ['', '', '', '', ''],
     palavras_chave_alerta: DEFAULT_KEYWORDS,
     alert_email: email,
+    frequencia_resumo: 'semanal',
+    ultimo_resumo_at: null,
   }
 }
 
@@ -248,6 +263,8 @@ function Radar() {
           concorrentes: [...conc, '', '', '', '', ''].slice(0, 5),
           palavras_chave_alerta: Array.isArray(cfg.palavras_chave_alerta) ? cfg.palavras_chave_alerta : DEFAULT_KEYWORDS,
           alert_email: cfg.alert_email ?? user.email ?? '',
+          frequencia_resumo: cfg.frequencia_resumo ?? 'semanal',
+          ultimo_resumo_at: cfg.ultimo_resumo_at ?? null,
         })
       } else {
         setConfig(emptyConfig(user.email ?? ''))
@@ -283,11 +300,30 @@ function Radar() {
       concorrentes: config.concorrentes.map((c) => c.trim()).filter(Boolean),
       palavras_chave_alerta: config.palavras_chave_alerta.map((k) => k.trim()).filter(Boolean),
       alert_email: config.alert_email.trim() || null,
+      frequencia_resumo: config.frequencia_resumo,
     }
-    const { error } = await supabase.from('radar_config').upsert(payload, { onConflict: 'user_id' })
+    let { error } = await supabase.from('radar_config').upsert(payload, { onConflict: 'user_id' })
+
+    // Se a migração da frequência ainda não rodou, o Postgres rejeita o upsert
+    // INTEIRO por causa da coluna que falta — e o cliente perderia também marca,
+    // palavras-chave e e-mail. Nesse caso salva o resto e avisa só o que ficou
+    // de fora, em vez de derrubar a tela toda. (Mesmo cuidado que o
+    // useSubscription já toma com a coluna radar_expires_at.)
+    let frequenciaNaoSalva = false
+    if (error && /frequencia_resumo/i.test(error.message)) {
+      const { frequencia_resumo: _ignorado, ...semFrequencia } = payload
+      const retry = await supabase.from('radar_config').upsert(semFrequencia, { onConflict: 'user_id' })
+      error = retry.error
+      frequenciaNaoSalva = !retry.error
+    }
+
     setSavingConfig(false)
     if (error) {
       setConfigErr(`Erro ao salvar: ${error.message}`)
+      return
+    }
+    if (frequenciaNaoSalva) {
+      setConfigErr('Monitoramento salvo, mas a frequência do resumo ainda não: falta rodar o MIGRATION_RADAR_FREQUENCIA.sql no Supabase.')
       return
     }
     setConfigMsg('Monitoramento salvo!')
@@ -442,10 +478,37 @@ function Radar() {
                   <Field label="@ Instagram da marca" hint="Guardado pra Fase 2 (monitoramento direto do Instagram)">
                     <input value={config.marca_instagram} onChange={(e) => setConfig({ ...config, marca_instagram: e.target.value })} className={inputClass} placeholder="@suamarca" />
                   </Field>
-                  <Field label="Email pra alerta de crise" hint="Onde chega o alerta quando detectamos menção negativa">
+                  <Field label="Email pra alerta e resumo" hint="Onde chegam o alerta de crise e o resumo periódico">
                     <input value={config.alert_email} onChange={(e) => setConfig({ ...config, alert_email: e.target.value })} className={inputClass} placeholder="voce@email.com" />
                   </Field>
                 </div>
+
+                <Field
+                  label="De quanto em quanto tempo quer o resumo por e-mail?"
+                  hint={
+                    config.ultimo_resumo_at
+                      ? `Último resumo enviado em ${new Date(config.ultimo_resumo_at).toLocaleDateString('pt-BR')}. O alerta de crise é imediato e independe desta escolha.`
+                      : 'Ainda não enviamos nenhum resumo — o primeiro sai na próxima varredura. O alerta de crise é imediato e independe desta escolha.'
+                  }
+                >
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                    {FREQUENCIAS.map((f) => (
+                      <button
+                        key={f.value}
+                        type="button"
+                        onClick={() => setConfig({ ...config, frequencia_resumo: f.value })}
+                        className={`p-3 rounded-lg border text-left transition-colors ${
+                          config.frequencia_resumo === f.value
+                            ? 'border-[#2563EB] bg-[#2563EB]/10 text-white'
+                            : 'border-gray-700 bg-[#1A1A1A] text-gray-400 hover:border-gray-600'
+                        }`}
+                      >
+                        <span className="block text-sm font-medium">{f.label}</span>
+                        <span className="block text-xs text-gray-500 mt-0.5">{f.dica}</span>
+                      </button>
+                    ))}
+                  </div>
+                </Field>
 
                 <Field label="Concorrentes (até 5)" hint="@ ou nome — monitorados junto da sua marca">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
