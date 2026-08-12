@@ -414,9 +414,15 @@ function Radar() {
   // `valido` = tem nota confiável (IA classificou E teve menções). Sem isso, mostra "—"
   // em vez de um 50 falso.
   const brandScore = relatorio ? reputationScore(relatorio.sentimento) : 0
+  // Nota só vale quando a IA classificou E sobrou menção da marca. Sem isso a
+  // fórmula devolve 0 — e um "0" vermelho embaixo de "quanto maior, melhor a
+  // reputação" faz o cliente ler "minha reputação é péssima" quando o certo é
+  // "não achamos menção nenhuma sua". Mesma condição usada no comparativo, pra
+  // as duas partes da tela nunca se contradizerem.
+  const notaValida = !semClassificacao && mencoesCount > 0
   const comparativo = relatorio
     ? [
-        { nome: `${config?.marca_nome || 'Sua marca'}`, score: brandScore, total: mencoesCount, voce: true, valido: !semClassificacao && mencoesCount > 0 },
+        { nome: `${config?.marca_nome || 'Sua marca'}`, score: brandScore, total: mencoesCount, voce: true, valido: notaValida },
         ...(relatorio.concorrentes || []).map((c) => ({
           nome: c.nome,
           score: c.score,
@@ -616,21 +622,23 @@ function Radar() {
 
                 {/* Nota de Reputação da marca */}
                 <div className="flex items-center gap-4 bg-[#0A0A0A] border border-gray-800 rounded-lg p-4">
-                  {semClassificacao ? (
-                    <div className="shrink-0 w-16 h-16 rounded-full flex items-center justify-center font-bold text-xl text-gray-600 border-[3px] border-gray-700">
-                      —
-                    </div>
-                  ) : (
+                  {notaValida ? (
                     <div className="shrink-0 w-16 h-16 rounded-full flex items-center justify-center font-bold text-xl" style={{ color: scoreColor(brandScore), border: `3px solid ${scoreColor(brandScore)}` }}>
                       {brandScore}
+                    </div>
+                  ) : (
+                    <div className="shrink-0 w-16 h-16 rounded-full flex items-center justify-center font-bold text-xl text-gray-600 border-[3px] border-gray-700">
+                      —
                     </div>
                   )}
                   <div>
                     <p className="text-sm font-medium text-white">Nota de Reputação da sua marca</p>
                     <p className="text-xs text-gray-500">
-                      {semClassificacao
+                      {notaValida
+                        ? '0 a 100 — quanto maior, melhor a reputação nas menções da web.'
+                        : semClassificacao
                         ? 'Indisponível nesta rodada — o sentimento não foi classificado.'
-                        : '0 a 100 — quanto maior, melhor a reputação nas menções da web.'}
+                        : 'Sem menções da sua marca nesta rodada — não dá pra calcular a nota. Nota baixa e ausência de menção são coisas diferentes.'}
                     </p>
                   </div>
                 </div>
@@ -718,8 +726,13 @@ function Radar() {
                             <span className="w-16 text-right text-[11px] text-gray-600">{row.total} menç.</span>
                           </div>
                         ))}
+                      {/* Sem "gere novamente" genérico: quando o motivo é NÃO TER menção,
+                          gerar de novo não muda nada — a ausência é o próprio resultado. */}
                       {comparativo.some((r) => !r.valido) && (
-                        <p className="text-[11px] text-gray-600 pt-1">"—" = sem nota confiável nesta rodada (IA não classificou ou sem menções). Gere novamente.</p>
+                        <p className="text-[11px] text-gray-600 pt-1">
+                          "—" = sem nota nesta rodada: ou não houve menção da marca, ou a IA não conseguiu
+                          classificar (nesse caso, gerar de novo resolve).
+                        </p>
                       )}
                     </div>
                   ) : (
