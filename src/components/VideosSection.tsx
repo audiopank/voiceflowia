@@ -14,7 +14,10 @@ function VideoCard({ video }: { video: VideoFundador }) {
 
   return (
     <div className="bg-[#111111] border border-gray-800 rounded-2xl overflow-hidden">
-      <div className={`relative bg-black ${ehYoutube ? 'aspect-video' : 'aspect-[4/5]'}`}>
+      {/* A proporcao segue como o video foi gravado (marcado no painel): video
+          vertical num quadro 16:9 aparecia espremido no meio, com tarja preta
+          dos dois lados e ocupando metade do espaco que podia. */}
+      <div className={`relative bg-black ${video.vertical ? 'aspect-[9/16]' : 'aspect-video'}`}>
         {tocando ? (
           ehYoutube ? (
             <iframe
@@ -124,7 +127,9 @@ export function VideosSection({
           deixava tudo espremido na esquerda. Assim fica centrado em qualquer qtd. */}
       <div className="flex flex-wrap justify-center gap-4 max-w-6xl mx-auto">
         {videos.map((video) => (
-          <div key={video.id} className="w-full sm:w-[340px]">
+          // Card vertical mais estreito: a 340px um 9:16 passaria de 600px de
+          // altura e viraria uma torre no meio da pagina.
+          <div key={video.id} className={`w-full ${video.vertical ? 'sm:w-[260px]' : 'sm:w-[340px]'}`}>
             <VideoCard video={video} />
           </div>
         ))}

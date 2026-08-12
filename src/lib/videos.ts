@@ -22,6 +22,8 @@ export interface VideoFundador {
   video_path: string | null
   poster_url: string | null
   poster_path: string | null
+  /** Gravado na vertical (celular)? Define se o card usa 9:16 ou 16:9. */
+  vertical: boolean
   sort_order: number
   active: boolean
   created_at: string
@@ -152,13 +154,14 @@ export interface NovoVideo {
   frase: string
   file: File
   poster: Blob | null
+  vertical: boolean
   sortOrder: number
 }
 
 // Sobe o arquivo (e o poster, se houver) pro Storage e grava a linha na tabela.
 // Se a gravacao no banco falhar, apaga o que subiu — senao ficaria arquivo orfao
 // ocupando cota sem nenhuma linha apontando pra ele.
-export async function criarVideo({ titulo, frase, file, poster, sortOrder }: NovoVideo): Promise<void> {
+export async function criarVideo({ titulo, frase, file, poster, vertical, sortOrder }: NovoVideo): Promise<void> {
   const ext = file.name.split('.').pop()?.toLowerCase() || 'mp4'
   const videoPath = nomeUnico('video', ext)
 
@@ -193,6 +196,7 @@ export async function criarVideo({ titulo, frase, file, poster, sortOrder }: Nov
     video_path: videoPath,
     poster_url: posterUrl,
     poster_path: posterPath,
+    vertical,
     sort_order: sortOrder,
     active: true,
   })
@@ -210,12 +214,14 @@ export async function criarVideoYoutube(
   titulo: string,
   frase: string,
   youtubeId: string,
+  vertical: boolean,
   sortOrder: number,
 ): Promise<void> {
   const { error } = await supabase.from(TABELA).insert({
     titulo,
     frase: frase.trim() || null,
     youtube_id: youtubeId,
+    vertical,
     sort_order: sortOrder,
     active: true,
   })
@@ -224,6 +230,12 @@ export async function criarVideoYoutube(
 
 export async function alternarAtivo(id: string, active: boolean) {
   return supabase.from(TABELA).update({ active }).eq('id', id)
+}
+
+// Corrige a orientacao de um video JA publicado, sem precisar apagar e
+// recadastrar (quem errou o formato so descobre olhando a pagina no ar).
+export async function alternarVertical(id: string, vertical: boolean) {
+  return supabase.from(TABELA).update({ vertical }).eq('id', id)
 }
 
 export async function atualizarOrdem(id: string, sortOrder: number) {

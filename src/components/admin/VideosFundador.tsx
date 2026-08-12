@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
-import { Loader2, AlertCircle, CheckCircle2, Upload, Trash2, Eye, EyeOff, ArrowUp, ArrowDown } from 'lucide-react'
+import { Loader2, AlertCircle, CheckCircle2, Upload, Trash2, Eye, EyeOff, ArrowUp, ArrowDown, RectangleHorizontal, RectangleVertical } from 'lucide-react'
 import {
   listarVideosAdmin,
   criarVideo,
   criarVideoYoutube,
   apagarVideo,
   alternarAtivo,
+  alternarVertical,
   atualizarOrdem,
   gerarPoster,
   extrairYoutubeId,
@@ -31,6 +32,7 @@ export function VideosFundador() {
   const [titulo, setTitulo] = useState('')
   const [frase, setFrase] = useState('')
   const [linkYoutube, setLinkYoutube] = useState('')
+  const [vertical, setVertical] = useState(false)
   const [file, setFile] = useState<File | null>(null)
   const [enviando, setEnviando] = useState(false)
   const [etapa, setEtapa] = useState('')
@@ -82,27 +84,29 @@ export function VideosFundador() {
 
       if (modo === 'youtube') {
         setEtapa('Publicando...')
-        await criarVideoYoutube(titulo.trim(), frase, youtubeId!, proximaOrdem)
+        await criarVideoYoutube(titulo.trim(), frase, youtubeId!, vertical, proximaOrdem)
       } else {
         setEtapa('Gerando miniatura...')
         const poster = await gerarPoster(file!)
         setEtapa('Enviando vídeo...')
-        await criarVideo({ titulo: titulo.trim(), frase, file: file!, poster, sortOrder: proximaOrdem })
+        await criarVideo({ titulo: titulo.trim(), frase, file: file!, poster, vertical, sortOrder: proximaOrdem })
       }
 
       setSuccess('Vídeo publicado! Já está no ar na página de preços e em /videos.')
       setTitulo('')
       setFrase('')
       setLinkYoutube('')
+      setVertical(false)
       setFile(null)
       if (fileInputRef.current) fileInputRef.current.value = ''
       await carregar()
     } catch (err) {
       console.error('Erro ao enviar vídeo:', err)
+      // Causa mais comum e SQL pendente. Cita os arquivos na ordem em que
+      // precisam rodar, em vez de chutar um so — errar o arquivo aqui manda o
+      // Mestre procurar problema no lugar errado.
       setError(
-        modo === 'youtube'
-          ? 'Não consegui publicar. O MIGRATION_FOUNDER_VIDEOS_YOUTUBE.sql já foi rodado no Supabase?'
-          : 'Não consegui publicar o vídeo. Confira se o CREATE_FOUNDER_VIDEOS_TABLE.sql já foi rodado no Supabase (ele cria a tabela e o bucket).',
+        'Não consegui publicar o vídeo. A causa mais comum é migração pendente no Supabase — rode, nesta ordem: CREATE_FOUNDER_VIDEOS_TABLE.sql, MIGRATION_FOUNDER_VIDEOS_YOUTUBE.sql e MIGRATION_FOUNDER_VIDEOS_VERTICAL.sql.',
       )
     } finally {
       setEnviando(false)
@@ -125,6 +129,13 @@ export function VideosFundador() {
   async function handleAlternar(video: VideoFundador) {
     const { error: err } = await alternarAtivo(video.id, !video.active)
     if (err) return setError('Não consegui mudar a visibilidade agora.')
+    await carregar()
+  }
+
+  async function handleVirarOrientacao(video: VideoFundador) {
+    setError('')
+    const { error: err } = await alternarVertical(video.id, !video.vertical)
+    if (err) return setError('Não consegui mudar a orientação. O MIGRATION_FOUNDER_VIDEOS_VERTICAL.sql já foi rodado?')
     await carregar()
   }
 
@@ -265,6 +276,32 @@ export function VideosFundador() {
           </Field>
         )}
 
+        <Field label="Como você gravou?" hint="O card na página se ajusta ao formato — errou? dá pra trocar depois, sem recadastrar.">
+          <div className="flex gap-2">
+            {([
+              { v: false, label: 'Horizontal', dica: 'Deitado (16:9)', Icone: RectangleHorizontal },
+              { v: true, label: 'Vertical', dica: 'Em pé, celular (9:16)', Icone: RectangleVertical },
+            ] as const).map(({ v, label, dica, Icone }) => (
+              <button
+                key={label}
+                type="button"
+                onClick={() => setVertical(v)}
+                className={`flex-1 p-3 rounded-lg border text-left transition-colors ${
+                  vertical === v
+                    ? 'border-[#8B5CF6] bg-[#8B5CF6]/10 text-white'
+                    : 'border-gray-700 bg-[#1A1A1A] text-gray-400 hover:border-gray-600'
+                }`}
+              >
+                <span className="flex items-center gap-2 text-sm font-medium">
+                  <Icone className="w-4 h-4" />
+                  {label}
+                </span>
+                <span className="block text-xs text-gray-500 mt-0.5">{dica}</span>
+              </button>
+            ))}
+          </div>
+        </Field>
+
         <Button
           onClick={enviar}
           disabled={enviando || !podeEnviar}
@@ -315,6 +352,7 @@ export function VideosFundador() {
                 {video.frase && <p className="text-sm text-gray-400 mt-0.5">“{video.frase}”</p>}
                 <p className="text-xs text-gray-600 mt-1">
                   {video.youtube_id ? 'YouTube' : 'Arquivo próprio'} ·{' '}
+                  {video.vertical ? 'Vertical' : 'Horizontal'} ·{' '}
                   {video.active ? 'Visível nas páginas públicas' : 'Oculto'}
                 </p>
 
@@ -334,6 +372,15 @@ export function VideosFundador() {
                     className="text-xs px-2 py-1 rounded-md bg-[#1A1A1A] border border-gray-700 text-gray-300 disabled:opacity-30 hover:border-[#8B5CF6]"
                   >
                     <ArrowDown className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    onClick={() => handleVirarOrientacao(video)}
+                    title="Trocar entre vertical e horizontal"
+                    className="text-xs px-3 py-1 rounded-md bg-[#1A1A1A] border border-gray-700 text-gray-300 hover:border-[#8B5CF6] flex items-center gap-1"
+                  >
+                    {video.vertical
+                      ? <><RectangleHorizontal className="w-3.5 h-3.5" /> Virar p/ horizontal</>
+                      : <><RectangleVertical className="w-3.5 h-3.5" /> Virar p/ vertical</>}
                   </button>
                   <button
                     onClick={() => handleAlternar(video)}
