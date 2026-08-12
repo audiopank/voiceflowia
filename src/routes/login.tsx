@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { createFileRoute, useNavigate } from "@tanstack/react-router"
 import { supabase } from '../lib/supabase'
 import { BackButton } from '../components/BackButton'
@@ -13,6 +13,32 @@ function Login() {
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const navigate = useNavigate()
+
+  // Quem JÁ está logado e cai aqui (ex: clicou "Entrar" numa página pública sem
+  // perceber que a sessão continuava viva) via o formulário e digitava a senha
+  // de novo à toa. Manda direto pro painel.
+  //
+  // A checagem é getUser() (e NÃO getSession()) de propósito: o /dashboard —
+  // como toda tela protegida — só deixa entrar quem passa no getUser(), que
+  // valida o token no servidor. Se aqui a porta fosse o getSession(), que só lê
+  // o token do localStorage sem validar, dava pra existir um token que abre o
+  // /login e é recusado pelo /dashboard (usuário offline, por exemplo: o
+  // getUser falha por rede e devolve user null sem apagar a sessão). Nesse caso
+  // as duas telas ficariam se empurrando em loop infinito. Mesma fonte de
+  // verdade nos dois lados = se o getUser falhar aqui, a pessoa fica no
+  // formulário e o loop nunca começa.
+  //
+  // `replace` pra não empilhar histórico: sem ele o "voltar" do navegador cai de
+  // novo no /login, que redireciona outra vez, e a pessoa fica presa.
+  useEffect(() => {
+    let cancelado = false
+    supabase.auth.getUser().then(({ data }) => {
+      if (!cancelado && data.user) navigate({ to: '/dashboard', replace: true })
+    })
+    return () => {
+      cancelado = true
+    }
+  }, [navigate])
 
   // Esta tela SÓ faz login. O cadastro que existia aqui era um segundo caminho
   // paralelo ao /cadastro que nunca chamava start_trial: quem entrava por ele

@@ -4,6 +4,7 @@ import { Check, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+import { supabase } from "../lib/supabase"
 import { fetchActivePlans, DEFAULT_PLANS, type Plan } from "../lib/plans"
 import { Logo } from "../components/Logo"
 import { VideosSection } from "../components/VideosSection"
@@ -71,9 +72,54 @@ function PlanCard({ plan, fallbackUrl }: { plan: Plan; fallbackUrl: string | nul
 function Precos() {
   const navigate = useNavigate()
   const [plans, setPlans] = useState<Plan[]>(DEFAULT_PLANS)
+  // Esta página é pública, mas quem chega nela vindo de DENTRO do app (ex: o
+  // botão "Conheça o RADAR PRO" no painel) continua logado. Mostrar "Entrar"
+  // pra essa pessoa dá a impressão de que a sessão caiu — e ela vai digitar a
+  // senha de novo sem precisar. null = ainda checando (não mostra nada).
+  const [logado, setLogado] = useState<boolean | null>(null)
 
   useEffect(() => {
     fetchActivePlans().then(setPlans)
+  }, [])
+
+  // Rolagem pro #radar precisa acontecer DEPOIS que os planos entram: eles
+  // carregam por rede e mudam a altura da página, então o salto que o navegador
+  // faz sozinho no load acaba parando no lugar errado (ou nem acontece, porque
+  // a seção ainda não existia). Por isso é um efeito preso ao `plans`.
+  useEffect(() => {
+    if (window.location.hash !== '#radar') return
+    const alvo = document.getElementById('radar')
+    if (!alvo) return
+    const t = setTimeout(() => alvo.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100)
+    return () => clearTimeout(t)
+  }, [plans])
+
+  // A checagem é local (lê o token do storage) e roda em paralelo: os planos e o
+  // resto da página não esperam por ela em momento nenhum.
+  //
+  // Esta é a página pública que converte, então ela não pode depender dessa
+  // resposta pra ter um botão no header. Se o getSession() demorar demais ou
+  // nunca responder (trava de lock entre abas já causou isso), o `logado` ficaria
+  // null pra sempre e o header ficaria SEM botão nenhum — some o "Entrar" do
+  // visitante. O timer abaixo devolve o comportamento antigo ("Entrar") nesse
+  // caso; se a resposta chegar depois, ela ainda corrige o botão.
+  useEffect(() => {
+    let cancelado = false
+    const fallback = setTimeout(() => {
+      if (!cancelado) setLogado((atual) => (atual === null ? false : atual))
+    }, 2500)
+    supabase.auth
+      .getSession()
+      .then(({ data }) => {
+        if (!cancelado) setLogado(!!data.session)
+      })
+      .catch(() => {
+        if (!cancelado) setLogado(false)
+      })
+    return () => {
+      cancelado = true
+      clearTimeout(fallback)
+    }
   }, [])
 
   const heroPlan = plans.find((p) => p.highlight) ?? plans[0]
@@ -85,9 +131,15 @@ function Precos() {
       {/* Header */}
       <header className="container mx-auto px-6 py-6 flex justify-between items-center">
         <Logo />
-        <Button variant="outline" onClick={() => navigate({ to: "/login" })}>
-          Entrar
-        </Button>
+        {logado === null ? null : logado ? (
+          <Button variant="outline" onClick={() => navigate({ to: '/dashboard' })}>
+            Voltar ao Painel
+          </Button>
+        ) : (
+          <Button variant="outline" onClick={() => navigate({ to: '/login' })}>
+            Entrar
+          </Button>
+        )}
       </header>
 
       {/* Hero */}
@@ -128,8 +180,10 @@ function Precos() {
       {/* Vídeos do fundador — some sozinha enquanto não houver vídeo publicado. */}
       <VideosSection />
 
-      {/* NOVO MÓDULO: VoiceFlow Radar */}
-      <section className="container mx-auto px-6 pb-20">
+      {/* NOVO MÓDULO: VoiceFlow Radar — o id é o alvo do botão "Conheça o RADAR
+          PRO" no painel: sem ele a pessoa caía no topo da página e tinha que
+          procurar o que foi ver. */}
+      <section id="radar" className="container mx-auto px-6 pb-20 scroll-mt-6">
         <div className="max-w-5xl mx-auto bg-gradient-to-br from-[#0A0F1E] to-[#0A0A0A] border border-[#1E3A5F] rounded-2xl p-8 md:p-12">
           <div className="text-center mb-8">
             <span className="inline-block px-3 py-1 rounded-full bg-[#2563EB]/20 border border-[#2563EB]/40 text-[#60A5FA] text-sm font-medium mb-4">

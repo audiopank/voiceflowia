@@ -367,7 +367,7 @@ function Dashboard() {
             </button>
           ) : (
             <button
-              onClick={() => navigate({ to: '/precos' })}
+              onClick={() => navigate({ to: '/precos', hash: 'radar' })}
               className="w-full bg-[#0A0F1E] border border-[#1E3A5F] text-gray-300 hover:border-[#2563EB] font-bold py-6 px-8 rounded-xl text-2xl flex items-center justify-center gap-3 transition-all"
             >
               <RadarIcon className="w-9 h-9 text-[#2563EB]" />
