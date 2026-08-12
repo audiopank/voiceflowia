@@ -1,25 +1,39 @@
 import { useEffect, useState } from 'react'
 import { Play } from 'lucide-react'
-import { listarVideosPublicos, type VideoFundador } from '../lib/videos'
+import { listarVideosPublicos, youtubeThumb, youtubeEmbed, type VideoFundador } from '../lib/videos'
 
-// Cada card so baixa o video quando a pessoa clica no play. Se todos carregassem
-// de cara, uma visita na pagina puxaria todos os arquivos e a cota de banda do
-// Storage iria embora sem ninguem ter assistido nada.
+// Cada card so carrega o video quando a pessoa clica no play — vale tanto pro
+// arquivo proprio (senao a cota de banda da Storage ia embora sem ninguem
+// assistir) quanto pro iframe do YouTube (que sozinho ja pesa centenas de KB
+// por card e planta script de terceiro em quem so passou pela pagina).
 function VideoCard({ video }: { video: VideoFundador }) {
   const [tocando, setTocando] = useState(false)
 
+  const ehYoutube = !!video.youtube_id
+  const thumb = ehYoutube ? youtubeThumb(video.youtube_id!) : video.poster_url
+
   return (
     <div className="bg-[#111111] border border-gray-800 rounded-2xl overflow-hidden">
-      <div className="relative bg-black aspect-[4/5]">
+      <div className={`relative bg-black ${ehYoutube ? 'aspect-video' : 'aspect-[4/5]'}`}>
         {tocando ? (
-          <video
-            src={video.video_url}
-            poster={video.poster_url || undefined}
-            controls
-            autoPlay
-            playsInline
-            className="w-full h-full object-contain"
-          />
+          ehYoutube ? (
+            <iframe
+              src={youtubeEmbed(video.youtube_id!)}
+              title={video.titulo}
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+              allowFullScreen
+              className="w-full h-full border-0"
+            />
+          ) : (
+            <video
+              src={video.video_url ?? undefined}
+              poster={video.poster_url || undefined}
+              controls
+              autoPlay
+              playsInline
+              className="w-full h-full object-contain"
+            />
+          )
         ) : (
           <button
             type="button"
@@ -27,9 +41,7 @@ function VideoCard({ video }: { video: VideoFundador }) {
             aria-label={`Assistir: ${video.titulo}`}
             className="group w-full h-full relative"
           >
-            {video.poster_url && (
-              <img src={video.poster_url} alt="" className="w-full h-full object-cover" />
-            )}
+            {thumb && <img src={thumb} alt="" loading="lazy" className="w-full h-full object-cover" />}
             <span className="absolute inset-0 flex items-center justify-center bg-black/30 group-hover:bg-black/20 transition-colors">
               <span className="w-14 h-14 rounded-full bg-white/90 group-hover:bg-white flex items-center justify-center transition-colors">
                 <Play className="w-6 h-6 text-[#111111] ml-0.5" fill="currentColor" />
@@ -112,7 +124,7 @@ export function VideosSection({
           deixava tudo espremido na esquerda. Assim fica centrado em qualquer qtd. */}
       <div className="flex flex-wrap justify-center gap-4 max-w-6xl mx-auto">
         {videos.map((video) => (
-          <div key={video.id} className="w-full sm:w-[280px]">
+          <div key={video.id} className="w-full sm:w-[340px]">
             <VideoCard video={video} />
           </div>
         ))}

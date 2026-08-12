@@ -5,8 +5,9 @@ import { supabase } from './supabase'
 const TABELA = 'founder_videos'
 const BUCKET = 'founder-videos'
 
-// Teto por arquivo. O padrao do Supabase Storage tambem e 50MB — subir mais que
-// isso falha no servidor, entao barramos antes pra dar mensagem decente.
+// Teto RIGIDO do plano Free da Supabase ("For Free projects, the limit can't
+// exceed 50 MB") — nao adianta aumentar aqui, o servidor recusa. Video mais
+// longo que ~1min nao cabe: nesse caso o caminho e o link do YouTube.
 export const MAX_VIDEO_BYTES = 50 * 1024 * 1024
 
 export const TIPOS_VIDEO_ACEITOS = ['video/mp4', 'video/webm', 'video/quicktime']
@@ -15,13 +16,57 @@ export interface VideoFundador {
   id: string
   titulo: string
   frase: string | null
-  video_url: string
-  video_path: string
+  /** Preenchido quando o video e do YouTube; nesse caso video_url/path vem null. */
+  youtube_id: string | null
+  video_url: string | null
+  video_path: string | null
   poster_url: string | null
   poster_path: string | null
   sort_order: number
   active: boolean
   created_at: string
+}
+
+// Aceita as formas que o YouTube usa: watch?v=, youtu.be/, /shorts/, /embed/ e
+// o proprio ID colado sozinho. Devolve null se nao reconhecer — dai a UI avisa
+// em vez de gravar um ID quebrado que so apareceria como player cinza no ar.
+export function extrairYoutubeId(entrada: string): string | null {
+  const texto = entrada.trim()
+  if (!texto) return null
+
+  // ID puro (11 chars do alfabeto do YouTube)
+  if (/^[\w-]{11}$/.test(texto)) return texto
+
+  // O (?![\w-]) no fim recusa trecho MAIOR que 11 chars em vez de cortar nos
+  // 11 primeiros: sem ele um link digitado errado virava "reconhecido" com um
+  // ID truncado, e o erro so apareceria como player cinza na pagina publica.
+  const padroes = [
+    /[?&]v=([\w-]{11})(?![\w-])/,          // youtube.com/watch?v=ID
+    /youtu\.be\/([\w-]{11})(?![\w-])/,     // youtu.be/ID
+    /\/shorts\/([\w-]{11})(?![\w-])/,      // youtube.com/shorts/ID
+    /\/embed\/([\w-]{11})(?![\w-])/,       // youtube.com/embed/ID
+    /\/live\/([\w-]{11})(?![\w-])/,        // youtube.com/live/ID
+  ]
+  for (const padrao of padroes) {
+    const achou = texto.match(padrao)
+    if (achou) return achou[1]
+  }
+  return null
+}
+
+// Todo ID gravado pelo painel passa por extrairYoutubeId, entao ja vem limitado
+// a [\w-]{11}. O encodeURIComponent aqui e cinto de seguranca pro caso de uma
+// linha inserida na mao pelo painel do Supabase: sem ele, um "ID" com ? ou &
+// grudaria parametro extra na URL do embed. ID valido nao muda em nada (todos
+// os caracteres do alfabeto do YouTube sao unreserved).
+// Thumbnail servida pelo proprio YouTube — nao gasta nada da nossa Storage.
+export function youtubeThumb(id: string): string {
+  return `https://img.youtube.com/vi/${encodeURIComponent(id)}/hqdefault.jpg`
+}
+
+// nocookie: nao planta cookie de rastreio do Google em quem so abriu a pagina.
+export function youtubeEmbed(id: string): string {
+  return `https://www.youtube-nocookie.com/embed/${encodeURIComponent(id)}?autoplay=1&rel=0`
 }
 
 // Lista publica: so os ativos, na ordem definida no painel. Usada pela /precos e
@@ -159,6 +204,24 @@ export async function criarVideo({ titulo, frase, file, poster, sortOrder }: Nov
   }
 }
 
+// Video do YouTube: nada sobe pra Storage, so grava a linha apontando pro ID.
+// E como o YouTube ja serve a thumbnail, nem poster precisamos guardar.
+export async function criarVideoYoutube(
+  titulo: string,
+  frase: string,
+  youtubeId: string,
+  sortOrder: number,
+): Promise<void> {
+  const { error } = await supabase.from(TABELA).insert({
+    titulo,
+    frase: frase.trim() || null,
+    youtube_id: youtubeId,
+    sort_order: sortOrder,
+    active: true,
+  })
+  if (error) throw error
+}
+
 export async function alternarAtivo(id: string, active: boolean) {
   return supabase.from(TABELA).update({ active }).eq('id', id)
 }
@@ -174,6 +237,7 @@ export async function apagarVideo(video: VideoFundador) {
   const { error } = await supabase.from(TABELA).delete().eq('id', video.id)
   if (error) throw error
 
-  const paths = video.poster_path ? [video.video_path, video.poster_path] : [video.video_path]
-  await supabase.storage.from(BUCKET).remove(paths)
+  // Video do YouTube nao tem arquivo nosso pra remover.
+  const paths = [video.video_path, video.poster_path].filter((p): p is string => !!p)
+  if (paths.length) await supabase.storage.from(BUCKET).remove(paths)
 }

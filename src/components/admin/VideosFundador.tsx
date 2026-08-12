@@ -3,10 +3,13 @@ import { Loader2, AlertCircle, CheckCircle2, Upload, Trash2, Eye, EyeOff, ArrowU
 import {
   listarVideosAdmin,
   criarVideo,
+  criarVideoYoutube,
   apagarVideo,
   alternarAtivo,
   atualizarOrdem,
   gerarPoster,
+  extrairYoutubeId,
+  youtubeThumb,
   MAX_VIDEO_BYTES,
   TIPOS_VIDEO_ACEITOS,
   type VideoFundador,
@@ -24,12 +27,17 @@ export function VideosFundador() {
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
 
+  const [modo, setModo] = useState<'youtube' | 'upload'>('youtube')
   const [titulo, setTitulo] = useState('')
   const [frase, setFrase] = useState('')
+  const [linkYoutube, setLinkYoutube] = useState('')
   const [file, setFile] = useState<File | null>(null)
   const [enviando, setEnviando] = useState(false)
   const [etapa, setEtapa] = useState('')
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const youtubeId = extrairYoutubeId(linkYoutube)
+  const podeEnviar = titulo.trim() && (modo === 'youtube' ? !!youtubeId : !!file)
 
   async function carregar() {
     setError('')
@@ -56,34 +64,46 @@ export function VideosFundador() {
       return
     }
     if (f.size > MAX_VIDEO_BYTES) {
-      setError(`Vídeo muito grande (${formatMB(f.size)}). O limite é ${formatMB(MAX_VIDEO_BYTES)} — grave em 720p ou corte a duração.`)
+      setError(
+        `Vídeo muito grande (${formatMB(f.size)}). O upload direto trava em ${formatMB(MAX_VIDEO_BYTES)} — é teto do plano grátis da Supabase, não dá pra aumentar. Para vídeo longo, suba no seu canal do YouTube e use a opção "Link do YouTube" aqui em cima: sem limite de duração.`,
+      )
       return
     }
     setFile(f)
   }
 
   async function enviar() {
-    if (!file || !titulo.trim()) return
+    if (!podeEnviar) return
     setEnviando(true)
     setError('')
     setSuccess('')
     try {
-      setEtapa('Gerando miniatura...')
-      const poster = await gerarPoster(file)
-
-      setEtapa('Enviando vídeo...')
       const proximaOrdem = videos.length ? Math.max(...videos.map((v) => v.sort_order)) + 1 : 1
-      await criarVideo({ titulo: titulo.trim(), frase, file, poster, sortOrder: proximaOrdem })
+
+      if (modo === 'youtube') {
+        setEtapa('Publicando...')
+        await criarVideoYoutube(titulo.trim(), frase, youtubeId!, proximaOrdem)
+      } else {
+        setEtapa('Gerando miniatura...')
+        const poster = await gerarPoster(file!)
+        setEtapa('Enviando vídeo...')
+        await criarVideo({ titulo: titulo.trim(), frase, file: file!, poster, sortOrder: proximaOrdem })
+      }
 
       setSuccess('Vídeo publicado! Já está no ar na página de preços e em /videos.')
       setTitulo('')
       setFrase('')
+      setLinkYoutube('')
       setFile(null)
       if (fileInputRef.current) fileInputRef.current.value = ''
       await carregar()
     } catch (err) {
       console.error('Erro ao enviar vídeo:', err)
-      setError('Não consegui publicar o vídeo. Confira se o CREATE_FOUNDER_VIDEOS_TABLE.sql já foi rodado no Supabase (ele cria a tabela e o bucket).')
+      setError(
+        modo === 'youtube'
+          ? 'Não consegui publicar. O MIGRATION_FOUNDER_VIDEOS_YOUTUBE.sql já foi rodado no Supabase?'
+          : 'Não consegui publicar o vídeo. Confira se o CREATE_FOUNDER_VIDEOS_TABLE.sql já foi rodado no Supabase (ele cria a tabela e o bucket).',
+      )
     } finally {
       setEnviando(false)
       setEtapa('')
@@ -155,9 +175,41 @@ export function VideosFundador() {
         <div>
           <h3 className="text-lg font-bold text-white">Novo vídeo</h3>
           <p className="text-sm text-gray-500">
-            Vídeo curto (30–60s) seu, como criador do VoiceFlow IA. Grave na horizontal ou vertical — a página se adapta.
+            Vídeo seu, como criador do VoiceFlow IA. Grave na horizontal ou vertical — a página se adapta.
           </p>
         </div>
+
+        <div className="flex gap-2">
+          {([
+            { key: 'youtube', label: '▶️ Link do YouTube', dica: 'Qualquer duração' },
+            { key: 'upload', label: '⬆️ Enviar arquivo', dica: `Até ${formatMB(MAX_VIDEO_BYTES)}` },
+          ] as const).map((m) => (
+            <button
+              key={m.key}
+              type="button"
+              onClick={() => {
+                setModo(m.key)
+                setError('')
+              }}
+              className={`flex-1 p-3 rounded-lg border text-left transition-colors ${
+                modo === m.key
+                  ? 'border-[#8B5CF6] bg-[#8B5CF6]/10 text-white'
+                  : 'border-gray-700 bg-[#1A1A1A] text-gray-400 hover:border-gray-600'
+              }`}
+            >
+              <span className="block text-sm font-medium">{m.label}</span>
+              <span className="block text-xs text-gray-500 mt-0.5">{m.dica}</span>
+            </button>
+          ))}
+        </div>
+
+        {modo === 'youtube' && (
+          <p className="text-xs text-gray-500 bg-[#1A1A1A] border border-gray-800 rounded-lg p-3">
+            Vídeo longo (4 min, 10 min) tem que ir por aqui: o plano grátis da Supabase trava upload
+            em {formatMB(MAX_VIDEO_BYTES)}, e servir vídeo pesado pela nossa conta queimaria a cota de
+            banda. Pelo YouTube a duração é livre, não custa banda e ainda alimenta o seu canal.
+          </p>
+        )}
 
         <Field label="Título" hint="O que esse vídeo mostra. Ex: “Monto o mês de um cliente em 4 minutos”">
           <input
@@ -179,20 +231,43 @@ export function VideosFundador() {
           />
         </Field>
 
-        <Field label="Arquivo" hint={`MP4, WebM ou MOV — até ${formatMB(MAX_VIDEO_BYTES)}.`}>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="video/mp4,video/webm,video/quicktime"
-            onChange={(e) => escolherArquivo(e.target.files?.[0])}
-            className="w-full text-sm text-gray-400 file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-[#8B5CF6] file:text-white file:text-sm file:font-medium hover:file:bg-[#7C3AED] file:cursor-pointer"
-          />
-          {file && <p className="text-xs text-gray-500 mt-1">{file.name} · {formatMB(file.size)}</p>}
-        </Field>
+        {modo === 'youtube' ? (
+          <Field label="Link do vídeo no YouTube" hint="Cole o link normal, o de compartilhar (youtu.be) ou o de Shorts.">
+            <input
+              type="text"
+              value={linkYoutube}
+              onChange={(e) => setLinkYoutube(e.target.value)}
+              placeholder="https://www.youtube.com/watch?v=..."
+              className={inputClass}
+            />
+            {linkYoutube.trim() && !youtubeId && (
+              <p className="text-xs text-red-400 mt-1">
+                Não reconheci um vídeo do YouTube nesse link. Confira se copiou inteiro.
+              </p>
+            )}
+            {youtubeId && (
+              <div className="flex items-center gap-3 mt-2">
+                <img src={youtubeThumb(youtubeId)} alt="" className="w-28 rounded-md border border-gray-800" />
+                <span className="text-xs text-[#22C55E]">Vídeo reconhecido ✓</span>
+              </div>
+            )}
+          </Field>
+        ) : (
+          <Field label="Arquivo" hint={`MP4, WebM ou MOV — até ${formatMB(MAX_VIDEO_BYTES)}.`}>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="video/mp4,video/webm,video/quicktime"
+              onChange={(e) => escolherArquivo(e.target.files?.[0])}
+              className="w-full text-sm text-gray-400 file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-[#8B5CF6] file:text-white file:text-sm file:font-medium hover:file:bg-[#7C3AED] file:cursor-pointer"
+            />
+            {file && <p className="text-xs text-gray-500 mt-1">{file.name} · {formatMB(file.size)}</p>}
+          </Field>
+        )}
 
         <Button
           onClick={enviar}
-          disabled={enviando || !file || !titulo.trim()}
+          disabled={enviando || !podeEnviar}
           className="bg-[#8B5CF6] hover:bg-[#7C3AED] disabled:opacity-50 flex items-center gap-2"
         >
           {enviando ? (
@@ -226,16 +301,20 @@ export function VideosFundador() {
               key={video.id}
               className={`bg-[#111111] border rounded-2xl p-4 flex items-start gap-4 ${video.active ? 'border-gray-800' : 'border-gray-800/50 opacity-60'}`}
             >
-              {video.poster_url ? (
-                <img src={video.poster_url} alt="" className="w-24 h-32 object-cover rounded-lg bg-black shrink-0" />
-              ) : (
-                <div className="w-24 h-32 rounded-lg bg-[#0A0A0A] border border-gray-800 shrink-0" />
-              )}
+              {(() => {
+                const thumb = video.youtube_id ? youtubeThumb(video.youtube_id) : video.poster_url
+                return thumb ? (
+                  <img src={thumb} alt="" className="w-24 h-32 object-cover rounded-lg bg-black shrink-0" />
+                ) : (
+                  <div className="w-24 h-32 rounded-lg bg-[#0A0A0A] border border-gray-800 shrink-0" />
+                )
+              })()}
 
               <div className="flex-1 min-w-0">
                 <p className="text-white font-medium">{video.titulo}</p>
                 {video.frase && <p className="text-sm text-gray-400 mt-0.5">“{video.frase}”</p>}
                 <p className="text-xs text-gray-600 mt-1">
+                  {video.youtube_id ? 'YouTube' : 'Arquivo próprio'} ·{' '}
                   {video.active ? 'Visível nas páginas públicas' : 'Oculto'}
                 </p>
 
