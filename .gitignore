@@ -41,3 +41,9 @@ dist-ssr
 *.tsbuildinfo
 vite.config.js
 vite.config.d.ts
+
+# Coleção completa de marketing skills de terceiro (429 arquivos, 4MB).
+# Só as 5 que servem pro nosso estágio foram copiadas pra .claude/skills/ —
+# ver .claude/skills/ATRIBUICAO.md. O resto não precisa viajar no repositório
+# nem no deploy.
+marketingskills-main/
