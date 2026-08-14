@@ -241,11 +241,17 @@ async function handler(request: Request): Promise<Response> {
       const { data: recent } = await supabaseAdmin.from('radar_alertas').select('url').eq('user_id', cfg.user_id).gte('created_at', since)
       const alreadyAlerted = new Set((recent || []).map((r: any) => r.url).filter(Boolean))
 
+      // Crise SEMPRE alerta. Palavra-chave só alerta quando a menção NÃO é positiva:
+      // quem cadastra o nome da própria marca como palavra-chave fazia todo elogio
+      // virar alerta de crise, e alerta que apita pra elogio o cliente aprende a
+      // ignorar — justo pra quando vier problema de verdade.
       const novos = hits.filter((h) => {
-        const isCrise = h.classificacao.toLowerCase() === 'crise'
-        const kwHit = keywords.some((k) => k && h.texto.toLowerCase().includes(k))
+        const c = h.classificacao.toLowerCase()
         const dup = h.url && alreadyAlerted.has(h.url)
-        return (isCrise || kwHit) && !dup
+        if (dup) return false
+        if (c === 'crise') return true
+        if (c === 'positivo') return false
+        return keywords.some((k) => k && h.texto.toLowerCase().includes(k))
       })
 
       for (const h of novos) {

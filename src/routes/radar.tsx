@@ -4,7 +4,7 @@ import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recha
 import {
   Lock, Loader2, Radar as RadarIcon, AlertTriangle, TrendingUp, Save,
   CheckCircle2, AlertCircle, ExternalLink, RefreshCw, Bell, Users, FileDown,
-  MessageSquare, Copy, X, Mic,
+  MessageSquare, Copy, X, Mic, Megaphone,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useSubscription } from '../lib/useSubscription'
@@ -58,6 +58,9 @@ interface Mencao {
   url: string
   classificacao: string
   motivo: string
+  /** true = publicação da PRÓPRIA marca (anúncio/divulgação), não opinião de terceiro.
+   *  Fica fora da nota — relatórios antigos não têm o campo (undefined = terceiro). */
+  propria?: boolean
 }
 
 interface Concorrente {
@@ -129,6 +132,15 @@ interface Alerta {
 }
 
 const DEFAULT_KEYWORDS = ['golpe', 'não recomendo', 'processo', 'lixo', 'péssimo', 'horrível']
+
+// Alerta é pra problema. Menção POSITIVA nunca deveria ter virado alerta — mas
+// versões anteriores gravavam por palavra-chave sem olhar o sentimento, e quem
+// cadastrou o nome da própria marca ficou com a lista cheia de elogio marcado
+// com triângulo vermelho. Filtrar na EXIBIÇÃO conserta as linhas antigas que já
+// estão no banco, sem precisar apagar nada à mão.
+function alertasReais(linhas: Alerta[]): Alerta[] {
+  return linhas.filter((a) => (a.classificacao || '').toLowerCase() !== 'positivo')
+}
 
 function emptyConfig(email: string): RadarConfig {
   return {
@@ -279,7 +291,7 @@ function Radar() {
       const { data: alr } = await supabase
         .from('radar_alertas').select('*').eq('user_id', user.id)
         .gte('created_at', seteDiasAtras).order('created_at', { ascending: false })
-      if (alr) setAlertas(alr as Alerta[])
+      if (alr) setAlertas(alertasReais(alr as Alerta[]))
     })()
   }, [hasRadar])
 
@@ -354,7 +366,7 @@ function Radar() {
         const { data: alr } = await supabase
           .from('radar_alertas').select('*').eq('user_id', userId)
           .gte('created_at', seteDiasAtras).order('created_at', { ascending: false })
-        if (alr) setAlertas(alr as Alerta[])
+        if (alr) setAlertas(alertasReais(alr as Alerta[]))
       }
     } catch (e) {
       setReportErr(e instanceof Error ? e.message : 'Erro ao gerar relatório')
@@ -404,6 +416,12 @@ function Radar() {
   const semClassificacao = !!relatorio && mencoesCount > 0 && !sentimentoOk
   // Quantas menções foram descartadas por serem de "xará" (outra empresa de mesmo nome).
   const descartadas = relatorio ? Number((relatorio.sentimento as Record<string, number>).descartadas || 0) : 0
+  // Publicações da PRÓPRIA marca (anúncio/divulgação): contam pra transparência,
+  // mas não pra nota — reputação é o que TERCEIROS dizem.
+  const proprias = relatorio ? Number((relatorio.sentimento as Record<string, number>).proprias || 0) : 0
+  const mencoesTerceiros = mencoesCount - proprias
+  // Teto de amostra que o backend usou; relatório antigo não tem → 0 (sem exigência).
+  const amostraMinima = relatorio ? Number((relatorio.sentimento as Record<string, number>).amostraMinima || 0) : 0
 
   const palavrasOrdenadas = relatorio
     ? Object.entries(relatorio.palavras).sort((a, b) => Number(b[1]) - Number(a[1])).slice(0, 30)
@@ -419,10 +437,13 @@ function Radar() {
   // reputação" faz o cliente ler "minha reputação é péssima" quando o certo é
   // "não achamos menção nenhuma sua". Mesma condição usada no comparativo, pra
   // as duas partes da tela nunca se contradizerem.
-  const notaValida = !semClassificacao && mencoesCount > 0
+  // Conta menção de TERCEIRO (a nota do backend já é calculada só com elas) e exige
+  // a mesma amostra mínima cobrada dos concorrentes — senão o cliente teria régua
+  // frouxa pra si e dura pro concorrente na mesma tabela.
+  const notaValida = !semClassificacao && mencoesTerceiros > 0 && mencoesTerceiros >= amostraMinima
   const comparativo = relatorio
     ? [
-        { nome: `${config?.marca_nome || 'Sua marca'}`, score: brandScore, total: mencoesCount, voce: true, valido: notaValida },
+        { nome: `${config?.marca_nome || 'Sua marca'}`, score: brandScore, total: mencoesTerceiros, voce: true, valido: notaValida },
         ...(relatorio.concorrentes || []).map((c) => ({
           nome: c.nome,
           score: c.score,
@@ -534,7 +555,10 @@ function Radar() {
                   </div>
                 </Field>
 
-                <Field label="Palavras-chave de alerta" hint="Separadas por vírgula. Menção com uma dessas dispara alerta de crise.">
+                <Field
+                  label="Palavras-chave de alerta"
+                  hint="Palavras que indicam PROBLEMA (golpe, péssimo, não recomendo, processo), separadas por vírgula. NÃO ponha o nome da sua marca aqui — ela já é monitorada sozinha, e usá-la faria toda menção virar alerta. Menção positiva nunca dispara alerta."
+                >
                   <input
                     value={config.palavras_chave_alerta.join(', ')}
                     onChange={(e) => setConfig({ ...config, palavras_chave_alerta: e.target.value.split(',').map((s) => s.trim()) })}
@@ -607,6 +631,14 @@ function Radar() {
                   </p>
                 )}
 
+                {/* Publicações da própria marca: transparência de onde a nota NÃO vem. */}
+                {proprias > 0 && (
+                  <p className="text-xs text-gray-500 flex items-center gap-1">
+                    <Megaphone className="w-3.5 h-3.5 shrink-0" />
+                    {proprias} publicação(ões) da própria marca (anúncio/divulgação) — contam como alcance, mas <strong className="text-gray-400">ficam fora da nota</strong>: reputação é o que terceiros dizem.
+                  </p>
+                )}
+
                 {/* Aviso quando a IA não classificou o sentimento (fallback = tudo Neutro) */}
                 {semClassificacao && (
                   <div className="p-3 bg-yellow-900/20 border border-yellow-700/50 rounded-lg flex items-start gap-2">
@@ -635,10 +667,14 @@ function Radar() {
                     <p className="text-sm font-medium text-white">Nota de Reputação da sua marca</p>
                     <p className="text-xs text-gray-500">
                       {notaValida
-                        ? '0 a 100 — quanto maior, melhor a reputação nas menções da web.'
+                        ? '0 a 100 — calculada só com o que TERCEIROS falaram (anúncio da própria marca não entra).'
                         : semClassificacao
                         ? 'Indisponível nesta rodada — o sentimento não foi classificado.'
-                        : 'Sem menções da sua marca nesta rodada — não dá pra calcular a nota. Nota baixa e ausência de menção são coisas diferentes.'}
+                        : mencoesCount <= 0
+                        ? 'Sem menções da sua marca nesta rodada — não dá pra calcular a nota. Nota baixa e ausência de menção são coisas diferentes.'
+                        : mencoesTerceiros <= 0
+                        ? 'Ninguém de fora falou da sua marca nesta rodada — só publicações dela mesma. Sem terceiro falando não há reputação a medir.'
+                        : `Amostra pequena (${mencoesTerceiros} menção(ões) de terceiros). Abaixo de ${amostraMinima} um único post move a nota demais — melhor não dar número do que dar número frágil.`}
                     </p>
                   </div>
                 </div>
@@ -730,8 +766,9 @@ function Radar() {
                           gerar de novo não muda nada — a ausência é o próprio resultado. */}
                       {comparativo.some((r) => !r.valido) && (
                         <p className="text-[11px] text-gray-600 pt-1">
-                          "—" = sem nota nesta rodada: ou não houve menção da marca, ou a IA não conseguiu
-                          classificar (nesse caso, gerar de novo resolve).
+                          "—" = sem nota confiável nesta rodada: menos de {amostraMinima || 5} menções de
+                          terceiros (amostra pequena demais pra virar número), ou a IA não conseguiu
+                          classificar — só nesse último caso gerar de novo resolve.
                         </p>
                       )}
                     </div>
@@ -777,7 +814,15 @@ function Radar() {
                             const respondivel = cl === 'negativo' || cl === 'crise'
                             return (
                               <tr key={i} className="border-b border-gray-900 last:border-0">
-                                <td className="p-2 text-gray-300 max-w-xs">{m.texto}</td>
+                                <td className="p-2 text-gray-300 max-w-xs">
+                                  {/* Etiqueta pra não confundir divulgação própria com opinião de terceiro. */}
+                                  {m.propria && (
+                                    <span className="inline-flex items-center gap-1 mr-1 px-1.5 py-0.5 rounded text-[10px] bg-[#1A1A1A] border border-gray-700 text-gray-400 align-middle">
+                                      <Megaphone className="w-3 h-3" /> sua publicação
+                                    </span>
+                                  )}
+                                  {m.texto}
+                                </td>
                                 <td className="p-2">
                                   {semClassificacao ? (
                                     <span className="text-xs text-gray-600" title="IA não classificou nesta rodada">—</span>

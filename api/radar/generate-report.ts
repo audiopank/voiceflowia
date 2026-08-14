@@ -15,7 +15,14 @@ interface Mencao {
   classificacao: string
   motivo: string
   relevante?: boolean // false = xará (outra empresa/pessoa de mesmo nome, fora do nicho)
+  // true = a PRÓPRIA marca publicou (anúncio, post do perfil dela, divulgação de
+  // parceiro). Não é opinião do público — entra separado pra não inflar a nota.
+  propria?: boolean
 }
+
+// Abaixo disso a nota vira estatística de nada: com 2 ou 3 menções um único post
+// move a nota 30 pontos. Melhor dizer "amostra pequena" do que fingir precisão.
+const MIN_MENCOES_NOTA = 5
 
 // Stopwords PT-BR pra limpar a nuvem de palavras.
 const STOPWORDS = new Set([
@@ -25,7 +32,27 @@ const STOPWORDS = new Set([
   'is','it','for','on','com.br','www','https','http','br','pt','são','sao','foi','ser','tem','está','esta','pra','pelo','pela',
 ])
 
-function tokenize(texts: string[]): Record<string, number> {
+// Sobras da raspagem, não são termos de marca: aparecem porque o Serper devolve
+// o texto do post junto do rótulo da plataforma ("Photo posted by...", "Publicação
+// de...", "Citação de Seguidores"). Sem isso a nuvem enche de ruído.
+const RUIDO_SCRAPING = new Set([
+  'photo','posted','publicacao','publicacoes','citacao','citacoes','instagram','facebook','linkedin',
+  'twitter','threads','tiktok','youtube','post','posts','stories','reels','perfil','pagina','link',
+  'clique','saiba','veja','confira','acesse','image','video','videos','feed',
+])
+
+// `marca` entra como stopword: o nome da própria marca aparece em TODA menção
+// (é o termo da busca), então dominava a nuvem sem informar nada.
+function tokenize(texts: string[], marca = ''): Record<string, number> {
+  const termosMarca = new Set(
+    marca
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/\p{Diacritic}/gu, '')
+      .replace(/[^a-z0-9\s]/g, ' ')
+      .split(/\s+/)
+      .filter(Boolean),
+  )
   const counts: Record<string, number> = {}
   for (const t of texts) {
     const words = (t || '')
@@ -37,6 +64,8 @@ function tokenize(texts: string[]): Record<string, number> {
     for (const w of words) {
       if (w.length < 4) continue
       if (STOPWORDS.has(w)) continue
+      if (RUIDO_SCRAPING.has(w)) continue
+      if (termosMarca.has(w)) continue
       counts[w] = (counts[w] || 0) + 1
     }
   }
@@ -203,20 +232,31 @@ async function analisarConcorrentes(
   )
 
   // Achata todas as menções tagueando de qual concorrente vieram.
-  const flat: { comp: number; texto: string; classificacao: string }[] = []
+  const flat: { comp: number; texto: string; classificacao: string; propria?: boolean }[] = []
   buscas.forEach((c, ci) => c.mencoes.forEach((texto) => flat.push({ comp: ci, texto, classificacao: '' })))
 
   let classifyOk = false
   if (flat.length) {
     try {
       const lista = flat.map((f, i) => `${i}. ${f.texto}`).join('\n')
-      const prompt = `Você analisa reputação de marcas no nicho "${nicho}". Para cada menção abaixo (sobre marcas concorrentes), classifique o sentimento como Positivo, Neutro, Negativo ou Crise (Crise = golpe/fraude/processo/escândalo). Motivo em 1 frase. Responda um array JSON com um item por menção: "indice", "classificacao", "motivo".\n\nMenções:\n${lista}`
+      // Pede `propria` aqui TAMBÉM: a nota da marca do cliente já exclui anúncio
+      // dela mesma. Se a do concorrente continuasse incluindo (e anúncio é quase
+      // sempre "Positivo"), a mesma barra compararia régua diferente e empurraria
+      // o cliente pra baixo — exatamente o inverso do que se quis corrigir.
+      const prompt = `Você analisa reputação de marcas no nicho "${nicho}". Para cada menção abaixo (sobre marcas concorrentes):
+1. "classificacao": Positivo, Neutro, Negativo ou Crise (Crise = golpe/fraude/processo/escândalo).
+2. "propria": true se quem PUBLICOU foi a própria marca mencionada ou alguém divulgando por ela (anúncio, post institucional, comunicado); false se é um TERCEIRO falando sobre ela. Na dúvida, true.
+3. "motivo": 1 frase curta.
+Responda um array JSON com um item por menção: "indice", "classificacao", "propria", "motivo".\n\nMenções:\n${lista}`
       const arr = await geminiJson(geminiKey, prompt, CLASSIFY_SCHEMA, 1)
       if (Array.isArray(arr)) {
         classifyOk = true
         for (const it of arr) {
           const idx = Number(it.indice)
-          if (flat[idx]) flat[idx].classificacao = it.classificacao || 'Neutro'
+          if (flat[idx]) {
+            flat[idx].classificacao = it.classificacao || 'Neutro'
+            flat[idx].propria = it.propria === true
+          }
         }
       }
     } catch {
@@ -228,6 +268,9 @@ async function analisarConcorrentes(
     const s: SentCount = { positivo: 0, neutro: 0, negativo: 0, crise: 0 }
     for (const f of flat) {
       if (f.comp !== ci) continue
+      // Mesma régua da marca do cliente: anúncio da própria empresa fica fora da nota.
+      // Só dá pra separar quando a IA classificou (senão `propria` vem indefinido).
+      if (classifyOk && f.propria === true) continue
       const cl = (f.classificacao || 'neutro').toLowerCase()
       if (cl === 'positivo') s.positivo++
       else if (cl === 'negativo') s.negativo++
@@ -236,7 +279,16 @@ async function analisarConcorrentes(
     }
     const total = s.positivo + s.neutro + s.negativo + s.crise
     // classificado só é confiável se a IA classificou E o concorrente teve menções.
-    return { nome: c.nome, total, sentimento: s, score: reputationScore(s), classificado: classifyOk && total > 0 }
+    // Amostra pequena não vira nota: comparar uma marca nova com "Instagram" achando
+    // 7 menções do Instagram no mundo e cravando 79 é ruído com cara de dado — e a
+    // barra verde ao lado da nota real do cliente sugere um empate que não existe.
+    return {
+      nome: c.nome,
+      total,
+      sentimento: s,
+      score: reputationScore(s),
+      classificado: classifyOk && total >= MIN_MENCOES_NOTA,
+    }
   })
 }
 
@@ -248,9 +300,10 @@ const CLASSIFY_SCHEMA = {
       indice: { type: 'INTEGER' },
       classificacao: { type: 'STRING', enum: ['Positivo', 'Neutro', 'Negativo', 'Crise'] },
       motivo: { type: 'STRING' },
-      // Opcional (só o classify da MARCA pede) — desambigua xarás. Fora do `required`
-      // pra não obrigar o classify dos concorrentes a devolver.
-      relevante: { type: 'BOOLEAN' },
+      // Opcionais (só o classify da MARCA pede). Fora do `required` pra não
+      // obrigar o classify dos concorrentes a devolver.
+      relevante: { type: 'BOOLEAN' }, // desambigua xarás
+      propria: { type: 'BOOLEAN' },   // publicado PELA marca (anúncio/post próprio)
     },
     required: ['indice', 'classificacao', 'motivo'],
   },
@@ -316,9 +369,10 @@ async function handler(request: Request): Promise<Response> {
       const lista = mencoes.map((m, i) => `${i}. ${m.texto}`).join('\n')
       const prompt = `Você analisa reputação da marca "${marca}", que atua no nicho "${nicho}". Para cada menção abaixo:
 1. "relevante": true se a menção é MESMO sobre a marca "${marca}" do nicho "${nicho}"; false se for um XARÁ — outra empresa, pessoa ou produto de nome igual/parecido, mas de outro ramo (ex: uma empresa homônima de outro setor).
-2. "classificacao": Positivo, Neutro, Negativo ou Crise (Crise = ameaça séria: acusação de golpe/fraude, ameaça de processo, escândalo).
-3. "motivo": 1 frase curta.
-Responda um array JSON com um item por menção: "indice" (número da menção), "relevante", "classificacao", "motivo".\n\nMenções:\n${lista}`
+2. "propria": true se quem PUBLICOU foi a própria marca ou alguém divulgando por ela — anúncio, post institucional, "conheça a ${marca}", comunicado de marco ("já somos X membros"), material promocional, post do perfil oficial. false quando é um TERCEIRO falando sobre a marca (cliente, jornalista, usuário comentando, avaliação). Na dúvida entre os dois, marque true.
+3. "classificacao": Positivo, Neutro, Negativo ou Crise (Crise = ameaça séria: acusação de golpe/fraude, ameaça de processo, escândalo).
+4. "motivo": 1 frase curta.
+Responda um array JSON com um item por menção: "indice" (número da menção), "relevante", "propria", "classificacao", "motivo".\n\nMenções:\n${lista}`
       try {
         const arr = await geminiJson(geminiKey, prompt, CLASSIFY_SCHEMA)
         if (Array.isArray(arr)) {
@@ -329,6 +383,7 @@ Responda um array JSON com um item por menção: "indice" (número da menção),
               mencoes[idx].classificacao = item.classificacao || 'Neutro'
               mencoes[idx].motivo = item.motivo || ''
               mencoes[idx].relevante = item.relevante !== false // só false explícito descarta
+              mencoes[idx].propria = item.propria === true // só true explícito separa
             }
           }
         }
@@ -367,29 +422,47 @@ Responda um array JSON com um item por menção: "indice" (número da menção),
     const mencoesRel = sentimentoOk ? mencoes.filter((m) => m.relevante !== false) : mencoes
     const descartadas = coletadas - mencoesRel.length
 
-    // 4) Sentimento agregado + nuvem de palavras (só das menções relevantes).
+    // REPUTAÇÃO = o que TERCEIROS falam. Anúncio e post do perfil da própria marca
+    // são divulgação, não opinião — contar isso como "positivo" inflava a nota e dava
+    // conforto falso (quem posta muito via nota alta). Ficam guardados e exibidos,
+    // mas fora do cálculo. Sem classificação da IA não dá pra separar → conta tudo.
+    const mencoesProprias = sentimentoOk ? mencoesRel.filter((m) => m.propria === true) : []
+    const mencoesTerceiros = sentimentoOk ? mencoesRel.filter((m) => m.propria !== true) : mencoesRel
+
+    // 4) Sentimento agregado + nuvem de palavras (só de TERCEIROS).
     const sentimento = { positivo: 0, neutro: 0, negativo: 0, crise: 0 }
-    for (const m of mencoesRel) {
+    for (const m of mencoesTerceiros) {
       const c = m.classificacao.toLowerCase()
       if (c === 'positivo') sentimento.positivo++
       else if (c === 'negativo') sentimento.negativo++
       else if (c === 'crise') sentimento.crise++
       else sentimento.neutro++
     }
-    const palavras = tokenize(mencoesRel.map((m) => m.texto))
+    const palavras = tokenize(mencoesTerceiros.map((m) => m.texto), marca)
 
-    // `classificado` (1/0) e `descartadas` viajam junto do sentimento (mesma coluna JSONB,
-    // sem migration nova). UI usa pra distinguir neutro real de "IA não classificou" e pra
-    // avisar quantos xarás foram descartados.
-    const sentimentoStore = { ...sentimento, classificado: sentimentoOk ? 1 : 0, descartadas }
+    // `classificado` (1/0), `descartadas`, `proprias` e `amostraMinima` viajam junto do
+    // sentimento (mesma coluna JSONB, sem migration nova). A UI usa pra distinguir neutro
+    // real de "IA não classificou", avisar dos xarás e não exibir nota de amostra minúscula.
+    const sentimentoStore = {
+      ...sentimento,
+      classificado: sentimentoOk ? 1 : 0,
+      descartadas,
+      proprias: mencoesProprias.length,
+      amostraMinima: MIN_MENCOES_NOTA,
+    }
 
+    const sufixoProprias = mencoesProprias.length
+      ? ` Outras ${mencoesProprias.length} menção(ões) são publicações da própria marca (anúncio/divulgação) e ficam FORA da nota — nota mede o que terceiros dizem.`
+      : ''
     const resumo = !coletadas
       ? `Não encontramos menções relevantes de "${marca}" na web nesta rodada. Tente novamente mais tarde ou ajuste o nome da marca.`
       : !sentimentoOk
         ? `Coletamos ${coletadas} menções sobre "${marca}", mas a IA não conseguiu classificar o sentimento nesta rodada (sobrecarga temporária do Gemini). Gere o relatório novamente em alguns instantes.`
         : mencoesRel.length === 0
           ? `Encontramos ${coletadas} menções com o nome "${marca}", mas todas eram de outra empresa/contexto (mesmo nome, nicho diferente). Nenhuma menção da sua marca nesta rodada.`
-          : `Analisamos ${mencoesRel.length} menções da sua marca "${marca}": ${sentimento.positivo} positivas, ${sentimento.neutro} neutras, ${sentimento.negativo} negativas e ${sentimento.crise} de crise.${descartadas > 0 ? ` (${descartadas} descartadas por serem de outra empresa de mesmo nome.)` : ''}`
+          : mencoesTerceiros.length === 0
+            ? `Encontramos ${mencoesRel.length} menção(ões) de "${marca}", mas TODAS são publicações da própria marca (anúncio/divulgação). Ninguém de fora falou da marca nesta rodada — por isso não há nota de reputação.${descartadas > 0 ? ` (${descartadas} descartadas por serem de outra empresa de mesmo nome.)` : ''}`
+            : `Analisamos ${mencoesTerceiros.length} menção(ões) de terceiros sobre "${marca}": ${sentimento.positivo} positivas, ${sentimento.neutro} neutras, ${sentimento.negativo} negativas e ${sentimento.crise} de crise.${sufixoProprias}${descartadas > 0 ? ` (${descartadas} descartadas por serem de outra empresa de mesmo nome.)` : ''}`
 
     // 5) Grava relatório (só as menções relevantes). A coluna `concorrentes` é da migration
     // 1.1 — se ela ainda não foi rodada no Supabase, o insert com esse campo falha. Nesse
@@ -405,10 +478,18 @@ Responda um array JSON com um item por menção: "indice" (número da menção),
     }
     if (relErr) return new Response(JSON.stringify({ error: `Erro ao salvar relatório: ${relErr.message}` }), { status: 500, headers: { 'Content-Type': 'application/json' } })
 
-    // 6) Gera alertas: Crise OU menção que bate com palavra-chave (só das relevantes).
+    // 6) Gera alertas. Crise SEMPRE alerta. Palavra-chave alerta só quando a menção
+    // NÃO é positiva: quem põe o nome da própria marca como palavra-chave fazia todo
+    // elogio virar "alerta de crise" — e alerta que apita pra elogio é alerta que o
+    // cliente aprende a ignorar, justo pra quando vier problema de verdade.
     const lowerKeywords = keywords.map((k) => k.toLowerCase())
     const alertas = mencoesRel
-      .filter((m) => m.classificacao.toLowerCase() === 'crise' || lowerKeywords.some((k) => k && m.texto.toLowerCase().includes(k)))
+      .filter((m) => {
+        const c = m.classificacao.toLowerCase()
+        if (c === 'crise') return true
+        if (c === 'positivo') return false
+        return lowerKeywords.some((k) => k && m.texto.toLowerCase().includes(k))
+      })
       .map((m) => ({
         user_id: user.id, config_id: config.id, mencao_texto: m.texto.slice(0, 300),
         fonte: m.fonte, url: m.url, classificacao: m.classificacao, motivo: m.motivo, notified_email: false,
