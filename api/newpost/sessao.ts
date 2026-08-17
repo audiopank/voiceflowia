@@ -53,6 +53,23 @@ function chaveEhPublica(chave: string): boolean {
   }
 }
 
+// A chave certa mas do PROJETO ERRADO passa no teste acima (role: anon) e só falha lá na
+// frente, com um 401 "Invalid API key" que não diz nada pro cliente. Como o VoiceFlow tem
+// a própria anon key numa variável de nome parecido, trocar as duas na Vercel é o erro
+// natural de se cometer — e foi o que aconteceu no 1º deploy. Aqui a gente compara o `ref`
+// declarado na chave com o subdomínio da URL e falha explicando.
+function chaveEDoProjeto(chave: string, url: string): boolean {
+  const refDaUrl = url.replace(/^https?:\/\//, '').split('.')[0]
+  const partes = chave.split('.')
+  if (partes.length !== 3) return true // formato novo (sb_publishable_): não dá pra conferir
+  try {
+    const payload = JSON.parse(Buffer.from(partes[1], 'base64').toString('utf8'))
+    return !payload?.ref || payload.ref === refDaUrl
+  } catch {
+    return true // não conseguiu ler: deixa seguir, o Supabase decide
+  }
+}
+
 interface SessaoNewPost {
   accessToken: string
   refreshToken: string
@@ -117,6 +134,10 @@ async function handler(request: Request): Promise<Response> {
   if (!chaveEhPublica(NEWPOST_ANON)) {
     console.error('[newpost/sessao] a chave configurada NÃO é a anon key — recusando pra não vazar segredo')
     return json({ error: 'Configuração inválida: defina NEWPOST_SUPABASE_ANON_KEY com a chave anon (pública) da NewPost-IA.' }, 500)
+  }
+  if (!chaveEDoProjeto(NEWPOST_ANON, NEWPOST_URL)) {
+    console.error('[newpost/sessao] NEWPOST_SUPABASE_ANON_KEY é de outro projeto Supabase, não bate com NEWPOST_SUPABASE_URL')
+    return json({ error: 'Configuração inválida: a NEWPOST_SUPABASE_ANON_KEY pertence a outro projeto Supabase (provavelmente a chave do próprio VoiceFlow). Use a anon key do projeto da NewPost-IA.' }, 500)
   }
   if (!VF_URL || !VF_SERVICE) return json({ error: 'VITE_SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY não configuradas' }, 500)
 
