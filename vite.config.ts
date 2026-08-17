@@ -23,6 +23,7 @@ function apiDevBridge(): Plugin {
     '/api/radar/generate-response': './api/radar/generate-response.ts',
     '/api/radar/cron-alerts': './api/radar/cron-alerts.ts',
     '/api/reminders/cron-reengajamento': './api/reminders/cron-reengajamento.ts',
+    '/api/newpost/sessao': './api/newpost/sessao.ts',
   }
 
   return {

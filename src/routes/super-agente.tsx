@@ -15,8 +15,9 @@ import { BackButton } from '../components/BackButton'
 import { AtivarTrial } from '../components/AtivarTrial'
 import { SuperAgenteGuia } from '../components/SuperAgenteGuia'
 import { buildIcsCalendar, downloadIcsFile, postDateTime } from '../lib/ics'
-import { convertToWhatsAppOgg } from '../lib/audioConvert'
+import { convertToWhatsAppOgg, convertMixToMp3 } from '../lib/audioConvert'
 import { RedesSociais } from '../components/RedesSociais'
+import { PublicarNewPost } from '../components/PublicarNewPost'
 import { SOCIAL_NETWORKS, socialKey, loadSocialLinks, saveSocialLinks, type SocialLinks } from '../lib/socialLinks'
 import { TONS, TOM_PADRAO, TONS_VALIDOS } from '../lib/tons'
 import { proximasDatasSazonais, textoContagem } from '../lib/datasSazonais'
@@ -750,6 +751,36 @@ function SuperAgente() {
     } finally {
       setExportingIndex(null)
     }
+  }
+
+  // Mesmo material do "Baixar Cards", mas como Blob em memória em vez de download: é o que
+  // sobe pro post na NewPost-IA. Reusa os slides ocultos já renderizados, então o post sai
+  // idêntico ao carrossel que o cliente baixaria.
+  async function prepararMidiaNewPost(index: number): Promise<{ imagens: Blob[]; audio: Blob | null }> {
+    const imagens: Blob[] = []
+    for (const slide of slidesFor(index)) {
+      const node = exportRefs.current[slideRefKey(index, slide)]
+      if (!node) continue
+      const dataUrl = await toPng(node, {
+        pixelRatio: 2,
+        width: EXPORT_W,
+        height: EXPORT_H,
+        backgroundColor: '#111111',
+      })
+      imagens.push(await (await fetch(dataUrl)).blob())
+    }
+
+    let audio: Blob | null = null
+    const bruto = audioBlobs[index]
+    if (bruto) {
+      // Mesma cadeia do ZIP (trilha do Estúdio por cima da locução), só que em MP3: é o
+      // formato que a NewPost-IA guarda no bucket post-audio e que toca em qualquer
+      // navegador. O OGG fica reservado pro WhatsApp.
+      const comTrilha = await aplicarTrilha(bruto, estudio.trilha.buffer, estudio.trilha.volume)
+      const { blob } = await convertMixToMp3(comTrilha)
+      audio = blob
+    }
+    return { imagens, audio }
   }
 
   async function handleDownloadKit() {
@@ -1544,6 +1575,17 @@ function SuperAgente() {
                     Baixar Cards ({slidesFor(index).length})
                   </Button>
                 </div>
+
+                {/* NewPost-IA é a rede do próprio Mestre: aqui a publicação é de verdade
+                    (texto + cards + locução), não "copia e cola" como nas outras. É a única
+                    que aceita áudio no post — ver src/lib/newpost.ts. */}
+                <PublicarNewPost
+                  texto={`${post.hook}\n\n${post.legenda}`}
+                  marca={nicho.trim() || 'Minha marca'}
+                  chaveUnica={`voiceflow-${dataInicio}-${diaTag(post.dia, post.periodo, post.horario)}-${index}`}
+                  prepararMidia={() => prepararMidiaNewPost(index)}
+                  disabled={exportingIndex !== null}
+                />
 
                 {/* Postar em: copia a legenda deste post e abre a rede pra colar. Só mostra
                     as redes que o cliente configurou no painel "Suas Redes Sociais". */}
