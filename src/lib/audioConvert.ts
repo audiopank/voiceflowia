@@ -18,9 +18,22 @@ async function getFFmpeg() {
       const { toBlobURL } = await import('@ffmpeg/util')
       const ffmpeg = new FFmpeg()
       const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd'
+      // classWorkerURL é obrigatório aqui, e a falta dele quebrava TODA conversão em
+      // produção (o WhatsApp recebia WAV em vez de OGG, e o post da NewPost-IA ia com
+      // WAV de ~2,7MB em vez de MP3 de ~250KB — silenciosamente, porque as duas funções
+      // caem no fallback de devolver o original).
+      //
+      // Motivo: o @ffmpeg/ffmpeg cria um worker interno que carrega o core com
+      // importScripts(). No build de produção o Vite converte esse worker em módulo ES,
+      // e module worker NÃO tem importScripts — daí "failed to import ffmpeg-core.js".
+      // Em `vite dev` funcionava, então o bug só aparecia depois do deploy.
+      // Apontar pro worker UMD (clássico) do próprio pacote resolve.
+      // A versão abaixo precisa acompanhar a de @ffmpeg/ffmpeg no package.json.
+      const baseFFmpeg = 'https://unpkg.com/@ffmpeg/ffmpeg@0.12.15/dist/umd'
       await ffmpeg.load({
         coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
         wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
+        classWorkerURL: await toBlobURL(`${baseFFmpeg}/814.ffmpeg.js`, 'text/javascript'),
       })
       return ffmpeg
     })().catch((err) => {
