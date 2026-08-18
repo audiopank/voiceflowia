@@ -1,4 +1,4 @@
-import { copyFileSync, mkdirSync, existsSync } from 'node:fs'
+import { copyFileSync, mkdirSync, existsSync, readFileSync } from 'node:fs'
 import { defineConfig, loadEnv, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
@@ -70,22 +70,35 @@ function apiDevBridge(): Plugin {
 
 // FFmpeg.wasm servido do NOSSO domínio, não de CDN.
 //
-// Copiamos o build ESM do core (não o UMD). Motivo, conferido no Chrome: o
-// @ffmpeg/ffmpeg SEMPRE cria o worker com `type: "module"` (dist/esm/classes.js),
-// e module worker não tem `importScripts()`. O core UMD só carrega por
-// importScripts, então esse caminho caía no fallback do pacote e estourava
-// "failed to import ffmpeg-core.js" / "Cannot find module '...'" — exatamente a
-// falha de produção. O worker ESM usa `await import(coreURL)`, que carrega o core
-// ESM da nossa origem, sem CDN e sem blob.
+// Por que: montar o worker e o core a partir de blob de origem externa quebrava
+// TODA conversão de áudio em produção — primeiro com "failed to import
+// ffmpeg-core.js", depois com "Cannot find module 'blob:...'". Em mesma origem o
+// navegador cria o Worker direto do arquivo e o importScripts do core funciona.
 //
-// A cópia é feita AQUI, na avaliação do config (que roda em todo dev e todo
-// build), e não num hook como buildStart — no Vite 8 aquele hook não disparou e a
-// falha era silenciosa: o build passava e o áudio quebrava só em produção.
+// O caminho leva a VERSÃO do @ffmpeg/core (ex: /ffmpeg/0.12.6/) de propósito: com a
+// versão embutida, o arquivo nunca muda de conteúdo sob a mesma URL, e aí dá pra
+// servir com `immutable` no vercel.json — o navegador guarda os 31MB pra sempre em
+// vez de revalidar a cada sessão. Atualizar o pacote gera um caminho novo e o cache
+// velho é simplesmente ignorado: zero invalidação manual.
 //
-// Os 31MB de wasm NÃO entram no Git: `public/ffmpeg/` está no .gitignore e os
-// arquivos são recriados de node_modules a cada build.
+// A cópia roda AQUI, na avaliação do config (que acontece em todo dev e todo build),
+// e não num hook como buildStart — no Vite 8 aquele hook não disparou e a falha era
+// silenciosa: o build passava e o áudio quebrava só em produção.
+//
+// Os 31MB NÃO entram no Git: `public/ffmpeg/` está no .gitignore.
+const FFMPEG_CORE_VERSION: string = (() => {
+  try {
+    return JSON.parse(readFileSync(__dirname + '/node_modules/@ffmpeg/core/package.json', 'utf8')).version
+  } catch {
+    return '0.0.0'
+  }
+})()
+
+// Exposto ao app via `define` (ver mais abaixo) pra não duplicar a versão em dois lugares.
+const FFMPEG_DIR = `/ffmpeg/${FFMPEG_CORE_VERSION}`
+
 function copiarFFmpeg(): void {
-  const destino = __dirname + '/public/ffmpeg'
+  const destino = __dirname + '/public' + FFMPEG_DIR
   try {
     mkdirSync(destino, { recursive: true })
     const origens: [string, string][] = [
@@ -95,7 +108,7 @@ function copiarFFmpeg(): void {
     for (const [de, para] of origens) {
       const origem = __dirname + de
       if (!existsSync(origem)) {
-        console.warn('[ffmpeg] faltando ' + de + ' — rode `npm install`. Conversao de audio vai cair no fallback.')
+        console.warn('[ffmpeg] faltando ' + de + ' — rode `npm install`. Conversao de audio cai no fallback.')
         continue
       }
       copyFileSync(origem, destino + para)
@@ -113,6 +126,10 @@ export default defineConfig(({ mode }) => {
 
   return {
     plugins: [tanstackRouter({ target: 'react', autoCodeSplitting: true }), react(), tailwindcss(), apiDevBridge()],
+    define: {
+      // Caminho versionado do FFmpeg: fonte unica, o app nao repete a versao.
+      __FFMPEG_DIR__: JSON.stringify(FFMPEG_DIR),
+    },
     resolve: {
       alias: {
         '@': __dirname + '/src',

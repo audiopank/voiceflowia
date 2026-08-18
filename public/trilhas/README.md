@@ -18,11 +18,10 @@ de atualizá-la fazia a trilha aparecer num lugar e sumir no outro).
 
 Enquanto o arquivo não existir, o chip mostra um aviso amigável em vez de quebrar.
 
-## Trilhas hoje (8)
+## Trilhas hoje (7)
 
 | Chip           | Arquivo             | Duração | Peso   |
 | -------------- | ------------------- | ------- | ------ |
-| 💼 Corporativa | `corporativa.mp3`   | 12s ⚠️   | 293 KB |
 | 🏢 Business    | `business.mp3`      | 1:00    | 1,4 MB |
 | 🌎 Global      | `global.mp3`        | 2:16    | 3,2 MB |
 | 🎵 Pop         | `pop.mp3`           | 1:01    | 1,5 MB |
@@ -31,10 +30,9 @@ Enquanto o arquivo não existir, o chip mostra um aviso amigável em vez de queb
 | 📈 Business 02 | `business-02.mp3`   | 0:25    | 0,8 MB |
 | 🏭 Industrial  | `industrial.mp3`    | 1:06    | 2,0 MB |
 
-⚠️ A Corporativa tem só **12 segundos**. Desde 18/08/2026 a trilha **repete
-automaticamente** quando é mais curta que a locução, então ela não deixa mais a voz
-sem cama — mas 12s repetindo fica repetitivo em locução longa. Trocar por uma
-versão de 1–2 minutos continua sendo o ideal.
+A **Corporativa (12s) foi aposentada em 18/08/2026**: curta demais, repetia no meio
+de qualquer locução e a emenda do loop era audível. Com 7 trilhas melhores no
+catálogo, não valia manter uma que soava defeituosa.
 
 ## Requisitos do arquivo
 

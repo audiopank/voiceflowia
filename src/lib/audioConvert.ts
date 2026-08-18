@@ -7,6 +7,9 @@
 // o runtime pra Node.js. Converter no cliente, só na hora do download, é o caminho mais
 // simples e de menor risco pra esse stack.
 
+// Injetado pelo Vite (define no vite.config.ts): caminho versionado dos arquivos.
+declare const __FFMPEG_DIR__: string
+
 let ffmpegPromise: Promise<import('@ffmpeg/ffmpeg').FFmpeg> | null = null
 
 // Carrega o FFmpeg (core servido do nosso domínio) uma única vez por sessão; conversões seguintes
@@ -27,8 +30,10 @@ async function getFFmpeg() {
       // com await import(coreURL). Testado no Chrome com estes arquivos: gera OGG e
       // MP3 de verdade; com o UMD, estourava "Cannot find module".
       await ffmpeg.load({
-        coreURL: '/ffmpeg/ffmpeg-core.js',
-        wasmURL: '/ffmpeg/ffmpeg-core.wasm',
+        // __FFMPEG_DIR__ vem do vite.config.ts e leva a versao do @ffmpeg/core no
+        // caminho (ex: /ffmpeg/0.12.6) — e o que permite servir com cache immutable.
+        coreURL: `${__FFMPEG_DIR__}/ffmpeg-core.js`,
+        wasmURL: `${__FFMPEG_DIR__}/ffmpeg-core.wasm`,
       })
       return ffmpeg
     })().catch((err) => {

@@ -23,7 +23,6 @@ export const TRILHA_VOL_PADRAO = 25
 // Pra somar uma trilha nova: ponha o MP3 em public/trilhas/ e acrescente UMA linha abaixo.
 // Requisitos do arquivo (licença, duração, peso) estão em public/trilhas/README.md.
 export const TRILHAS_PRONTAS = [
-  { id: 'corporativa', label: 'Corporativa', emoji: '💼', file: 'corporativa.mp3' },
   { id: 'business', label: 'Business', emoji: '🏢', file: 'business.mp3' },
   { id: 'global', label: 'Global', emoji: '🌎', file: 'global.mp3' },
   { id: 'pop', label: 'Pop', emoji: '🎵', file: 'pop.mp3' },

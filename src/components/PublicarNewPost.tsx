@@ -1,10 +1,11 @@
 import { useState } from 'react'
-import { Send, Loader2, CheckCircle2, ExternalLink, KeyRound } from 'lucide-react'
+import { Send, Loader2, CheckCircle2, ExternalLink, KeyRound, AtSign } from 'lucide-react'
 import { Button } from './ui/button'
 import {
   obterSessaoNewPost,
   publicarNaNewPost,
   PrecisaSenhaNewPost,
+  PrecisaNomeNewPost,
   URL_NEWPOST,
   type ResultadoPublicacao,
 } from '../lib/newpost'
@@ -33,17 +34,25 @@ export function PublicarNewPost({
 }) {
   const [estado, setEstado] = useState<'parado' | 'preparando' | 'enviando' | 'pronto'>('parado')
   const [erro, setErro] = useState('')
+  const [pedindoNome, setPedindoNome] = useState<{ sugestao: string } | null>(null)
+  const [nomePerfil, setNomePerfil] = useState('')
   const [pedindoSenha, setPedindoSenha] = useState<{ email: string } | null>(null)
   const [senha, setSenha] = useState('')
   const [resultado, setResultado] = useState<ResultadoPublicacao | null>(null)
 
-  async function publicar(senhaNewpost?: string) {
+  async function publicar(opcoes: { nomePerfil?: string; senhaNewpost?: string } = {}) {
     setErro('')
     try {
-      // A conta vem primeiro: se o cliente precisar informar a senha, é melhor descobrir
+      // A conta vem primeiro: se faltar o nome do perfil ou a senha, é melhor descobrir
       // isso ANTES de gastar tempo renderizando 4 PNGs e convertendo áudio.
       setEstado('preparando')
-      const sessao = await obterSessaoNewPost(marca, senhaNewpost)
+      // `nomePerfil` do estado sobrevive entre as duas perguntas: se ele escolher o nome e
+      // logo depois a conta pedir senha, não perguntamos o nome de novo.
+      const sessao = await obterSessaoNewPost(marca, {
+        nomePerfil: opcoes.nomePerfil ?? (nomePerfil.trim() || undefined),
+        senhaNewpost: opcoes.senhaNewpost,
+      })
+      setPedindoNome(null)
       setPedindoSenha(null)
 
       const { imagens, audio } = await prepararMidia()
@@ -53,7 +62,18 @@ export function PublicarNewPost({
       setResultado(r)
       setEstado('pronto')
     } catch (e) {
+      if (e instanceof PrecisaNomeNewPost) {
+        setPedindoNome({ sugestao: e.sugestao })
+        if (!nomePerfil) setNomePerfil(e.sugestao)
+        setEstado('parado')
+        return
+      }
       if (e instanceof PrecisaSenhaNewPost) {
+        // Fecha a pergunta do nome ANTES de abrir a da senha: na renderizacao o bloco
+        // do nome vem primeiro, entao deixa-lo aberto prendia o cliente que ja tem
+        // conta na mesma tela, sem nunca ver o campo de senha. O nome digitado fica
+        // no estado `nomePerfil` e viaja junto na proxima tentativa.
+        setPedindoNome(null)
         setPedindoSenha({ email: e.email })
         setEstado('parado')
         return
@@ -99,6 +119,47 @@ export function PublicarNewPost({
     )
   }
 
+  // Primeira publicação: quem escolhe o nome público do perfil é o CLIENTE. A sugestão
+  // vem preenchida só pra ele não começar do zero — e é editável. Antes a gente usava o
+  // campo "Nicho" sem perguntar, e quem digitava "padaria em BH" nascia com isso de nome.
+  if (pedindoNome) {
+    return (
+      <div className="no-export space-y-2 pt-1 rounded-lg border border-gray-700 bg-[#0A0A0A] p-3">
+        <p className="text-xs text-gray-300 flex items-start gap-1.5">
+          <AtSign className="w-3.5 h-3.5 mt-0.5 shrink-0 text-[#0EA5A4]" />
+          Como você quer aparecer na NewPost-IA? É o nome que o público vê no seu perfil —
+          você pode mudar depois, dentro da rede.
+        </p>
+        <div className="flex gap-2">
+          <input
+            type="text"
+            value={nomePerfil}
+            onChange={(e) => setNomePerfil(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter' && nomePerfil.trim() && estado === 'parado') publicar({ nomePerfil: nomePerfil.trim() }) }}
+            placeholder="Nome do seu perfil"
+            maxLength={60}
+            autoFocus
+            className="flex-1 p-2 bg-[#1A1A1A] border border-gray-700 rounded-lg text-white placeholder-gray-600 text-sm focus:outline-none focus:border-[#0EA5A4]"
+          />
+          <Button
+            onClick={() => publicar({ nomePerfil: nomePerfil.trim() })}
+            disabled={!nomePerfil.trim() || estado !== 'parado'}
+            className="bg-[#0EA5A4] hover:opacity-90 disabled:opacity-50 px-3"
+          >
+            Continuar
+          </Button>
+        </div>
+        {/* Cancelar limpa tambem o campo: a sugestao vem preenchida por nos, e se ela
+            sobrevivesse ao cancelamento o proximo clique em "Publicar" criaria o perfil
+            com um nome que o cliente nunca confirmou. Ao reabrir, a sugestao volta. */}
+        <button onClick={() => { setPedindoNome(null); setNomePerfil('') }} className="text-xs text-gray-500 hover:text-gray-300">
+          Cancelar
+        </button>
+        {erro && <p className="text-yellow-500 text-xs">{erro}</p>}
+      </div>
+    )
+  }
+
   if (pedindoSenha) {
     return (
       <div className="no-export space-y-2 pt-1 rounded-lg border border-gray-700 bg-[#0A0A0A] p-3">
@@ -112,12 +173,12 @@ export function PublicarNewPost({
             type="password"
             value={senha}
             onChange={(e) => setSenha(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter' && senha) publicar(senha) }}
+            onKeyDown={(e) => { if (e.key === 'Enter' && senha) publicar({ senhaNewpost: senha }) }}
             placeholder="Senha da NewPost-IA"
             className="flex-1 p-2 bg-[#1A1A1A] border border-gray-700 rounded-lg text-white placeholder-gray-600 text-sm focus:outline-none focus:border-[#8B5CF6]"
           />
           <Button
-            onClick={() => publicar(senha)}
+            onClick={() => publicar({ senhaNewpost: senha })}
             disabled={!senha || estado !== 'parado'}
             className="bg-[#8B5CF6] hover:bg-[#7C3AED] disabled:opacity-50 px-3"
           >

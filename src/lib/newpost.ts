@@ -34,7 +34,21 @@ export class PrecisaSenhaNewPost extends Error {
   }
 }
 
-export async function obterSessaoNewPost(marca: string, senhaNewpost?: string): Promise<SessaoNewPost> {
+// O cliente ainda nao escolheu como quer aparecer na rede. So acontece na PRIMEIRA
+// publicacao — depois o vinculo existe e ninguem pergunta mais nada.
+export class PrecisaNomeNewPost extends Error {
+  sugestao: string
+  constructor(sugestao: string) {
+    super('Escolha o nome do seu perfil na NewPost-IA.')
+    this.name = 'PrecisaNomeNewPost'
+    this.sugestao = sugestao
+  }
+}
+
+export async function obterSessaoNewPost(
+  marca: string,
+  opcoes: { nomePerfil?: string; senhaNewpost?: string } = {},
+): Promise<SessaoNewPost> {
   const { data: { session } } = await supabase.auth.getSession()
   const token = session?.access_token
   if (!token) throw new Error('Faça login no VoiceFlow para publicar.')
@@ -42,7 +56,7 @@ export async function obterSessaoNewPost(marca: string, senhaNewpost?: string): 
   const res = await fetch('/api/newpost/sessao', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-    body: JSON.stringify({ marca, senhaNewpost }),
+    body: JSON.stringify({ marca, nomePerfil: opcoes.nomePerfil, senhaNewpost: opcoes.senhaNewpost }),
   })
 
   // Resposta pode não ser JSON (502/504 da Vercel devolvem HTML) — ler como texto
@@ -52,6 +66,7 @@ export async function obterSessaoNewPost(marca: string, senhaNewpost?: string): 
   try { dados = JSON.parse(bruto) } catch { /* mantém {} */ }
 
   if (!res.ok) {
+    if (dados?.precisaNome) throw new PrecisaNomeNewPost(dados.sugestao || '')
     if (dados?.precisaSenha) throw new PrecisaSenhaNewPost(dados.error || 'Informe a senha da NewPost-IA.', dados.email || '')
     throw new Error(dados?.error || `Falha ao conectar na NewPost-IA (HTTP ${res.status}).`)
   }

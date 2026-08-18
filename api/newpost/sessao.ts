@@ -153,7 +153,7 @@ async function handler(request: Request): Promise<Response> {
 
   let body: any = {}
   try { body = await request.json() } catch { /* corpo opcional */ }
-  const marca: string = (body?.marca || '').toString().trim() || usuario.email.split('@')[0]
+  const nomePerfil: string = (body?.nomePerfil || '').toString().trim()
   const senhaInformada: string = (body?.senhaNewpost || '').toString()
 
   // --- já existe vínculo? --------------------------------------------------
@@ -162,6 +162,20 @@ async function handler(request: Request): Promise<Response> {
     .select('newpost_user_id, newpost_email, refresh_token, senha_gerada')
     .eq('user_id', usuario.id)
     .maybeSingle()
+
+  // Primeira publicação: o CLIENTE escolhe como quer aparecer na rede. Antes a gente
+  // usava o campo "Nicho" do Super Agente como display_name, e quem digitava
+  // "padaria em BH" nascia com isso de nome público — decisão nossa sobre a marca
+  // dele, que não é nossa pra tomar. A sugestão abaixo é só um ponto de partida
+  // editável; nada é criado enquanto ele não confirmar.
+  if (!vinculo && !nomePerfil) {
+    return json({
+      precisaNome: true,
+      sugestao: (body?.marca || '').toString().trim() || usuario.email.split('@')[0],
+      email: usuario.email,
+    }, 409)
+  }
+  const marca = nomePerfil || usuario.email.split('@')[0]
 
   let sessao: SessaoNewPost | null = null
   let contaCriadaAgora = false
@@ -231,7 +245,8 @@ async function handler(request: Request): Promise<Response> {
     updated_at: new Date().toISOString(),
   })
   // Falha ao gravar o vínculo não impede a publicação de agora — só faz a próxima vez
-  // pedir a senha de novo. Melhor publicar do que travar o cliente.
+  // perguntar de novo (o nome do perfil e, se a conta já existia, a senha). Melhor
+  // publicar e repetir uma pergunta do que travar o cliente.
   if (erroSalvar) console.error('[newpost/sessao] não gravou o vínculo:', erroSalvar.message)
 
   return json({
