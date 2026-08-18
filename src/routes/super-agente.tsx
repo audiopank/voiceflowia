@@ -15,7 +15,7 @@ import { BackButton } from '../components/BackButton'
 import { AtivarTrial } from '../components/AtivarTrial'
 import { SuperAgenteGuia } from '../components/SuperAgenteGuia'
 import { buildIcsCalendar, downloadIcsFile, postDateTime } from '../lib/ics'
-import { convertToWhatsAppOgg, convertMixToMp3 } from '../lib/audioConvert'
+import { convertToWhatsAppOgg, convertVoiceToMp3 } from '../lib/audioConvert'
 import { RedesSociais } from '../components/RedesSociais'
 import { PublicarNewPost } from '../components/PublicarNewPost'
 import { SOCIAL_NETWORKS, socialKey, loadSocialLinks, saveSocialLinks, type SocialLinks } from '../lib/socialLinks'
@@ -777,7 +777,7 @@ function SuperAgente() {
       // formato que a NewPost-IA guarda no bucket post-audio e que toca em qualquer
       // navegador. O OGG fica reservado pro WhatsApp.
       const comTrilha = await aplicarTrilha(bruto, estudio.trilha.buffer, estudio.trilha.volume)
-      const { blob } = await convertMixToMp3(comTrilha)
+      const { blob } = await convertVoiceToMp3(comTrilha)
       audio = blob
     }
     return { imagens, audio }

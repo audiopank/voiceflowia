@@ -9,31 +9,26 @@
 
 let ffmpegPromise: Promise<import('@ffmpeg/ffmpeg').FFmpeg> | null = null
 
-// Carrega o FFmpeg (~8MB de core, via CDN) uma única vez por sessão; conversões seguintes
+// Carrega o FFmpeg (core servido do nosso domínio) uma única vez por sessão; conversões seguintes
 // reusam a mesma instância.
 async function getFFmpeg() {
   if (!ffmpegPromise) {
     ffmpegPromise = (async () => {
       const { FFmpeg } = await import('@ffmpeg/ffmpeg')
-      const { toBlobURL } = await import('@ffmpeg/util')
       const ffmpeg = new FFmpeg()
-      const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd'
-      // classWorkerURL é obrigatório aqui, e a falta dele quebrava TODA conversão em
-      // produção (o WhatsApp recebia WAV em vez de OGG, e o post da NewPost-IA ia com
-      // WAV de ~2,7MB em vez de MP3 de ~250KB — silenciosamente, porque as duas funções
-      // caem no fallback de devolver o original).
+      // Core ESM em MESMA ORIGEM (copiado pra public/ffmpeg/ por copiarFFmpeg() no
+      // vite.config.ts). Carregar de CDN via blob quebrava em produção
+      // ("failed to import ffmpeg-core.js" e depois "Cannot find module 'blob:...'").
       //
-      // Motivo: o @ffmpeg/ffmpeg cria um worker interno que carrega o core com
-      // importScripts(). No build de produção o Vite converte esse worker em módulo ES,
-      // e module worker NÃO tem importScripts — daí "failed to import ffmpeg-core.js".
-      // Em `vite dev` funcionava, então o bug só aparecia depois do deploy.
-      // Apontar pro worker UMD (clássico) do próprio pacote resolve.
-      // A versão abaixo precisa acompanhar a de @ffmpeg/ffmpeg no package.json.
-      const baseFFmpeg = 'https://unpkg.com/@ffmpeg/ffmpeg@0.12.15/dist/umd'
+      // NÃO passar classWorkerURL apontando pro UMD (814.ffmpeg.js): o
+      // @ffmpeg/ffmpeg cria o worker sempre com type: "module", e module worker não
+      // tem importScripts() — que é o único jeito de o core UMD entrar. Sem
+      // classWorkerURL, o Vite empacota o worker ESM do pacote, que carrega o core
+      // com await import(coreURL). Testado no Chrome com estes arquivos: gera OGG e
+      // MP3 de verdade; com o UMD, estourava "Cannot find module".
       await ffmpeg.load({
-        coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
-        wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
-        classWorkerURL: await toBlobURL(`${baseFFmpeg}/814.ffmpeg.js`, 'text/javascript'),
+        coreURL: '/ffmpeg/ffmpeg-core.js',
+        wasmURL: '/ffmpeg/ffmpeg-core.wasm',
       })
       return ffmpeg
     })().catch((err) => {
@@ -116,6 +111,43 @@ export async function convertMixToMp3(wavBlob: Blob): Promise<{ blob: Blob; ext:
     return { blob: new Blob([bytes], { type: 'audio/mpeg' }), ext: 'mp3' }
   } catch (err) {
     console.error('Erro ao converter mixagem pra MP3:', err)
+    return { blob: wavBlob, ext: 'wav' }
+  }
+}
+
+// Locução pra publicar no feed da NewPost-IA: MP3 MONO 64 kbps.
+//
+// Diferente do convertMixToMp3 (320 kbps estéreo), que existe pra mixagem de rádio.
+// Aqui é voz única indo pra um feed social: estéreo dobra o tamanho sem ganho audível,
+// e 320 kbps num post de 20 segundos são ~800KB à toa. 64 kbps mono deixa a locução
+// limpa em ~160KB — e é o mesmo padrão que a NewPost-IA usa nos áudios dela.
+//
+// Mesmo fallback dos outros: se o FFmpeg falhar, devolve o WAV original. Ele pesa
+// muito mais, mas toca — melhor um post com áudio pesado do que sem áudio.
+export async function convertVoiceToMp3(wavBlob: Blob): Promise<{ blob: Blob; ext: 'mp3' | 'wav' }> {
+  try {
+    const { fetchFile } = await import('@ffmpeg/util')
+    const ffmpeg = await getFFmpeg()
+
+    const inputName = 'voz.wav'
+    const outputName = 'voz.mp3'
+    await ffmpeg.writeFile(inputName, await fetchFile(wavBlob))
+    await ffmpeg.exec([
+      '-i', inputName,
+      '-c:a', 'libmp3lame',
+      '-b:a', '64k',
+      '-ar', '44100',
+      '-ac', '1',
+      outputName,
+    ])
+    const data = await ffmpeg.readFile(outputName)
+    await ffmpeg.deleteFile(inputName)
+    await ffmpeg.deleteFile(outputName)
+
+    const bytes = new Uint8Array(data as Uint8Array)
+    return { blob: new Blob([bytes], { type: 'audio/mpeg' }), ext: 'mp3' }
+  } catch (err) {
+    console.error('Erro ao converter locução pra MP3:', err)
     return { blob: wavBlob, ext: 'wav' }
   }
 }

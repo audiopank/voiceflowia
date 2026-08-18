@@ -47,3 +47,6 @@ vite.config.d.ts
 # ver .claude/skills/ATRIBUICAO.md. O resto não precisa viajar no repositório
 # nem no deploy.
 marketingskills-main/
+
+# FFmpeg.wasm: 31MB copiados de node_modules a cada build (ver copiarFFmpeg no vite.config.ts)
+public/ffmpeg/

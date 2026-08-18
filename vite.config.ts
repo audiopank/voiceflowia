@@ -1,3 +1,4 @@
+import { copyFileSync, mkdirSync, existsSync } from 'node:fs'
 import { defineConfig, loadEnv, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
@@ -66,6 +67,46 @@ function apiDevBridge(): Plugin {
     },
   }
 }
+
+// FFmpeg.wasm servido do NOSSO domínio, não de CDN.
+//
+// Copiamos o build ESM do core (não o UMD). Motivo, conferido no Chrome: o
+// @ffmpeg/ffmpeg SEMPRE cria o worker com `type: "module"` (dist/esm/classes.js),
+// e module worker não tem `importScripts()`. O core UMD só carrega por
+// importScripts, então esse caminho caía no fallback do pacote e estourava
+// "failed to import ffmpeg-core.js" / "Cannot find module '...'" — exatamente a
+// falha de produção. O worker ESM usa `await import(coreURL)`, que carrega o core
+// ESM da nossa origem, sem CDN e sem blob.
+//
+// A cópia é feita AQUI, na avaliação do config (que roda em todo dev e todo
+// build), e não num hook como buildStart — no Vite 8 aquele hook não disparou e a
+// falha era silenciosa: o build passava e o áudio quebrava só em produção.
+//
+// Os 31MB de wasm NÃO entram no Git: `public/ffmpeg/` está no .gitignore e os
+// arquivos são recriados de node_modules a cada build.
+function copiarFFmpeg(): void {
+  const destino = __dirname + '/public/ffmpeg'
+  try {
+    mkdirSync(destino, { recursive: true })
+    const origens: [string, string][] = [
+      ['/node_modules/@ffmpeg/core/dist/esm/ffmpeg-core.js', '/ffmpeg-core.js'],
+      ['/node_modules/@ffmpeg/core/dist/esm/ffmpeg-core.wasm', '/ffmpeg-core.wasm'],
+    ]
+    for (const [de, para] of origens) {
+      const origem = __dirname + de
+      if (!existsSync(origem)) {
+        console.warn('[ffmpeg] faltando ' + de + ' — rode `npm install`. Conversao de audio vai cair no fallback.')
+        continue
+      }
+      copyFileSync(origem, destino + para)
+    }
+  } catch (err) {
+    // Nao derruba o build: sem os arquivos a conversao devolve o audio original.
+    console.warn('[ffmpeg] nao consegui copiar os assets:', (err as Error).message)
+  }
+}
+
+copiarFFmpeg()
 
 export default defineConfig(({ mode }) => {
   Object.assign(process.env, loadEnv(mode, process.cwd(), ''))
