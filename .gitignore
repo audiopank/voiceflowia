@@ -50,3 +50,9 @@ marketingskills-main/
 
 # FFmpeg.wasm: 31MB copiados de node_modules a cada build (ver copiarFFmpeg no vite.config.ts)
 public/ffmpeg/
+
+# Trilhas de origem (55MB de WAV/MP3 crus). As que entram no app sao copiadas
+# pra public/trilhas/ com nome limpo — so essas viajam no deploy.
+# A barra inicial e OBRIGATORIA: "trilhas/" sem ela casaria tambem com
+# public/trilhas/ e os MP3s do app nao iriam pro deploy.
+/trilhas/

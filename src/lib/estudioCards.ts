@@ -27,6 +27,10 @@ export const TRILHAS_PRONTAS = [
   { id: 'business', label: 'Business', emoji: '🏢', file: 'business.mp3' },
   { id: 'global', label: 'Global', emoji: '🌎', file: 'global.mp3' },
   { id: 'pop', label: 'Pop', emoji: '🎵', file: 'pop.mp3' },
+  { id: 'business-day', label: 'Business Day', emoji: '🏙️', file: 'business-day.mp3' },
+  { id: 'movimento', label: 'Movimento', emoji: '🚀', file: 'movimento.mp3' },
+  { id: 'business-02', label: 'Business 02', emoji: '📈', file: 'business-02.mp3' },
+  { id: 'industrial', label: 'Industrial', emoji: '🏭', file: 'industrial.mp3' },
 ] as const
 export type TrilhaPronta = (typeof TRILHAS_PRONTAS)[number]
 

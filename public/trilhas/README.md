@@ -18,18 +18,23 @@ de atualizá-la fazia a trilha aparecer num lugar e sumir no outro).
 
 Enquanto o arquivo não existir, o chip mostra um aviso amigável em vez de quebrar.
 
-## Trilhas hoje
+## Trilhas hoje (8)
 
-| Chip           | Arquivo           | Duração | Peso   |
-| -------------- | ----------------- | ------- | ------ |
-| 💼 Corporativa | `corporativa.mp3` | **12s** ⚠️ | 293 KB |
-| 🏢 Business    | `business.mp3`    | 60s     | 1,4 MB |
-| 🌎 Global      | `global.mp3`      | 2:16    | 3,2 MB |
-| 🎵 Pop         | `pop.mp3`         | 61s     | 1,5 MB |
+| Chip           | Arquivo             | Duração | Peso   |
+| -------------- | ------------------- | ------- | ------ |
+| 💼 Corporativa | `corporativa.mp3`   | 12s ⚠️   | 293 KB |
+| 🏢 Business    | `business.mp3`      | 1:00    | 1,4 MB |
+| 🌎 Global      | `global.mp3`        | 2:16    | 3,2 MB |
+| 🎵 Pop         | `pop.mp3`           | 1:01    | 1,5 MB |
+| 🏙️ Business Day | `business-day.mp3` | 2:02    | 3,7 MB |
+| 🚀 Movimento   | `movimento.mp3`     | 1:02    | 1,9 MB |
+| 📈 Business 02 | `business-02.mp3`   | 0:25    | 0,8 MB |
+| 🏭 Industrial  | `industrial.mp3`    | 1:06    | 2,0 MB |
 
-⚠️ **A Corporativa tem só 12 segundos e a trilha NÃO faz loop** (decisão de
-projeto — ver o comentário no topo de `src/lib/audioMix.ts`). Numa locução de 20s
-a música simplesmente para na metade. Trocar por uma versão de 1–2 minutos.
+⚠️ A Corporativa tem só **12 segundos**. Desde 18/08/2026 a trilha **repete
+automaticamente** quando é mais curta que a locução, então ela não deixa mais a voz
+sem cama — mas 12s repetindo fica repetitivo em locução longa. Trocar por uma
+versão de 1–2 minutos continua sendo o ideal.
 
 ## Requisitos do arquivo
 
@@ -37,8 +42,8 @@ a música simplesmente para na metade. Trocar por uma versão de 1–2 minutos.
 - **Licença:** royalty-free com **uso comercial liberado**. O cliente vai usar em
   rádio, streaming e anúncio; guarde o comprovante de licença de cada faixa.
 - **Duração:** 1 a 2 minutos. A trilha é aparada no tamanho da locução e recebe
-  fade-out automático de 1,10s no fim. Mais curta que a locução = música parando
-  no meio, porque não há loop.
+  fade-out automático de 1,10s no fim. Se for mais curta que a locução, ela repete
+  automaticamente — mas uma faixa curta demais fica com repetição audível.
 - **Peso:** abaixo de ~3 MB (128–192 kbps já basta pra cama de fundo). São
   servidas estáticas pela Vercel e entram na banda do projeto.
 - **Volume:** pode vir em volume cheio — no mixer ela entra como cama em ~25% e o

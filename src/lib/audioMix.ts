@@ -6,8 +6,9 @@
 // editor passa esse WAV pro FFmpeg.wasm (mesmo que já usamos pro OGG) e vira MP3 320k.
 //
 // Master = duração da VOZ (+ pequena cauda): a trilha entra como cama embaixo da locução e é
-// aparada no fim da fala. Se a trilha for mais curta que a voz, ela simplesmente termina antes
-// (sem loop). Intro/arranjo na linha do tempo é escopo de Fase 2 (timeline com waveform).
+// aparada no fim da fala. Trilha mais curta que a voz REPETE automaticamente (ver renderMix),
+// pra locução nenhuma ficar sem cama no meio. Intro/arranjo na linha do tempo continua sendo
+// escopo de Fase 2 (timeline com waveform).
 
 // AudioContext único por sessão só pra decodificar (decodeAudioData). Criado sob demanda
 // porque só existe depois de um gesto do usuário (clique em gerar/mixar).
@@ -65,9 +66,19 @@ export async function renderMix(
   if (track) {
     const trackSrc = ctx.createBufferSource()
     trackSrc.buffer = track
+    // Trilha mais curta que a locução REPETE em vez de deixar o resto seco. Antes, a
+    // "Corporativa" (12s) simplesmente parava no meio de uma locução de 20s e a voz
+    // seguia sem cama nenhuma — o cliente ouvia a música sumir e achava que era defeito.
+    // O loop do Web Audio é contínuo (sem intervalo entre as repetições), e a renderização
+    // para no fim do buffer do master, então não há excesso pra cortar.
+    // Só liga quando precisa: trilha que já cobre voz + fade toca de ponta a ponta, sem emenda
+    // audível (segue aparada no fim do master, como sempre — o loop não muda a duração da saída).
+    trackSrc.loop = track.duration < voice.duration + FADE_OUT_SECONDS
     const trackGainNode = ctx.createGain()
     // Mantém o volume da trilha até a voz acabar; a partir daí, rampa linear até zero
     // em FADE_OUT_SECONDS. (setValueAtTime "ancora" o valor antes da rampa começar.)
+    // Vale igual com loop ligado: o fade é do GANHO, não do arquivo, então a repetição
+    // desce junto e termina no silêncio no mesmo ponto de sempre.
     trackGainNode.gain.setValueAtTime(trackGain, 0)
     trackGainNode.gain.setValueAtTime(trackGain, voice.duration)
     trackGainNode.gain.linearRampToValueAtTime(0, voice.duration + FADE_OUT_SECONDS)
