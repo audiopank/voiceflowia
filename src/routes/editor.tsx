@@ -9,21 +9,14 @@ import { AtivarTrial } from '../components/AtivarTrial'
 import { ELEVENLABS_VOICES, GEMINI_VOICES_TEXTO_LONGO, type Voice, type Provider } from '../lib/voices'
 import { convertToWhatsAppOgg, convertMixToMp3 } from '../lib/audioConvert'
 import { blobToAudioBuffer, renderMix, audioBufferToWav, enhanceVoiceBuffer } from '../lib/audioMix'
+import { TRILHAS_PRONTAS } from '../lib/estudioCards'
 
 export const Route = createFileRoute("/editor")({
   component: Editor,
 })
 
-// Trilhas prontas ("camas" instrumentais royalty-free) servidas de public/trilhas/*.mp3.
-// O cliente clica e a trilha entra direto no mixer, sem precisar ter música própria — é o
-// que tira o atrito "cadê a música?" na hora de sonorizar. Os arquivos ficam em public/ pra
-// serem servidos same-origin pela Vercel (sem CORS pro Web Audio decodificar).
-const PRESET_TRACKS = [
-  { id: 'corporativa', label: 'Corporativa', emoji: '💼', file: 'corporativa.mp3' },
-  { id: 'business', label: 'Business', emoji: '🏢', file: 'business.mp3' },
-  { id: 'global', label: 'Global', emoji: '🌎', file: 'global.mp3' },
-  { id: 'pop', label: 'Pop', emoji: '🎵', file: 'pop.mp3' },
-] as const
+// Trilhas prontas: a lista vive em src/lib/estudioCards.ts (fonte unica).
+const PRESET_TRACKS = TRILHAS_PRONTAS
 
 function Editor() {
   const { hasAccess, loading: loadingSubscription, canStartTrial, startTrial } = useSubscription()

@@ -12,8 +12,16 @@ import { blobToAudioBuffer, enhanceVoiceBuffer, renderMix, audioBufferToWav } fr
 // (mesma referência ~0.25 usada no Estúdio de Mixagem do Editor).
 export const TRILHA_VOL_PADRAO = 25
 
-// Trilhas prontas: as MESMAS camas royalty-free do Editor (public/trilhas/*.mp3,
-// lista espelhada de PRESET_TRACKS em editor.tsx — mudou lá, mude aqui).
+// Trilhas prontas ("camas" instrumentais royalty-free) servidas de public/trilhas/*.mp3.
+// O cliente clica e a trilha entra direto no mixer, sem precisar ter música própria — é o
+// que tira o atrito "cadê a música?" na hora de sonorizar. Os arquivos ficam em public/ pra
+// serem servidos same-origin pela Vercel (sem CORS pro Web Audio decodificar).
+//
+// FONTE ÚNICA: o Editor de Voz e os cards do Agente/Super Agente leem daqui. Antes a lista
+// era duplicada em editor.tsx com um comentário "mudou lá, mude aqui" — do jeito que estava,
+// acrescentar uma trilha exigia editar dois arquivos e esquecer um deles era silencioso.
+// Pra somar uma trilha nova: ponha o MP3 em public/trilhas/ e acrescente UMA linha abaixo.
+// Requisitos do arquivo (licença, duração, peso) estão em public/trilhas/README.md.
 export const TRILHAS_PRONTAS = [
   { id: 'corporativa', label: 'Corporativa', emoji: '💼', file: 'corporativa.mp3' },
   { id: 'business', label: 'Business', emoji: '🏢', file: 'business.mp3' },

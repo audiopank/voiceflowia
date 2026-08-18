@@ -115,12 +115,14 @@ export async function convertMixToMp3(wavBlob: Blob): Promise<{ blob: Blob; ext:
   }
 }
 
-// Locução pra publicar no feed da NewPost-IA: MP3 MONO 64 kbps.
+// Locução pra publicar no feed da NewPost-IA: MP3 MONO 96 kbps.
 //
 // Diferente do convertMixToMp3 (320 kbps estéreo), que existe pra mixagem de rádio.
 // Aqui é voz única indo pra um feed social: estéreo dobra o tamanho sem ganho audível,
-// e 320 kbps num post de 20 segundos são ~800KB à toa. 64 kbps mono deixa a locução
-// limpa em ~160KB — e é o mesmo padrão que a NewPost-IA usa nos áudios dela.
+// e 320 kbps num post de 20 segundos são ~800KB à toa. 96 kbps mono deixa a locução
+// com brilho mesmo COM trilha por baixo — em 64k o Mestre ouviu "abafado", porque o
+// LAME corta agudos por volta de 11kHz nesse bitrate; em 96k o corte sobe pra ~15kHz.
+// Custo: ~250KB por post em vez de ~160KB. Barato pelo ganho audível.
 //
 // Mesmo fallback dos outros: se o FFmpeg falhar, devolve o WAV original. Ele pesa
 // muito mais, mas toca — melhor um post com áudio pesado do que sem áudio.
@@ -135,7 +137,7 @@ export async function convertVoiceToMp3(wavBlob: Blob): Promise<{ blob: Blob; ex
     await ffmpeg.exec([
       '-i', inputName,
       '-c:a', 'libmp3lame',
-      '-b:a', '64k',
+      '-b:a', '96k',
       '-ar', '44100',
       '-ac', '1',
       outputName,

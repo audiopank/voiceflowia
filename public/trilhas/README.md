@@ -1,34 +1,60 @@
-# Trilhas prontas do Estúdio de Mixagem
+# Trilhas prontas do Estúdio
 
-Coloque aqui os arquivos de trilha instrumental (royalty-free) que aparecem como
-"trilhas prontas" no Editor de Voz. Os nomes devem ser EXATAMENTE estes (o código
-em `src/routes/editor.tsx`, constante `PRESET_TRACKS`, aponta pra eles):
+Camas instrumentais royalty-free que aparecem como chips no **Editor de Voz** e no
+**Estúdio** dos cards do Agente / Super Agente.
 
-| Chip no app    | Arquivo          | Obs                                    |
-| -------------- | ---------------- | -------------------------------------- |
-| 💼 Corporativa | `corporativa.mp3`| ⚠️ só 12s — trocar por versão mais longa |
-| 🏢 Business    | `business.mp3`   | 60s                                    |
-| 🌎 Global      | `global.mp3`     | 2:16                                   |
-| 🎵 Pop         | `pop.mp3`        | 61s                                    |
+## Como acrescentar uma trilha nova
 
-Pra adicionar um 5º chip (ex: um Funk de verdade — o que veio era cópia do Business),
-coloque o MP3 aqui e adicione uma linha em `PRESET_TRACKS`.
+1. Coloque o MP3 nesta pasta.
+2. Acrescente **uma linha** em `TRILHAS_PRONTAS`, em `src/lib/estudioCards.ts`:
 
-Os arquivos são reencodados pra MP3 192kbps estéreo 44.1kHz antes de subir (ffmpeg),
-pra ficarem leves. Os originais em WAV (que vieram como `.mp3`) foram movidos pra fora
-do repositório.
+```ts
+{ id: 'cinematica', label: 'Cinemática', emoji: '🎬', file: 'cinematica.mp3' },
+```
 
-## Requisitos dos arquivos
+Só isso. O Editor importa dessa mesma constante — **não existe mais uma segunda
+lista pra manter em sincronia** (antes havia uma cópia em `editor.tsx`, e esquecer
+de atualizá-la fazia a trilha aparecer num lugar e sumir no outro).
 
-- **Formato:** MP3 (o navegador decodifica nativo pro Web Audio).
-- **Licença:** royalty-free / uso comercial liberado (o cliente vai usar em rádio,
-  streaming e anúncios). Guarde o comprovante de licença de cada faixa.
-- **Duração:** ~1 a 2 minutos é suficiente — a trilha é aparada no tamanho da
-  locução e recebe fade-out automático de 1,10s no fim.
-- **Volume:** pode vir em volume cheio; no mixer ela entra como cama em ~25% e o
+Enquanto o arquivo não existir, o chip mostra um aviso amigável em vez de quebrar.
+
+## Trilhas hoje
+
+| Chip           | Arquivo           | Duração | Peso   |
+| -------------- | ----------------- | ------- | ------ |
+| 💼 Corporativa | `corporativa.mp3` | **12s** ⚠️ | 293 KB |
+| 🏢 Business    | `business.mp3`    | 60s     | 1,4 MB |
+| 🌎 Global      | `global.mp3`      | 2:16    | 3,2 MB |
+| 🎵 Pop         | `pop.mp3`         | 61s     | 1,5 MB |
+
+⚠️ **A Corporativa tem só 12 segundos e a trilha NÃO faz loop** (decisão de
+projeto — ver o comentário no topo de `src/lib/audioMix.ts`). Numa locução de 20s
+a música simplesmente para na metade. Trocar por uma versão de 1–2 minutos.
+
+## Requisitos do arquivo
+
+- **Formato:** MP3 — o navegador decodifica nativo no Web Audio.
+- **Licença:** royalty-free com **uso comercial liberado**. O cliente vai usar em
+  rádio, streaming e anúncio; guarde o comprovante de licença de cada faixa.
+- **Duração:** 1 a 2 minutos. A trilha é aparada no tamanho da locução e recebe
+  fade-out automático de 1,10s no fim. Mais curta que a locução = música parando
+  no meio, porque não há loop.
+- **Peso:** abaixo de ~3 MB (128–192 kbps já basta pra cama de fundo). São
+  servidas estáticas pela Vercel e entram na banda do projeto.
+- **Volume:** pode vir em volume cheio — no mixer ela entra como cama em ~25% e o
   cliente ajusta o fader.
-- **Peso:** de preferência abaixo de ~3 MB cada (bitrate 128–192 kbps já basta pra
-  música de fundo) — são servidas estáticas pela Vercel.
+- **Escolha musical:** instrumental, sem vocal e sem melodia marcante. A cama não
+  pode disputar atenção com a locução — se a música "canta", o cliente abaixa o
+  volume até ela sumir, e aí ela não serve pra nada.
 
-Enquanto um arquivo não existir, o chip correspondente mostra um aviso amigável
-("Essa trilha ainda não está disponível...") em vez de quebrar.
+## Onde conseguir (royalty-free, uso comercial)
+
+- **Pixabay Music** e **Free Music Archive** — grátis, sem atribuição na maioria.
+- **Uppbeat**, **Epidemic Sound**, **Artlist** — assinatura, catálogo muito maior
+  e licença mais firme pra uso em anúncio de cliente.
+
+Reencode antes de subir, pra ficar leve:
+
+```
+ffmpeg -i original.wav -c:a libmp3lame -b:a 192k -ar 44100 -ac 2 nome-da-trilha.mp3
+```
