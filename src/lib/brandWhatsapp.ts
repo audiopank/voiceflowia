@@ -50,8 +50,46 @@ export function onBrandWhatsappUpdated(cb: () => void): () => void {
   return () => window.removeEventListener(EVENT_NAME, cb)
 }
 
+// Normaliza o numero pro formato que o wa.me exige: so digitos, comecando pelo
+// codigo do pais.
+//
+// Por que existe: o cliente digita o numero como fala — "85 99226-2297" — e o link
+// saia como wa.me/85992262297, que o WhatsApp recusa com "o codigo do pais 55 nao
+// foi inserido". O placeholder do campo ja pedia DDI+DDD e mesmo assim acontecia:
+// pedir pro usuario formatar nunca funciona, quem tem que consertar e o codigo.
+//
+// Regras (numeracao brasileira):
+//   10 digitos = DDD + fixo de 8      -> falta o 55
+//   11 digitos = DDD + celular de 9   -> falta o 55
+//   12 digitos = 55 + DDD + fixo      -> ja tem
+//   13 digitos = 55 + DDD + celular   -> ja tem
+// Um DDD 55 (Santa Maria/RS) nao confunde a conta: 5533334444 tem 10 digitos, cai
+// na primeira regra e vira 555533334444, que e o certo.
+// LIMITE ASSUMIDO: 10 ou 11 digitos sao SEMPRE tratados como brasileiros. Um numero
+// dos EUA (11 digitos com o 1 na frente) tambem ganharia o 55 e sairia errado. E
+// aceitavel porque o produto e para o mercado brasileiro; quem for de fora precisa
+// digitar com o DDI, e ai o tamanho passa de 11 e o numero segue intacto.
+export function normalizarWhatsapp(numero: string): string {
+  let digits = numero.replace(/\D/g, '')
+  // "085 99226-2297": zero antes do DDD e habito de ligacao interurbana e nao entra
+  // no formato internacional.
+  if (digits.startsWith('0')) digits = digits.replace(/^0+/, '')
+  if (digits.length === 10 || digits.length === 11) return `55${digits}`
+  return digits
+}
+
+// Numero curto demais pra ser telefone — usado pra avisar o cliente ANTES de ele
+// publicar um CTA com link quebrado.
+// Texto sem digito nenhum ("meu whats") tambem conta como incompleto: normaliza pra
+// string vazia, que geraria wa.me/ pelado. Quem chama e responsavel por so perguntar
+// quando o campo nao esta vazio (o CtaObjetivo faz isso com numero.trim()).
+export function whatsappIncompleto(numero: string): boolean {
+  const digits = normalizarWhatsapp(numero)
+  return digits.length < 12
+}
+
 export function buildWaLink(numero: string, mensagem: string, incluirMensagem: boolean): string {
-  const digits = numero.replace(/\D/g, '') // wa.me exige só dígitos (DDI+DDD+número)
+  const digits = normalizarWhatsapp(numero)
   const base = `https://wa.me/${digits}`
   return incluirMensagem ? `${base}?text=${encodeURIComponent(mensagem)}` : base
 }

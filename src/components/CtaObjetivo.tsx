@@ -11,6 +11,8 @@ import {
   saveBrandWhatsapp,
   onBrandWhatsappUpdated,
   buildWaLink,
+  normalizarWhatsapp,
+  whatsappIncompleto,
   MENSAGEM_PADRAO,
 } from '../lib/brandWhatsapp'
 
@@ -235,9 +237,23 @@ export function CtaObjetivo({ legenda, tom, hook, onAplicar }: CtaObjetivoProps)
                 type="text"
                 value={whatsappDraft.numero}
                 onChange={(e) => setWhatsappDraft({ ...whatsappDraft, numero: e.target.value })}
-                placeholder="Número com DDI+DDD, ex: 5585992262297"
+                placeholder="DDD + número, ex: 85 99226-2297"
                 className="w-full p-2 bg-[#0F0F0F] border border-gray-700 rounded-lg text-white text-xs focus:outline-none focus:border-[#8B5CF6]"
               />
+              {/* Mostra o numero como o WhatsApp vai receber. O cliente digita como fala
+                  ("85 99226-2297") e o 55 entra sozinho — antes o link saia sem o codigo
+                  do pais e o WhatsApp recusava na cara do cliente final dele. */}
+              {whatsappDraft.numero.trim() && (
+                whatsappIncompleto(whatsappDraft.numero) ? (
+                  <p className="text-xs text-yellow-500">
+                    Faltam dígitos — confira o DDD e o número.
+                  </p>
+                ) : (
+                  <p className="text-xs text-gray-500">
+                    Vai como <span className="text-gray-300">+{normalizarWhatsapp(whatsappDraft.numero)}</span> — o código do país entra sozinho.
+                  </p>
+                )
+              )}
               <label className="flex items-center gap-2 text-xs text-gray-400">
                 <input
                   type="checkbox"
@@ -260,7 +276,7 @@ export function CtaObjetivo({ legenda, tom, hook, onAplicar }: CtaObjetivoProps)
                 <button
                   type="button"
                   onClick={salvarWhatsapp}
-                  disabled={!whatsappDraft.numero.trim()}
+                  disabled={!whatsappDraft.numero.trim() || whatsappIncompleto(whatsappDraft.numero)}
                   className="text-xs px-3 py-1.5 rounded-lg bg-[#22C55E] hover:bg-[#16A34A] disabled:opacity-50 text-white font-medium"
                 >
                   Salvar número
