@@ -1,9 +1,10 @@
-export const config = {
-  runtime: 'edge'
-}
-
 // Calendários maiores (mais dias = mais posts) podem passar do limite padrão de
 // execução (~25s) e virar "Erro na API: 504" (timeout do gateway, ver text-to-speech.ts).
+// Runtime Node.js (NAO Edge). Edge Function na Vercel tem teto rigido de ~25s e
+// IGNORA o `maxDuration` — este arquivo declarava maxDuration = 60 justamente pra
+// resolver o 504 de texto longo, e nunca teve efeito porque rodava em Edge.
+// No runtime Node o teto vale, mas o handler precisa ser exportado como
+// `export default { fetch: handler }` (ver api/radar/cron-alerts.ts).
 export const maxDuration = 60
 
 const RESPONSE_SCHEMA = {
@@ -64,7 +65,7 @@ REGRAS:
 Responda apenas com o array JSON, sem texto adicional.`
 }
 
-export default async function handler(request: Request): Promise<Response> {
+async function handler(request: Request): Promise<Response> {
   if (request.method !== 'POST') {
     return new Response(JSON.stringify({ error: 'Método não permitido' }), {
       status: 405,
@@ -97,6 +98,10 @@ export default async function handler(request: Request): Promise<Response> {
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`,
       {
         method: 'POST',
+        // 50s deixa ~10s de folga dentro do maxDuration de 60: se a IA pendurar, a
+        // funcao ainda consegue devolver erro em JSON. Sem isso a Vercel mata a funcao e
+        // o cliente recebe o HTML de 504, que o front nao sabe interpretar.
+        signal: AbortSignal.timeout(50_000),
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           contents: [
@@ -147,3 +152,5 @@ export default async function handler(request: Request): Promise<Response> {
     )
   }
 }
+
+export default { fetch: handler }

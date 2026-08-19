@@ -1,10 +1,11 @@
-export const config = {
-  runtime: 'edge'
-}
-
 // Textos mais longos fazem a síntese do Gemini TTS passar do limite padrão de execução
 // (~25s), o que a Vercel devolve pro cliente como "Erro na API: 504" (timeout do gateway,
 // não erro da aplicação). Aumenta o teto pra dar tempo de sintetizar textos maiores.
+// Runtime Node.js (NAO Edge). Edge Function na Vercel tem teto rigido de ~25s e
+// IGNORA o `maxDuration` — este arquivo declarava maxDuration = 60 justamente pra
+// resolver o 504 de texto longo, e nunca teve efeito porque rodava em Edge.
+// No runtime Node o teto vale, mas o handler precisa ser exportado como
+// `export default { fetch: handler }` (ver api/radar/cron-alerts.ts).
 export const maxDuration = 60
 
 function base64ToBytes(base64: string): Uint8Array<ArrayBuffer> {
@@ -72,7 +73,7 @@ function toWav(pcmData: Uint8Array<ArrayBuffer>, mimeType: string): Uint8Array<A
   return wavBytes
 }
 
-export default async function handler(request: Request): Promise<Response> {
+async function handler(request: Request): Promise<Response> {
   if (request.method !== 'POST') {
     return new Response(JSON.stringify({ error: 'Método não permitido' }), {
       status: 405,
@@ -104,6 +105,10 @@ export default async function handler(request: Request): Promise<Response> {
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-tts-preview:generateContent?key=${apiKey}`,
       {
         method: 'POST',
+        // 50s deixa ~10s de folga dentro do maxDuration de 60: se a IA pendurar, a
+        // funcao ainda consegue devolver erro em JSON. Sem isso a Vercel mata a funcao e
+        // o cliente recebe o HTML de 504, que o front nao sabe interpretar.
+        signal: AbortSignal.timeout(50_000),
         headers: {
           'Content-Type': 'application/json'
         },
@@ -167,9 +172,18 @@ export default async function handler(request: Request): Promise<Response> {
     })
   } catch (error) {
     console.error('Erro ao gerar áudio:', error)
+    // AbortError = estourou os 50s. Mensagem especifica porque a acao do cliente e
+    // diferente: nao adianta tentar de novo igual, tem que encurtar o texto.
+    const abortou = (error as any)?.name === 'TimeoutError' || (error as any)?.name === 'AbortError'
     return new Response(
-      JSON.stringify({ error: 'Erro ao gerar áudio' }),
+      JSON.stringify({
+        error: abortou
+          ? 'A geração da voz demorou demais. Tente um roteiro mais curto ou gere de novo em instantes.'
+          : 'Erro ao gerar áudio',
+      }),
       { status: 500, headers: { 'Content-Type': 'application/json' } }
     )
   }
 }
+
+export default { fetch: handler }
