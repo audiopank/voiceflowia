@@ -18,6 +18,10 @@ import { buildIcsCalendar, downloadIcsFile, postDateTime } from '../lib/ics'
 import { convertToWhatsAppOgg, convertVoiceToMp3 } from '../lib/audioConvert'
 import { RedesSociais } from '../components/RedesSociais'
 import { PublicarNewPost } from '../components/PublicarNewPost'
+import {
+  ExportSlide, hookFontSize, bodyFontSize, slideRefKey, renderSlidesToBlobs,
+  EXPORT_W, EXPORT_H, type SlideKey,
+} from '../components/CardExport'
 import { SOCIAL_NETWORKS, socialKey, loadSocialLinks, saveSocialLinks, type SocialLinks } from '../lib/socialLinks'
 import { TONS, TOM_PADRAO, TONS_VALIDOS } from '../lib/tons'
 import { textoLongoDemais, avisoTextoLongo } from '../lib/limites'
@@ -111,74 +115,6 @@ ${post.roteiro}
 LEGENDA:
 ${post.legenda}
 `
-}
-
-// Auto-ajuste simples de fonte pros slides do carrossel (1080x1350 cada, um bloco por slide):
-// texto longo = fonte menor, pra caber sem cortar no canvas fixo.
-function hookFontSize(hook: string): number {
-  if (hook.length > 140) return 30
-  if (hook.length > 90) return 38
-  if (hook.length > 50) return 46
-  return 54
-}
-
-// Roteiro e legenda usam a mesma régua — cada um sozinho no próprio slide, tem bem mais espaço
-// do que quando dividiam card com o resto.
-function bodyFontSize(text: string): number {
-  if (text.length > 500) return 20
-  if (text.length > 350) return 24
-  if (text.length > 220) return 28
-  return 32
-}
-
-type SlideKey = 'hook' | 'roteiro' | 'legenda' | 'imagem'
-
-// Tamanho fixo dos slides do carrossel: 1080x1350 (4:5), o retrato mais alto que o Instagram
-// aceita sem cortar/recomprimir no feed.
-const EXPORT_W = 540
-const EXPORT_H = 675
-
-// Um slide do carrossel: só o CONTEÚDO + a logo da marca no canto. NADA de chrome de
-// produção (Dia, rótulo do bloco HOOK/ROTEIRO/LEGENDA/IMAGEM, contador 1/4, rodapé de
-// horário) — isso serve pra organização interna e vazava no PNG que o cliente publica.
-// Fica oculto (height:0/overflow:hidden na wrapper) até ser exportado.
-function ExportSlide({
-  innerRef, brandLogo, children,
-}: {
-  innerRef: (el: HTMLDivElement | null) => void
-  brandLogo: string | null
-  children: React.ReactNode
-}) {
-  return (
-    <div style={{ height: 0, overflow: 'hidden' }}>
-      <div
-        ref={innerRef}
-        style={{
-          width: EXPORT_W,
-          height: EXPORT_H,
-          background: '#111111',
-          color: '#FFFFFF',
-          boxSizing: 'border-box',
-          padding: 36,
-          display: 'flex',
-          flexDirection: 'column',
-        }}
-      >
-        {brandLogo && (
-          <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'flex-start' }}>
-            <img
-              src={brandLogo}
-              alt=""
-              style={{ width: 60, height: 60, objectFit: 'contain', background: '#FFFFFF', borderRadius: 10, padding: 6 }}
-            />
-          </div>
-        )}
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', marginTop: 8 }}>
-          {children}
-        </div>
-      </div>
-    </div>
-  )
 }
 
 // Teto de hooks enviados como memória. Um mês cheio já são 60 posts, e mandar
@@ -362,7 +298,6 @@ function SuperAgente() {
   // não garante unicidade/sequência, sobretudo em respostas maiores; duas posições com o
   // mesmo "dia" já causaram cards compartilhando áudio/imagem entre si).
   const exportRefs = useRef<Record<string, HTMLDivElement | null>>({})
-  const slideRefKey = (index: number, slide: SlideKey) => `${index}:${slide}`
 
   // Estratégia vem recolhida (pedido de cliente): mostra só o resumo, detalhes sob demanda.
   const [estrategiaAberta, setEstrategiaAberta] = useState(false)
@@ -764,18 +699,9 @@ function SuperAgente() {
   // sobe pro post na NewPost-IA. Reusa os slides ocultos já renderizados, então o post sai
   // idêntico ao carrossel que o cliente baixaria.
   async function prepararMidiaNewPost(index: number): Promise<{ imagens: Blob[]; audio: Blob | null }> {
-    const imagens: Blob[] = []
-    for (const slide of slidesFor(index)) {
-      const node = exportRefs.current[slideRefKey(index, slide)]
-      if (!node) continue
-      const dataUrl = await toPng(node, {
-        pixelRatio: 2,
-        width: EXPORT_W,
-        height: EXPORT_H,
-        backgroundColor: '#111111',
-      })
-      imagens.push(await (await fetch(dataUrl)).blob())
-    }
+    // Mesmo desenho de antes (pixelRatio 2, 540x675, fundo #111111): agora sai do
+    // renderSlidesToBlobs em CardExport.tsx, a mesma máquina que o Agente usa.
+    const imagens = await renderSlidesToBlobs(exportRefs.current, index, slidesFor(index))
 
     let audio: Blob | null = null
     const bruto = audioBlobs[index]

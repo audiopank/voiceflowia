@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { Fragment, useRef, useState } from 'react'
 import { createFileRoute } from '@tanstack/react-router'
 import { Lock, Loader2, AlertCircle, Sparkles, Volume2, Download, Play, CalendarDays, RefreshCw } from 'lucide-react'
 import { useSubscription, devolverGeracaoTrial } from '../lib/useSubscription'
@@ -6,6 +6,11 @@ import { supabase } from '../lib/supabase'
 import { fetchWithRetry, safeJson, friendlyApiError } from '../lib/apiRetry'
 import { textoLongoDemais, avisoTextoLongo } from '../lib/limites'
 import { Button } from '../components/ui/button'
+import { PublicarNewPost } from '../components/PublicarNewPost'
+import {
+  ExportSlide, hookFontSize, bodyFontSize, slideRefKey, renderSlidesToBlobs,
+} from '../components/CardExport'
+import { convertVoiceToMp3 } from '../lib/audioConvert'
 import { BackButton } from '../components/BackButton'
 import { AtivarTrial } from '../components/AtivarTrial'
 import { EditableText } from '../components/EditableText'
@@ -55,6 +60,7 @@ function Agente() {
   const [audioErrors, setAudioErrors] = useState<Record<number, string>>({})
   // Estúdio: trilha de fundo única do kit (aplicada em todas as locuções).
   const estudio = useTrilhaFundo()
+  const exportRefs = useRef<Record<string, HTMLDivElement | null>>({})
   const [generatingAudioFor, setGeneratingAudioFor] = useState<number | null>(null)
   const [convertingIndex, setConvertingIndex] = useState<number | null>(null)
   const [rateNotice, setRateNotice] = useState('')
@@ -130,16 +136,19 @@ function Agente() {
   // dias de forma única/sequencial (comum em respostas maiores), e dois posts com o mesmo
   // "dia" passavam a compartilhar o mesmo áudio/estado de botão entre si.
   async function handleGenerateAudio(post: Post, index: number) {
-    setGeneratingAudioFor(index)
-    setAudioErrors((prev) => ({ ...prev, [index]: '' }))
-
     // Roteiro editado a mao pode passar do teto de tempo da sintese. Barrar aqui
     // poupa o cliente de esperar 50s por um erro — mesma orientacao do Editor.
+    // Checado ANTES de ligar o spinner: este `return` nao passa pelo `finally` do
+    // try abaixo, entao com o estado ja ligado o botao do card ficava girando e
+    // desabilitado pra sempre (so voltava depois de outra geracao de audio).
     const textoDaVoz = `${post.hook} ${post.roteiro}`
     if (textoLongoDemais(textoDaVoz)) {
       setAudioErrors((prev) => ({ ...prev, [index]: avisoTextoLongo(textoDaVoz) }))
       return
     }
+
+    setGeneratingAudioFor(index)
+    setAudioErrors((prev) => ({ ...prev, [index]: '' }))
 
     try {
       const response = await fetchWithRetry(
@@ -230,6 +239,25 @@ function Agente() {
     }))
     const ics = buildIcsCalendar(events)
     downloadIcsFile(`calendario-${nicho.trim().toLowerCase().replace(/\s+/g, '-') || 'conteudo'}.ics`, ics)
+  }
+
+  // Slides do carrossel deste card, como Blob PNG + a locução em MP3 — é o material
+  // que sobe pro post na NewPost-IA. O Agente não tem upload de imagem por card
+  // (isso é do Super Agente), então são sempre 3 slides: hook, roteiro e legenda.
+  async function prepararMidiaNewPost(index: number): Promise<{ imagens: Blob[]; audio: Blob | null }> {
+    const imagens = await renderSlidesToBlobs(exportRefs.current, index, ['hook', 'roteiro', 'legenda'])
+
+    let audio: Blob | null = null
+    const bruto = audioBlobs[index]
+    if (bruto) {
+      // Mesma cadeia do download (trilha do Estúdio por cima da locução), só que em MP3
+      // mono — é o que a NewPost-IA guarda e o que toca em qualquer navegador. O OGG
+      // fica reservado pro WhatsApp.
+      const comTrilha = await aplicarTrilha(bruto, estudio.trilha.buffer, estudio.trilha.volume)
+      const { blob } = await convertVoiceToMp3(comTrilha)
+      audio = blob
+    }
+    return { imagens, audio }
   }
 
   if (loadingSubscription) {
@@ -371,6 +399,7 @@ function Agente() {
         {posts && <TrilhaFundoPanel estudio={estudio} />}
 
         {posts && (
+          <Fragment>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {posts.map((post, index) => (
               <div key={index} className="bg-[#111111] border border-gray-800 rounded-2xl p-5 space-y-3">
@@ -487,9 +516,51 @@ function Agente() {
                     )}
                   </Button>
                 )}
+
+                {/* NewPost-IA é a rede do próprio Mestre: aqui a publicação é de verdade
+                    (texto + cards + locução), não "copia e cola" como nas outras. É a
+                    única que aceita áudio no post — ver src/lib/newpost.ts. */}
+                <PublicarNewPost
+                  texto={`${post.hook}\n\n${post.legenda}`}
+                  marca={nicho.trim() || 'Minha marca'}
+                  chaveUnica={`voiceflow-agente-${dataInicio}-dia${post.dia}-${post.periodo}-${index}`}
+                  prepararMidia={() => prepararMidiaNewPost(index)}
+                />
               </div>
             ))}
           </div>
+
+          {/* Slides ocultos que viram os PNGs do carrossel ao publicar. Ficam FORA do
+              .grid de propósito: elemento oculto dentro da grade entra no auto-placement
+              do CSS Grid e empurra os cards visíveis — bug que já quebrou este layout. */}
+          {posts.map((post, index) => (
+            <Fragment key={index}>
+              {(['hook', 'roteiro', 'legenda'] as const).map((slide) => (
+                <ExportSlide
+                  key={slide}
+                  innerRef={(el) => { exportRefs.current[slideRefKey(index, slide)] = el }}
+                  brandLogo={null}
+                >
+                  {slide === 'hook' && (
+                    <p style={{ margin: 0, fontWeight: 700, lineHeight: 1.25, fontSize: hookFontSize(post.hook) }}>
+                      {post.hook}
+                    </p>
+                  )}
+                  {slide === 'roteiro' && (
+                    <p style={{ margin: 0, lineHeight: 1.45, fontSize: bodyFontSize(post.roteiro) }}>
+                      {post.roteiro}
+                    </p>
+                  )}
+                  {slide === 'legenda' && (
+                    <p style={{ margin: 0, lineHeight: 1.45, fontSize: bodyFontSize(post.legenda) }}>
+                      {post.legenda}
+                    </p>
+                  )}
+                </ExportSlide>
+              ))}
+            </Fragment>
+          ))}
+          </Fragment>
         )}
       </div>
     </div>
