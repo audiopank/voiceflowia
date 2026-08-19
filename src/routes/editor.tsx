@@ -10,6 +10,7 @@ import { ELEVENLABS_VOICES, GEMINI_VOICES_TEXTO_LONGO, type Voice, type Provider
 import { convertToWhatsAppOgg, convertMixToMp3 } from '../lib/audioConvert'
 import { blobToAudioBuffer, renderMix, audioBufferToWav, enhanceVoiceBuffer } from '../lib/audioMix'
 import { TRILHAS_PRONTAS } from '../lib/estudioCards'
+import { LIMITE_TEXTO, LIMITE_AVISO } from '../lib/limites'
 
 export const Route = createFileRoute("/editor")({
   component: Editor,
@@ -18,9 +19,12 @@ export const Route = createFileRoute("/editor")({
 // Trilhas prontas: a lista vive em src/lib/estudioCards.ts (fonte unica).
 const PRESET_TRACKS = TRILHAS_PRONTAS
 
+
+
 function Editor() {
   const { hasAccess, loading: loadingSubscription, canStartTrial, startTrial } = useSubscription()
   const [text, setText] = useState('Olá, isso é um teste de voz.')
+  const passouDoLimite = text.length > LIMITE_TEXTO
   // Padrao Gemini: as vozes da ElevenLabs sao de biblioteca e retornam 402
   // (paid_plan_required) em contas free. Gemini (Zephyr/Puck/...) funciona no free.
   const [provider, setProvider] = useState<Provider>('gemini')
@@ -383,15 +387,35 @@ function Editor() {
 
           {/* Caixa de Texto */}
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
-              Seu Texto
-            </label>
+            <div className="flex items-end justify-between mb-2">
+              <label className="block text-sm font-medium text-gray-300">
+                Seu Texto
+              </label>
+              {/* Contador: some quando o texto e curto, pra nao poluir. Aparece na reta
+                  final e vira aviso ao passar do limite. */}
+              {text.length > LIMITE_AVISO && (
+                <span className={`text-xs tabular-nums ${passouDoLimite ? 'text-red-400 font-medium' : 'text-yellow-500'}`}>
+                  {text.length.toLocaleString('pt-BR')} / {LIMITE_TEXTO.toLocaleString('pt-BR')}
+                </span>
+              )}
+            </div>
             <textarea
               value={text}
               onChange={(e) => setText(e.target.value)}
-              className="w-full h-48 p-4 bg-[#1A1A1A] border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-[#8B5CF6] resize-none"
+              className={`w-full h-48 p-4 bg-[#1A1A1A] border rounded-lg text-white placeholder-gray-500 focus:outline-none resize-none ${
+                passouDoLimite ? 'border-red-500/70 focus:border-red-500' : 'border-gray-700 focus:border-[#8B5CF6]'
+              }`}
               placeholder="Digite ou cole o texto que você quer converter em voz..."
             />
+            {/* De proposito SEM maxLength: cortar o texto colado sem avisar e pior que
+                deixar colar e explicar. O cliente ve o quanto passou e decide o que tirar. */}
+            {passouDoLimite && (
+              <p className="mt-2 text-xs text-red-400">
+                Texto longo demais para uma locução só — passou {(text.length - LIMITE_TEXTO).toLocaleString('pt-BR')} caractere(s).
+                A síntese leva cerca de 1 segundo a cada 22 caracteres e o servidor corta em 50s.
+                Divida em duas locuções e junte depois no Estúdio.
+              </p>
+            )}
           </div>
 
           {/* Dropdown de Vozes */}
@@ -422,7 +446,7 @@ function Editor() {
             {!audioReady ? (
               <Button
                 onClick={handleGenerateVoice}
-                disabled={isGenerating || !text.trim() || loadingVoices}
+                disabled={isGenerating || !text.trim() || loadingVoices || passouDoLimite}
                 className="w-full bg-[#22C55E] hover:bg-[#16A34A] disabled:opacity-50 text-lg py-6 font-bold"
               >
                 {isGenerating ? (

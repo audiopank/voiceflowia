@@ -4,6 +4,7 @@ import { Lock, Loader2, AlertCircle, Sparkles, Volume2, Download, Play, Calendar
 import { useSubscription, devolverGeracaoTrial } from '../lib/useSubscription'
 import { supabase } from '../lib/supabase'
 import { fetchWithRetry, safeJson, friendlyApiError } from '../lib/apiRetry'
+import { textoLongoDemais, avisoTextoLongo } from '../lib/limites'
 import { Button } from '../components/ui/button'
 import { BackButton } from '../components/BackButton'
 import { AtivarTrial } from '../components/AtivarTrial'
@@ -131,6 +132,14 @@ function Agente() {
   async function handleGenerateAudio(post: Post, index: number) {
     setGeneratingAudioFor(index)
     setAudioErrors((prev) => ({ ...prev, [index]: '' }))
+
+    // Roteiro editado a mao pode passar do teto de tempo da sintese. Barrar aqui
+    // poupa o cliente de esperar 50s por um erro — mesma orientacao do Editor.
+    const textoDaVoz = `${post.hook} ${post.roteiro}`
+    if (textoLongoDemais(textoDaVoz)) {
+      setAudioErrors((prev) => ({ ...prev, [index]: avisoTextoLongo(textoDaVoz) }))
+      return
+    }
 
     try {
       const response = await fetchWithRetry(

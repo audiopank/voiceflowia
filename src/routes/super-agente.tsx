@@ -20,6 +20,7 @@ import { RedesSociais } from '../components/RedesSociais'
 import { PublicarNewPost } from '../components/PublicarNewPost'
 import { SOCIAL_NETWORKS, socialKey, loadSocialLinks, saveSocialLinks, type SocialLinks } from '../lib/socialLinks'
 import { TONS, TOM_PADRAO, TONS_VALIDOS } from '../lib/tons'
+import { textoLongoDemais, avisoTextoLongo } from '../lib/limites'
 import { proximasDatasSazonais, textoContagem } from '../lib/datasSazonais'
 import { realcarVoz, aplicarTrilha } from '../lib/estudioCards'
 import { useTrilhaFundo, TrilhaFundoPanel } from '../components/TrilhaFundo'
@@ -565,6 +566,12 @@ function SuperAgente() {
   }
 
   async function generateAudioFor(post: Post): Promise<Blob> {
+    // Barra ANTES de chamar a API: um roteiro editado a mao pode passar do teto de
+    // tempo da sintese, e ai o cliente esperaria 50s pra receber erro. Melhor falhar
+    // na hora, com a mesma orientacao que o Editor da.
+    const texto = `${post.hook} ${post.roteiro}`
+    if (textoLongoDemais(texto)) throw new Error(avisoTextoLongo(texto))
+
     const response = await fetchWithRetry(
       '/api/gemini/text-to-speech',
       {
