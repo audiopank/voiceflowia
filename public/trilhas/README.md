@@ -38,28 +38,36 @@ catálogo, não valia manter uma que soava defeituosa.
 
 | Chip                | Arquivo                | Duração | Peso   | Nível       |
 | ------------------- | ---------------------- | ------- | ------ | ----------- |
-| 💬 Conversa neutra  | `conversa-neutra.mp3`  | 1:50    | 2,1 MB | −21,4 LUFS  |
-| 🤔 Conversa séria   | `conversa-seria.mp3`   | 1:20    | 1,5 MB | −21,4 LUFS  |
+| 💬 Conversa neutra  | `conversa-neutra.mp3`  | 1:50    | 2,1 MB | −16,4 LUFS  |
+| 🤔 Conversa séria   | `conversa-seria.mp3`   | 1:20    | 1,5 MB | −16,4 LUFS  |
 
 ### Nível: camas de diálogo são entregues MAIS BAIXAS que as outras
 
 As 7 trilhas comuns ficam entre **−7 e −14 LUFS**. As duas camas de diálogo são
-convertidas pra **−21,4 LUFS** — cerca de 10 dB abaixo. Isso é de propósito, e é o
-que faz o **mesmo** controle de volume servir pros dois casos: no mesmo ponto do
-slider, a cama de conversa entra bem mais discreta que uma trilha de spot.
+convertidas pra **−16,4 LUFS** — cerca de 7,5 dB abaixo da trilha comum típica
+(mediana medida: −8,9 LUFS). Isso é de propósito, e é o que faz o **mesmo**
+controle de volume servir pros dois casos: no mesmo ponto do slider, a cama de
+conversa entra bem mais discreta que uma trilha de spot.
 
 O motivo é acústico: cama sob **diálogo** precisa de mais folga que sob narração.
 Duas vozes alternando deixam pausas entre as falas, e nessas pausas a cama fica
-exposta. Medido: sem atenuar, a 25% a cama ficava a **2,7 dB** da locução — uma cama
-sob fala pede de 12 a 18 dB de folga.
+exposta. Medido: sem atenuar, a 25% a cama ficava a **2,7 dB** da locução — perto
+demais. Em −16,4 LUFS, a 25% ela fica ~10 dB abaixo, que foi o ponto aprovado de
+ouvido no produto.
 
-Ao trocar ou acrescentar uma cama de diálogo, **normalize pra −21 LUFS**:
+Ao trocar ou acrescentar uma cama de diálogo, **normalize pra −16,4 LUFS**:
 
 ```
-ffprobe/ffmpeg -i original.mp3 -af ebur128 -f null -      # mede o LUFS atual
-ffmpeg -i original.mp3 -af volume=<-21 menos o medido>dB \
+ffmpeg -i original.mp3 -af ebur128 -f null -              # mede o LUFS atual
+ffmpeg -i original.mp3 -af volume=<-16.4 menos o medido>dB \
   -c:a libmp3lame -b:a 160k -ar 44100 -ac 2 conversa-<nome>.mp3
 ```
+
+⚠️ **Calibre o nível ouvindo o áudio que sai da TELA, nunca uma prévia montada
+fora do navegador.** Na primeira tentativa o nível foi ajustado contra uma prévia
+onde o Realce Profissional era simulado no ffmpeg — e essa simulação deixou a voz
+**5,3 dB mais baixa** que a real. A cama ficou certa contra a voz simulada e baixa
+demais contra a voz do produto, e foi preciso refazer.
 
 Estas duas vivem em `TRILHAS_DIALOGO` (`src/lib/estudioCards.ts`), **fora de
 `TRILHAS_PRONTAS`**, e é essa separação que faz a regra valer: não estando naquela

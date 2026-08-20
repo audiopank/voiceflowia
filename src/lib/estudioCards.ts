@@ -52,11 +52,18 @@ export type TrilhaPronta = (typeof TRILHAS_PRONTAS)[number]
 // eu tinha lido a primeira como a séria pelo espectro (ela quase não tem agudo) e estava
 // errado. Ela é neutra. "Leve" viraria promessa de alegria que a faixa não entrega.
 //
-// Nível: as duas são entregues em -21,4 LUFS, ~10 dB abaixo das 7 trilhas comuns
-// (-7 a -14 LUFS). Isso é de propósito e é o que faz o MESMO controle de volume servir
-// pros dois casos: no mesmo ponto do slider, a cama de conversa entra bem mais discreta
-// que uma trilha de spot. Cama sob DIÁLOGO precisa de mais folga que sob narração — nas
-// pausas entre as falas ela fica exposta, e a 25% sem atenuar ficava a 2,7 dB da voz.
+// Nível: as duas são entregues em -16,4 LUFS, ~7,5 dB abaixo da trilha comum típica
+// (as 7 comuns vão de -7,4 a -13,7 LUFS, mediana -8,9). Isso é de propósito e é o que
+// faz o MESMO controle de volume servir pros dois casos: no mesmo ponto do slider, a
+// cama de conversa entra mais discreta que uma trilha de spot. Cama sob DIÁLOGO precisa
+// de mais folga que sob narração — nas pausas entre as falas ela fica exposta, e a 25%
+// sem atenuar ficava a 2,7 dB da voz.
+//
+// O -16,4 foi calibrado em DUAS rodadas de escuta, e a primeira errou por um motivo que
+// vale registrar: eu ajustei contra uma prévia onde o Realce Profissional era simulado no
+// ffmpeg, e essa simulação deixou a voz 5,3 dB mais baixa que a real. A cama ficou certa
+// contra a voz simulada e baixa demais contra a voz do produto. Lição: calibrar nível de
+// cama SÓ no áudio que sai da tela, nunca numa prévia montada fora do navegador.
 export const TRILHAS_DIALOGO = [
   { id: 'conversa-neutra', label: 'Conversa neutra', emoji: '💬', file: 'conversa-neutra.mp3' },
   { id: 'conversa-seria', label: 'Conversa séria', emoji: '🤔', file: 'conversa-seria.mp3' },
