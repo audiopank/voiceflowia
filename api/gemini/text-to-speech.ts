@@ -73,6 +73,67 @@ function toWav(pcmData: Uint8Array<ArrayBuffer>, mimeType: string): Uint8Array<A
   return wavBytes
 }
 
+// ===== Modo Diálogo (duas vozes numa chamada só) =====
+//
+// O Gemini TTS aceita `multiSpeakerVoiceConfig` com no máximo 2 locutores. O texto tem
+// que vir como transcrição — cada linha começando com "Nome:" — e os nomes precisam
+// bater EXATAMENTE com os declarados na config.
+//
+// Validar isso aqui não é preciosismo: se um nome não bate, a API não reclama — ela
+// sintetiza a linha órfã com uma voz qualquer, e o cliente recebe um áudio errado sem
+// nenhum erro na tela. Falhar com mensagem clara é melhor que entregar áudio torto.
+type ConfigFala =
+  | { erro: string }
+  | { texto?: string; speechConfig?: Record<string, unknown> }
+
+function montarDialogo(text: unknown, falantes: unknown): ConfigFala {
+  if (falantes === undefined || falantes === null) return {} // caminho de voz única
+
+  if (!Array.isArray(falantes) || falantes.length !== 2) {
+    return { erro: 'O modo diálogo precisa de exatamente 2 falantes.' }
+  }
+
+  const nomes: string[] = []
+  const vozes: string[] = []
+  for (const f of falantes) {
+    const nome = typeof f?.nome === 'string' ? f.nome.trim() : ''
+    const voz = typeof f?.voz === 'string' ? f.voz.trim() : ''
+    if (!nome || !voz) return { erro: 'Cada falante precisa de um nome e uma voz.' }
+    // ":" no nome quebraria o casamento com o começo da linha ("Nome: fala").
+    if (nome.includes(':')) return { erro: 'O nome do falante não pode conter ":".' }
+    nomes.push(nome)
+    vozes.push(voz)
+  }
+
+  if (nomes[0].toLowerCase() === nomes[1].toLowerCase()) {
+    return { erro: 'Os dois falantes precisam ter nomes diferentes.' }
+  }
+
+  const linhas = String(text).split('\n').map((l) => l.trim()).filter(Boolean)
+  if (!linhas.length) return { erro: 'O diálogo está vazio.' }
+
+  const orfa = linhas.find((l) => !nomes.some((n) => l.toLowerCase().startsWith(`${n.toLowerCase()}:`)))
+  if (orfa) {
+    return {
+      erro: `Esta linha do diálogo não começa com "${nomes[0]}:" nem "${nomes[1]}:" — ${orfa.slice(0, 60)}`,
+    }
+  }
+
+  return {
+    // O prefixo em inglês é o formato que o Gemini documenta pra transcrição; o
+    // conteúdo continua em português e é ele que define o idioma da fala.
+    texto: `TTS the following conversation between ${nomes[0]} and ${nomes[1]}:\n${linhas.join('\n')}`,
+    speechConfig: {
+      multiSpeakerVoiceConfig: {
+        speakerVoiceConfigs: nomes.map((nome, i) => ({
+          speaker: nome,
+          voiceConfig: { prebuiltVoiceConfig: { voiceName: vozes[i] } },
+        })),
+      },
+    },
+  }
+}
+
 async function handler(request: Request): Promise<Response> {
   if (request.method !== 'POST') {
     return new Response(JSON.stringify({ error: 'Método não permitido' }), {
@@ -90,7 +151,7 @@ async function handler(request: Request): Promise<Response> {
       )
     }
 
-    const { text, voiceName } = await request.json()
+    const { text, voiceName, falantes } = await request.json()
 
     if (!text) {
       return new Response(
@@ -100,6 +161,25 @@ async function handler(request: Request): Promise<Response> {
     }
 
     const voice = voiceName || 'Zephyr'
+
+    // Modo Diálogo: `falantes` presente = duas vozes conversando numa única chamada
+    // (multiSpeakerVoiceConfig do Gemini TTS). Ausente = caminho de sempre, intocado.
+    //
+    // Medido nesta conta, neste modelo: 746 caracteres -> 49,0s de áudio em 20,4s de
+    // síntese; 672 caracteres -> 40,7s de áudio em 30,2s. O tempo varia com a fila da
+    // Gemini, não com o tamanho do texto — ver a conta do teto em src/lib/dialogo.ts.
+    const dialogo = montarDialogo(text, falantes)
+    if ('erro' in dialogo) {
+      return new Response(
+        JSON.stringify({ error: dialogo.erro }),
+        { status: 400, headers: { 'Content-Type': 'application/json' } }
+      )
+    }
+
+    const textoFinal = dialogo.texto ?? text
+    const speechConfig = dialogo.speechConfig ?? {
+      voiceConfig: { prebuiltVoiceConfig: { voiceName: voice } },
+    }
 
     const response = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-tts-preview:generateContent?key=${apiKey}`,
@@ -117,20 +197,14 @@ async function handler(request: Request): Promise<Response> {
             {
               parts: [
                 {
-                  text
+                  text: textoFinal
                 }
               ]
             }
           ],
           generationConfig: {
             responseModalities: ['AUDIO'],
-            speechConfig: {
-              voiceConfig: {
-                prebuiltVoiceConfig: {
-                  voiceName: voice
-                }
-              }
-            }
+            speechConfig
           }
         })
       }

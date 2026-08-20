@@ -18,6 +18,7 @@ function apiDevBridge(): Plugin {
     '/api/gemini/gerar-legenda': './api/gemini/gerar-legenda.ts',
     '/api/gemini/gerar-ctas': './api/gemini/gerar-ctas.ts',
     '/api/gemini/humanizar': './api/gemini/humanizar.ts',
+    '/api/gemini/gerar-dialogo': './api/gemini/gerar-dialogo.ts',
     '/api/elevenlabs/text-to-speech': './api/elevenlabs/text-to-speech.ts',
     '/api/kiwify/webhook': './api/kiwify/webhook.ts',
     '/api/radar/generate-report': './api/radar/generate-report.ts',

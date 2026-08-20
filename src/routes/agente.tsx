@@ -22,6 +22,8 @@ import { convertToWhatsAppOgg } from '../lib/audioConvert'
 import { TONS, TOM_PADRAO } from '../lib/tons'
 import { realcarVoz, aplicarTrilha } from '../lib/estudioCards'
 import { useTrilhaFundo, TrilhaFundoPanel } from '../components/TrilhaFundo'
+import { ModoDialogo } from '../components/ModoDialogo'
+import { montarTranscricao, falantesParaApi, type Dialogo } from '../lib/dialogo'
 
 // Data de hoje em yyyy-mm-dd, pro input type="date" (padrão: "Dia 1" = hoje).
 function todayIso(): string {
@@ -58,6 +60,9 @@ function Agente() {
 
   const [audioBlobs, setAudioBlobs] = useState<Record<number, Blob>>({})
   const [audioErrors, setAudioErrors] = useState<Record<number, string>>({})
+  // Modo Diálogo por card (índice da lista, mesma regra do áudio: nunca chavear por
+  // campo que a IA devolve). Ausente = card usa a locução normal de uma voz só.
+  const [dialogos, setDialogos] = useState<Record<number, Dialogo>>({})
   // Estúdio: trilha de fundo única do kit (aplicada em todas as locuções).
   const estudio = useTrilhaFundo()
   const exportRefs = useRef<Record<string, HTMLDivElement | null>>({})
@@ -83,6 +88,9 @@ function Agente() {
     setPosts(null)
     setAudioBlobs({})
     setAudioErrors({})
+    // Diálogos são de um calendário específico: sem limpar, o card 3 do calendário novo
+    // herdaria a conversa do card 3 do anterior (o estado é chaveado por índice).
+    setDialogos({})
 
     try {
       const response = await fetchWithRetry(
@@ -136,12 +144,17 @@ function Agente() {
   // dias de forma única/sequencial (comum em respostas maiores), e dois posts com o mesmo
   // "dia" passavam a compartilhar o mesmo áudio/estado de botão entre si.
   async function handleGenerateAudio(post: Post, index: number) {
+    // Com Modo Diálogo ativo, é a CONVERSA que vira locução (duas vozes numa chamada só,
+    // ver src/lib/dialogo.ts) — o roteiro de uma voz fica de lado até o cliente descartar
+    // o diálogo. O corpo da chamada é a única diferença; tudo depois daqui é igual.
+    const dialogo = dialogos[index] ?? null
+    const textoDaVoz = dialogo ? montarTranscricao(dialogo.falas) : `${post.hook} ${post.roteiro}`
+
     // Roteiro editado a mao pode passar do teto de tempo da sintese. Barrar aqui
     // poupa o cliente de esperar 50s por um erro — mesma orientacao do Editor.
     // Checado ANTES de ligar o spinner: este `return` nao passa pelo `finally` do
     // try abaixo, entao com o estado ja ligado o botao do card ficava girando e
     // desabilitado pra sempre (so voltava depois de outra geracao de audio).
-    const textoDaVoz = `${post.hook} ${post.roteiro}`
     if (textoLongoDemais(textoDaVoz)) {
       setAudioErrors((prev) => ({ ...prev, [index]: avisoTextoLongo(textoDaVoz) }))
       return
@@ -156,10 +169,11 @@ function Agente() {
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            text: `${post.hook} ${post.roteiro}`,
-            voiceName: post.vozSugerida
-          })
+          body: JSON.stringify(
+            dialogo
+              ? { text: textoDaVoz, falantes: falantesParaApi(dialogo.vozes) }
+              : { text: textoDaVoz, voiceName: post.vozSugerida }
+          )
         },
         { onWait: (s) => setRateNotice(`⏳ Muita procura agora — tentando de novo em ${s}s...`) },
       )
@@ -456,6 +470,24 @@ function Agente() {
                   {post.periodo === 'Manhã' ? '🎯 Objetivo: Relacionamento' : '💰 Objetivo: Conversão/Venda'}
                 </span>
 
+                {/* Modo Diálogo: enquanto houver conversa montada aqui, é ELA que vira
+                    locução — por isso o botão de áudio abaixo muda de rótulo. */}
+                <ModoDialogo
+                  hook={post.hook}
+                  roteiro={post.roteiro}
+                  nicho={nicho}
+                  tom={tom}
+                  dialogo={dialogos[index] ?? null}
+                  onChange={(d) =>
+                    setDialogos((prev) => {
+                      const proximo = { ...prev }
+                      if (d) proximo[index] = d
+                      else delete proximo[index]
+                      return proximo
+                    })
+                  }
+                />
+
                 {audioErrors[index] && (
                   <p className="text-red-400 text-xs">{audioErrors[index]}</p>
                 )}
@@ -511,7 +543,7 @@ function Agente() {
                     ) : (
                       <>
                         <Volume2 className="w-4 h-4" />
-                        Gerar Áudio com 1 Clique
+                        {dialogos[index] ? 'Gerar Áudio do Diálogo (2 vozes)' : 'Gerar Áudio com 1 Clique'}
                       </>
                     )}
                   </Button>
