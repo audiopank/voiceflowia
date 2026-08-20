@@ -45,9 +45,44 @@ export class PrecisaNomeNewPost extends Error {
   }
 }
 
+// Teto da bio do perfil — mesmo valor no gerador (api/gemini/gerar-bio.ts) e na rota que
+// grava (api/newpost/sessao.ts). Bio maior que isso é cortada na tela do perfil.
+export const LIMITE_BIO = 160
+
+// Corta a bio no limite SEM quebrar emoji. `.slice()` conta unidade UTF-16, então um
+// emoji (par substituto) que caia em cima do índice 160 é partido ao meio e a metade
+// órfã aparece como "�" na tela e no perfil público. Descarta a metade solta.
+export function limitarBio(texto: string): string {
+  return texto.slice(0, LIMITE_BIO).replace(/[\uD800-\uDBFF]$/, '')
+}
+
+// Pede à IA uma bio a partir do nome do perfil e do nicho que o cliente já digitou.
+// Falhar aqui NÃO pode travar a publicação: sem bio o perfil nasce sem bio, e o cliente
+// escreve a dele na rede depois. Por isso devolve string vazia em vez de estourar.
+export async function sugerirBioNewPost(marca: string, nicho: string): Promise<string> {
+  try {
+    const res = await fetch('/api/gemini/gerar-bio', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ marca, nicho }),
+    })
+    if (!res.ok) return ''
+    // Corpo pode não ser JSON (504 da Vercel devolve HTML) — mesmo cuidado do resto do arquivo.
+    const bruto = await res.text()
+    try {
+      const dados = JSON.parse(bruto)
+      return typeof dados?.bio === 'string' ? limitarBio(dados.bio) : ''
+    } catch {
+      return ''
+    }
+  } catch {
+    return ''
+  }
+}
+
 export async function obterSessaoNewPost(
   marca: string,
-  opcoes: { nomePerfil?: string; senhaNewpost?: string } = {},
+  opcoes: { nomePerfil?: string; senhaNewpost?: string; bio?: string } = {},
 ): Promise<SessaoNewPost> {
   const { data: { session } } = await supabase.auth.getSession()
   const token = session?.access_token
@@ -56,7 +91,7 @@ export async function obterSessaoNewPost(
   const res = await fetch('/api/newpost/sessao', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-    body: JSON.stringify({ marca, nomePerfil: opcoes.nomePerfil, senhaNewpost: opcoes.senhaNewpost }),
+    body: JSON.stringify({ marca, nomePerfil: opcoes.nomePerfil, senhaNewpost: opcoes.senhaNewpost, bio: opcoes.bio }),
   })
 
   // Resposta pode não ser JSON (502/504 da Vercel devolvem HTML) — ler como texto

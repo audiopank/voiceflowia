@@ -96,20 +96,49 @@ async function postAuth(url: string, anon: string, caminho: string, corpo: unkno
 
 // Garante que existe uma linha em `profiles` na NewPost-IA — a tabela `posts` referencia
 // o perfil, então sem ele o insert do post falha.
-async function garantirPerfil(url: string, anon: string, token: string, userId: string, nome: string): Promise<string | null> {
+//
+// A `bio` vem do cliente (gerada por IA a partir do nicho dele e editável antes de
+// confirmar — ver api/gemini/gerar-bio.ts). Antes era a string fixa "Publicando com o
+// VoiceFlow IA": quem clicava no perfil da padaria lia propaganda da NOSSA ferramenta em
+// vez de qualquer coisa sobre a padaria, e todos os clientes ficavam com o perfil
+// idêntico. Sem bio é melhor que isso — por isso, quando ela não vem, o campo simplesmente
+// não é enviado e o perfil nasce sem bio, pronto pro cliente escrever a dele na rede.
+async function garantirPerfil(url: string, anon: string, token: string, userId: string, nome: string, bio: string): Promise<string | null> {
   const H = { apikey: anon, Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
   try {
-    const res = await fetch(`${url}/rest/v1/profiles?id=eq.${userId}&select=id`, { headers: H, signal: AbortSignal.timeout(15_000) })
+    const res = await fetch(`${url}/rest/v1/profiles?id=eq.${userId}&select=id,bio`, { headers: H, signal: AbortSignal.timeout(15_000) })
     if (res.ok) {
       // Corpo não-JSON (PostgREST fora do ar devolve HTML) não pode virar exceção aqui:
       // cairia no catch e viraria um 502 falso. Sem lista = segue e tenta criar o perfil.
       const linhas = await res.json().catch(() => null)
-      if (Array.isArray(linhas) && linhas.length > 0) return null // já existe
+      if (Array.isArray(linhas) && linhas.length > 0) {
+        // O perfil JÁ EXISTE — e na prática é sempre este o caminho: a NewPost-IA cria a
+        // linha de `profiles` sozinha no cadastro, então o POST abaixo nunca chegou a
+        // rodar. Conferido no banco: 115 perfis, TODOS com bio NULL, inclusive os que
+        // nós criamos. Quer dizer que a bio precisa ser escrita AQUI, senão a feature
+        // inteira é decoração.
+        //
+        // Só preenche bio VAZIA. Se o cliente já escreveu a dele lá na rede, o que ele
+        // escreveu manda — a nossa sugestão nunca sobrescreve texto de gente.
+        const atual = (linhas[0]?.bio ?? '').toString().trim()
+        if (bio && !atual) {
+          const patch = await fetch(`${url}/rest/v1/profiles?id=eq.${userId}`, {
+            method: 'PATCH',
+            headers: { ...H, Prefer: 'return=minimal' },
+            body: JSON.stringify({ bio }),
+            signal: AbortSignal.timeout(15_000),
+          })
+          // Falhar aqui NÃO derruba a publicação: bio é enfeite do perfil, o post é o
+          // que o cliente veio fazer. Fica no log e segue.
+          if (!patch.ok) console.error('[newpost/sessao] não gravou a bio:', patch.status, (await patch.text()).slice(0, 160))
+        }
+        return null
+      }
     }
     const cria = await fetch(`${url}/rest/v1/profiles`, {
       method: 'POST',
       headers: { ...H, Prefer: 'return=minimal' },
-      body: JSON.stringify({ id: userId, display_name: nome, bio: 'Publicando com o VoiceFlow IA' }),
+      body: JSON.stringify(bio ? { id: userId, display_name: nome, bio } : { id: userId, display_name: nome }),
       signal: AbortSignal.timeout(15_000),
     })
     if (!cria.ok) return `perfil: ${cria.status} ${(await cria.text()).slice(0, 160)}`
@@ -154,6 +183,14 @@ async function handler(request: Request): Promise<Response> {
   let body: any = {}
   try { body = await request.json() } catch { /* corpo opcional */ }
   const nomePerfil: string = (body?.nomePerfil || '').toString().trim()
+  // Mesmo teto do gerador e do campo na tela (api/gemini/gerar-bio.ts). Cortar aqui
+  // também porque o corpo vem do navegador e pode ter sido adulterado.
+  const bioPerfil: string = (body?.bio || '').toString().trim()
+    .replace(/\s*\n+\s*/g, ' ')
+    .slice(0, 160)
+    // `.slice()` corta por unidade UTF-16: se o índice 160 cair em cima de um emoji,
+    // sobra metade do par substituto e o perfil público exibe "�". Joga a metade fora.
+    .replace(/[\uD800-\uDBFF]$/, '')
   const senhaInformada: string = (body?.senhaNewpost || '').toString()
 
   // --- já existe vínculo? --------------------------------------------------
@@ -231,7 +268,7 @@ async function handler(request: Request): Promise<Response> {
   }
 
   // --- perfil no feed ------------------------------------------------------
-  const erroPerfil = await garantirPerfil(NEWPOST_URL, NEWPOST_ANON, sessao.accessToken, sessao.userId, marca)
+  const erroPerfil = await garantirPerfil(NEWPOST_URL, NEWPOST_ANON, sessao.accessToken, sessao.userId, marca, bioPerfil)
   if (erroPerfil) return json({ error: `Conta ok, mas não consegui preparar seu perfil na NewPost-IA (${erroPerfil}).` }, 502)
 
   // --- guarda/atualiza o vínculo ------------------------------------------
