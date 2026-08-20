@@ -73,6 +73,12 @@ function Agente() {
   const exportRefs = useRef<Record<string, HTMLDivElement | null>>({})
   const [generatingAudioFor, setGeneratingAudioFor] = useState<number | null>(null)
   const [convertingIndex, setConvertingIndex] = useState<number | null>(null)
+  // Card cujo "Ouvir" está preparando o áudio (baixando/decodificando a cama e mixando).
+  const [preparandoPlay, setPreparandoPlay] = useState<number | null>(null)
+  // Falha do "Ouvir" em canal PRÓPRIO, pelo mesmo motivo de camaAvisos: quem limpa
+  // audioErrors é o "gerar áudio", então um erro de reprodução jogado lá ficaria grudado
+  // na tela depois de o cliente conseguir ouvir. Este nasce e morre com a tentativa.
+  const [playErros, setPlayErros] = useState<Record<number, string>>({})
   const [rateNotice, setRateNotice] = useState('')
 
   async function handleGenerateContent() {
@@ -247,12 +253,49 @@ function Agente() {
   async function handlePlayAudio(index: number) {
     const blob = audioBlobs[index]
     if (!blob) return
-    // O "Ouvir" toca o resultado FINAL (voz + trilha no volume atual): o que o
-    // cliente escuta é exatamente o que vai baixar — sem surpresa no export.
-    const final = await aplicarTrilha(blob, await camaDoCard(index), estudio.trilha.volume)
-    const url = URL.createObjectURL(final)
-    const audio = new Audio(url)
-    audio.play()
+    // Spinner obrigatório: na PRIMEIRA vez com cama de conversa marcada, este clique
+    // baixa e decodifica um MP3 de ~2MB antes de tocar. Sem indicador, o cliente ficava
+    // alguns segundos olhando um botão que não reagia e clicava de novo. O Baixar e o
+    // Publicar já tinham spinner; só o Ouvir não tinha.
+    setPreparandoPlay(index)
+    setPlayErros((prev) => {
+      if (!prev[index]) return prev
+      const proximo = { ...prev }
+      delete proximo[index]
+      return proximo
+    })
+    // Declarada FORA do try pro catch conseguir revogar o blob: quando play() rejeita por
+    // bloqueio do navegador (NotAllowedError) o elemento NÃO dispara 'error', e sem isto o
+    // WAV ficava pendurado na memória da aba sem ninguém pra soltar.
+    let url = ''
+    try {
+      // O "Ouvir" toca o resultado FINAL (voz + trilha no volume atual): o que o
+      // cliente escuta é exatamente o que vai baixar — sem surpresa no export.
+      const final = await aplicarTrilha(blob, await camaDoCard(index), estudio.trilha.volume)
+      url = URL.createObjectURL(final)
+      const audio = new Audio(url)
+      // Libera o blob quando a locução acaba (ou falha). Sem isso, cada clique em Ouvir
+      // deixava um WAV de alguns MB preso na memória da aba até recarregar a página —
+      // num kit de 60 cards, ouvir tudo uma vez já pesava. Cada clique cria a SUA própria
+      // URL e o SEU elemento, então revogar no 'ended' nunca atinge outra reprodução.
+      const soltar = () => URL.revokeObjectURL(url)
+      audio.addEventListener('ended', soltar, { once: true })
+      audio.addEventListener('error', soltar, { once: true })
+      await audio.play()
+    } catch (err) {
+      // O onClick do botão não tem .catch: sem este bloco, a rejeição de play() (gesto do
+      // clique já expirado depois do preparo — iOS/Safari — ou formato recusado) ou de
+      // aplicarTrilha subia como "unhandled rejection" no console do cliente, e a tela
+      // apenas voltava pra "Ouvir" sem tocar nada e sem dizer por quê.
+      console.error('=== ERRO ao tocar áudio ===', err)
+      if (url) URL.revokeObjectURL(url)
+      setPlayErros((prev) => ({
+        ...prev,
+        [index]: 'Não foi possível tocar o áudio agora. Tente de novo ou use o Baixar.',
+      }))
+    } finally {
+      setPreparandoPlay(null)
+    }
   }
 
   // Baixa como OGG/Opus — único formato que o WhatsApp reconhece como "áudio de voz"
@@ -261,6 +304,7 @@ function Agente() {
     const blob = audioBlobs[index]
     if (!blob) return
     setConvertingIndex(index)
+    setPlayErros((prev) => ({ ...prev, [index]: '' }))
     try {
       const comTrilha = await aplicarTrilha(blob, await camaDoCard(index), estudio.trilha.volume)
       const oggBlob = await convertToWhatsAppOgg(comTrilha, 'wav')
@@ -272,6 +316,15 @@ function Agente() {
       a.click()
       document.body.removeChild(a)
       URL.revokeObjectURL(url)
+    } catch (err) {
+      // Mesmo motivo do "Ouvir": o onClick não tem .catch, então uma falha do FFmpeg.wasm
+      // (memória, codec) ou da mixagem virava unhandled rejection — o spinner sumia, nada
+      // baixava e o cliente não recebia explicação nenhuma.
+      console.error('=== ERRO ao baixar áudio ===', err)
+      setPlayErros((prev) => ({
+        ...prev,
+        [index]: 'Não consegui preparar o arquivo pra baixar. Tente de novo.',
+      }))
     } finally {
       setConvertingIndex(null)
     }
@@ -535,14 +588,23 @@ function Agente() {
                   <p className="text-yellow-500 text-xs">{camaAvisos[index]}</p>
                 )}
 
+                {playErros[index] && (
+                  <p className="text-red-400 text-xs">{playErros[index]}</p>
+                )}
+
                 {audioBlobs[index] ? (
                   <div className="flex gap-2">
                     <Button
                       onClick={() => handlePlayAudio(index)}
-                      className="flex-1 bg-[#1A1A1A] hover:bg-[#252525] flex items-center justify-center gap-2"
+                      disabled={preparandoPlay === index}
+                      className="flex-1 bg-[#1A1A1A] hover:bg-[#252525] disabled:opacity-50 flex items-center justify-center gap-2"
                     >
-                      <Play className="w-4 h-4" />
-                      Ouvir
+                      {preparandoPlay === index ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Play className="w-4 h-4" />
+                      )}
+                      {preparandoPlay === index ? 'Preparando…' : 'Ouvir'}
                     </Button>
                     <Button
                       onClick={() => handleDownloadAudio(index, post.dia, post.periodo)}
