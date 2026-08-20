@@ -33,6 +33,72 @@ export const TRILHAS_PRONTAS = [
 ] as const
 export type TrilhaPronta = (typeof TRILHAS_PRONTAS)[number]
 
+// ===== Camas exclusivas do Modo Diálogo =====
+//
+// Ficam FORA de TRILHAS_PRONTAS de propósito, e é essa separação que faz a regra valer:
+// não estando naquela lista, elas não têm como aparecer como chip no Editor de Voz nem
+// no painel de trilha do kit. Uma cama de conversa nunca sonoriza um spot de rádio —
+// não por disciplina de quem edita o código, por construção.
+//
+// Por que DUAS e não uma: "conversa" cobre desde a padaria brincando com o cliente até a
+// oficina respondendo a alguém com medo de ser passado pra trás. Cama alegre embaixo de
+// um diálogo sobre desconfiança soa como deboche do cliente — e metade dos nichos do
+// produto (oficina, saúde, contábil, jurídico) cai nesse segundo caso.
+//
+// Requisito extra em relação às trilhas normais: duas vozes alternando ocupam muito mais
+// do meio do espectro que um narrador só, então a cama tem que ser MAIS rala — percussão
+// leve e notas soltas, nada de acorde sustentado. Ver public/trilhas/README.md.
+// Os rótulos vieram do que o Mestre OUVIU, não do que o arquivo parecia pela medição —
+// eu tinha lido a primeira como a séria pelo espectro (ela quase não tem agudo) e estava
+// errado. Ela é neutra. "Leve" viraria promessa de alegria que a faixa não entrega.
+//
+// Nível: as duas são entregues em -21,4 LUFS, ~10 dB abaixo das 7 trilhas comuns
+// (-7 a -14 LUFS). Isso é de propósito e é o que faz o MESMO controle de volume servir
+// pros dois casos: no mesmo ponto do slider, a cama de conversa entra bem mais discreta
+// que uma trilha de spot. Cama sob DIÁLOGO precisa de mais folga que sob narração — nas
+// pausas entre as falas ela fica exposta, e a 25% sem atenuar ficava a 2,7 dB da voz.
+export const TRILHAS_DIALOGO = [
+  { id: 'conversa-neutra', label: 'Conversa neutra', emoji: '💬', file: 'conversa-neutra.mp3' },
+  { id: 'conversa-seria', label: 'Conversa séria', emoji: '🤔', file: 'conversa-seria.mp3' },
+] as const
+export type TrilhaDialogo = (typeof TRILHAS_DIALOGO)[number]
+
+// Cache por id: são só 2 arquivos e o cliente troca de cama várias vezes comparando.
+// Decodificar de novo a cada clique desperdiçaria segundos e memória à toa.
+const cacheDialogo: Record<string, AudioBuffer> = {}
+
+// Carrega (e decodifica) uma cama de diálogo. Devolve null quando o arquivo ainda não
+// existe ou não decodifica — quem chama trata como "sem cama", NUNCA caindo na trilha do
+// kit: substituir calado a cama de conversa por uma trilha corporativa é exatamente o que
+// a separação acima existe pra impedir.
+export async function carregarTrilhaDialogo(id: string): Promise<AudioBuffer | null> {
+  if (cacheDialogo[id]) return cacheDialogo[id]
+
+  const preset = TRILHAS_DIALOGO.find((t) => t.id === id)
+  if (!preset) return null
+
+  try {
+    // Timeout obrigatório: esta chamada acontece DENTRO do "Baixar OGG" e do publicar na
+    // NewPost-IA, que ligam o spinner antes e só desligam no finally. Sem teto, uma
+    // conexão pendurada segurava a promise pra sempre e o botão ficava girando e
+    // desabilitado até o cliente recarregar a página — mesmo estrago do bug do texto
+    // longo. Estourando o tempo, cai no catch e vira "sem cama" + aviso, que é a
+    // degradação já desenhada.
+    const res = await fetch(`/trilhas/${preset.file}`, { signal: AbortSignal.timeout(15_000) })
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    const blob = await res.blob()
+    // Em SPA com fallback pra index.html, arquivo faltando volta como HTML 200 — sem esta
+    // checagem o decode receberia HTML achando que é áudio (mesmo padrão do TrilhaFundo).
+    if (!blob.type.startsWith('audio')) throw new Error('não é áudio')
+    const buffer = await blobToAudioBuffer(blob)
+    cacheDialogo[id] = buffer
+    return buffer
+  } catch (err) {
+    console.error(`Cama de diálogo "${id}" indisponível:`, err)
+    return null
+  }
+}
+
 // Masteriza a locução crua (trim + EQ + compressor + reverb sutil) e devolve WAV.
 // Falhou? Devolve o blob original — o cliente recebe a voz crua, nunca nada.
 export async function realcarVoz(blob: Blob): Promise<Blob> {

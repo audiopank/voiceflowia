@@ -3,6 +3,7 @@ import { MessagesSquare, Loader2, X, RefreshCw } from 'lucide-react'
 import { Button } from './ui/button'
 import { fetchWithRetry, safeJson, friendlyApiError } from '../lib/apiRetry'
 import { LIMITE_AVISO, LIMITE_TEXTO } from '../lib/limites'
+import { TRILHAS_DIALOGO } from '../lib/estudioCards'
 import {
   FALANTE_CLIENTE,
   FALANTE_DONO,
@@ -60,9 +61,13 @@ export function ModoDialogo({
       const data = await safeJson(res)
       const falas: Fala[] = Array.isArray(data?.falas) ? data.falas : []
       if (!falas.length) throw new Error('A IA não devolveu falas.')
-      // Vozes só entram no estado se ainda não havia diálogo: refazer as falas não deve
-      // desfazer a escolha de voz que o cliente já tinha feito.
-      onChange({ falas, vozes: dialogo?.vozes ?? { ...VOZES_PADRAO } })
+      // Vozes e cama só entram no estado se ainda não havia diálogo: refazer as falas não
+      // deve desfazer a escolha de voz nem a trilha que o cliente já tinha feito.
+      onChange({
+        falas,
+        vozes: dialogo?.vozes ?? { ...VOZES_PADRAO },
+        trilhaId: dialogo?.trilhaId ?? null,
+      })
     } catch (e) {
       setErro(e instanceof Error ? e.message : 'Não consegui montar o diálogo.')
     } finally {
@@ -142,6 +147,32 @@ export function ModoDialogo({
             />
           </div>
         ))}
+      </div>
+
+      {/* Cama de conversa: exclusiva do Modo Diálogo. Estas duas NÃO estão em
+          TRILHAS_PRONTAS, então nunca aparecem como opção pra um spot de uma voz só.
+          Nenhuma marcada é o padrão — clicar de novo na ativa desliga. */}
+      <div className="flex flex-wrap gap-1.5 items-center">
+        <span className="text-[11px] text-gray-500">Cama:</span>
+        {TRILHAS_DIALOGO.map((t) => {
+          const ativa = dialogo.trilhaId === t.id
+          return (
+            <button
+              key={t.id}
+              type="button"
+              aria-pressed={ativa}
+              onClick={() => onChange({ ...dialogo, trilhaId: ativa ? null : t.id })}
+              className={`text-[11px] rounded-full border px-2 py-0.5 transition-colors ${
+                ativa
+                  ? 'border-[#8B5CF6] bg-[#8B5CF6]/15 text-white'
+                  : 'border-gray-700 bg-[#0F0F0F] text-gray-400 hover:border-gray-500 hover:text-white'
+              }`}
+            >
+              {t.emoji} {t.label}
+            </button>
+          )
+        })}
+        {!dialogo.trilhaId && <span className="text-[11px] text-gray-600">nenhuma</span>}
       </div>
 
       <div className="flex flex-wrap gap-2 items-center">

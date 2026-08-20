@@ -20,7 +20,7 @@ import { HumanizarButton } from '../components/HumanizarButton'
 import { buildIcsCalendar, downloadIcsFile, postDateTime } from '../lib/ics'
 import { convertToWhatsAppOgg } from '../lib/audioConvert'
 import { TONS, TOM_PADRAO } from '../lib/tons'
-import { realcarVoz, aplicarTrilha } from '../lib/estudioCards'
+import { realcarVoz, aplicarTrilha, carregarTrilhaDialogo } from '../lib/estudioCards'
 import { useTrilhaFundo, TrilhaFundoPanel } from '../components/TrilhaFundo'
 import { ModoDialogo } from '../components/ModoDialogo'
 import { montarTranscricao, falantesParaApi, type Dialogo } from '../lib/dialogo'
@@ -60,6 +60,11 @@ function Agente() {
 
   const [audioBlobs, setAudioBlobs] = useState<Record<number, Blob>>({})
   const [audioErrors, setAudioErrors] = useState<Record<number, string>>({})
+  // Aviso da cama de conversa em canal PRÓPRIO, separado de audioErrors: são coisas
+  // diferentes (o áudio saiu, só veio sem cama) e dividir o mesmo canal apagava o erro de
+  // geração do card — e, pior, o aviso ficava grudado na tela depois de resolvido, porque
+  // quem limpa audioErrors é o "gerar áudio", não o download.
+  const [camaAvisos, setCamaAvisos] = useState<Record<number, string>>({})
   // Modo Diálogo por card (índice da lista, mesma regra do áudio: nunca chavear por
   // campo que a IA devolve). Ausente = card usa a locução normal de uma voz só.
   const [dialogos, setDialogos] = useState<Record<number, Dialogo>>({})
@@ -88,6 +93,7 @@ function Agente() {
     setPosts(null)
     setAudioBlobs({})
     setAudioErrors({})
+    setCamaAvisos({})
     // Diálogos são de um calendário específico: sem limpar, o card 3 do calendário novo
     // herdaria a conversa do card 3 do anterior (o estado é chaveado por índice).
     setDialogos({})
@@ -206,12 +212,44 @@ function Agente() {
     )
   }
 
+  // Qual cama entra neste card. Com Modo Diálogo e uma cama de conversa marcada, é ELA —
+  // nunca a trilha do kit. Se o arquivo ainda não estiver na pasta, sai SEM cama nenhuma e
+  // o cliente é avisado: substituir calado a cama de conversa por uma trilha corporativa é
+  // exatamente o que a separação em TRILHAS_DIALOGO existe pra impedir.
+  async function camaDoCard(index: number): Promise<AudioBuffer | null> {
+    // O aviso nasce e morre com a própria tentativa: limpo aqui, reposto só se a cama
+    // faltar de novo. Assim ele nunca sobrevive ao cliente desmarcar a cama ou ao MP3
+    // aparecer — a tela nunca afirma sobre este áudio algo que deixou de ser verdade.
+    const limparAviso = () =>
+      setCamaAvisos((prev) => {
+        if (!prev[index]) return prev
+        const proximo = { ...prev }
+        delete proximo[index]
+        return proximo
+      })
+
+    const id = dialogos[index]?.trilhaId
+    if (!id) {
+      limparAviso()
+      return estudio.trilha.buffer
+    }
+
+    const buffer = await carregarTrilhaDialogo(id)
+    if (buffer) limparAviso()
+    else
+      setCamaAvisos((prev) => ({
+        ...prev,
+        [index]: 'A cama de conversa ainda não está disponível — este áudio saiu só com as vozes.',
+      }))
+    return buffer
+  }
+
   async function handlePlayAudio(index: number) {
     const blob = audioBlobs[index]
     if (!blob) return
     // O "Ouvir" toca o resultado FINAL (voz + trilha no volume atual): o que o
     // cliente escuta é exatamente o que vai baixar — sem surpresa no export.
-    const final = await aplicarTrilha(blob, estudio.trilha.buffer, estudio.trilha.volume)
+    const final = await aplicarTrilha(blob, await camaDoCard(index), estudio.trilha.volume)
     const url = URL.createObjectURL(final)
     const audio = new Audio(url)
     audio.play()
@@ -224,7 +262,7 @@ function Agente() {
     if (!blob) return
     setConvertingIndex(index)
     try {
-      const comTrilha = await aplicarTrilha(blob, estudio.trilha.buffer, estudio.trilha.volume)
+      const comTrilha = await aplicarTrilha(blob, await camaDoCard(index), estudio.trilha.volume)
       const oggBlob = await convertToWhatsAppOgg(comTrilha, 'wav')
       const url = URL.createObjectURL(oggBlob)
       const a = document.createElement('a')
@@ -267,7 +305,7 @@ function Agente() {
       // Mesma cadeia do download (trilha do Estúdio por cima da locução), só que em MP3
       // mono — é o que a NewPost-IA guarda e o que toca em qualquer navegador. O OGG
       // fica reservado pro WhatsApp.
-      const comTrilha = await aplicarTrilha(bruto, estudio.trilha.buffer, estudio.trilha.volume)
+      const comTrilha = await aplicarTrilha(bruto, await camaDoCard(index), estudio.trilha.volume)
       const { blob } = await convertVoiceToMp3(comTrilha)
       audio = blob
     }
@@ -490,6 +528,11 @@ function Agente() {
 
                 {audioErrors[index] && (
                   <p className="text-red-400 text-xs">{audioErrors[index]}</p>
+                )}
+
+                {/* Amarelo, não vermelho: a locução saiu inteira, só veio sem a cama. */}
+                {camaAvisos[index] && (
+                  <p className="text-yellow-500 text-xs">{camaAvisos[index]}</p>
                 )}
 
                 {audioBlobs[index] ? (

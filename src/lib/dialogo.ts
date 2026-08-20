@@ -35,6 +35,13 @@ export interface Dialogo {
   falas: Fala[]
   /** Voz escolhida pra cada papel: { Cliente: 'Puck', Dono: 'Kore' } */
   vozes: Record<string, string>
+  /**
+   * Cama de fundo exclusiva de diálogo (ver TRILHAS_DIALOGO em estudioCards.ts).
+   * null = sem cama, e é o PADRÃO de propósito: a maioria dos clientes aceita o
+   * padrão, e cama alegre embaixo de um diálogo sobre desconfiança é pior do que
+   * nenhuma. Quando marcada, ela substitui a trilha do kit só neste card.
+   */
+  trilhaId: string | null
 }
 
 // Só as vozes comprovadamente rápidas pra texto longo. As outras 5 do catálogo passam
