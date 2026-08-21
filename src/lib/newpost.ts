@@ -216,4 +216,7 @@ export async function publicarNaNewPost(post: PostNewPost, sessao: SessaoNewPost
   }
 }
 
-export const URL_NEWPOST = 'https://plugpost-ai.lovable.app'
+// O endereço mora em socialLinks.ts (arquivo sem dependência nenhuma) e é reexportado
+// aqui pra não quebrar quem já importava daqui. Antes ele estava escrito à mão nos dois
+// arquivos — que é como se troca um e esquece o outro.
+export { URL_NEWPOST } from './socialLinks'
