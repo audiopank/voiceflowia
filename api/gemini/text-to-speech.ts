@@ -109,6 +109,13 @@ function montarDialogo(text: unknown, falantes: unknown): ConfigFala {
     return { erro: 'Os dois falantes precisam ter nomes diferentes.' }
   }
 
+  // Duas vozes iguais = "diálogo" de voz única depois de gastar cota. O front só
+  // avisa; aqui a gente TRAVA — padrão que o Locutores IA aprendeu na marra no
+  // mesmo motor multi-speaker do Gemini.
+  if (vozes[0].toLowerCase() === vozes[1].toLowerCase()) {
+    return { erro: 'Escolha duas vozes diferentes pro diálogo — iguais soam como uma voz só.' }
+  }
+
   const linhas = String(text).split('\n').map((l) => l.trim()).filter(Boolean)
   if (!linhas.length) return { erro: 'O diálogo está vazio.' }
 
@@ -120,9 +127,12 @@ function montarDialogo(text: unknown, falantes: unknown): ConfigFala {
   }
 
   return {
-    // O prefixo em inglês é o formato que o Gemini documenta pra transcrição; o
-    // conteúdo continua em português e é ele que define o idioma da fala.
-    texto: `TTS the following conversation between ${nomes[0]} and ${nomes[1]}:\n${linhas.join('\n')}`,
+    // Preâmbulo que NOMEIA os dois falantes numa linha própria, ANTES das falas.
+    // Sem isso o Gemini às vezes lê tudo numa voz só (colapso do multi-speaker) —
+    // o Locutores IA achou na marra que esta redação, com "alternando entre as
+    // vozes de X e Y", é a que segura o roteamento. O conteúdo em português também
+    // define o idioma da fala.
+    texto: `Leia em voz alta, exatamente como está escrito, o texto a seguir, alternando entre as vozes de ${nomes[0]} e ${nomes[1]}:\n${linhas.join('\n')}`,
     speechConfig: {
       multiSpeakerVoiceConfig: {
         speakerVoiceConfigs: nomes.map((nome, i) => ({
@@ -181,8 +191,13 @@ async function handler(request: Request): Promise<Response> {
       voiceConfig: { prebuiltVoiceConfig: { voiceName: voice } },
     }
 
+    // Modelo por caminho: diálogo (multi-speaker) vai no 2.5, que o Locutores IA
+    // provou no ouvido; a voz única fica no 3.1, que funciona bem. Modelos de TTS
+    // preview divergem no multi-locutor — o 3.1 colapsava as duas vozes em uma só.
+    const modelo = dialogo.speechConfig ? 'gemini-2.5-flash-preview-tts' : 'gemini-3.1-flash-tts-preview'
+
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-tts-preview:generateContent?key=${apiKey}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/${modelo}:generateContent?key=${apiKey}`,
       {
         method: 'POST',
         // 50s deixa ~10s de folga dentro do maxDuration de 60: se a IA pendurar, a
