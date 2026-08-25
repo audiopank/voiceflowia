@@ -1,6 +1,6 @@
 import { Fragment, useRef, useState } from 'react'
 import { createFileRoute } from '@tanstack/react-router'
-import { Lock, Loader2, AlertCircle, Sparkles, Volume2, Download, Play, CalendarDays, RefreshCw } from 'lucide-react'
+import { Lock, Loader2, AlertCircle, Sparkles, Volume2, Download, Play, Square, CalendarDays, RefreshCw } from 'lucide-react'
 import { useSubscription, devolverGeracaoTrial } from '../lib/useSubscription'
 import { supabase } from '../lib/supabase'
 import { fetchWithRetry, safeJson, friendlyApiError } from '../lib/apiRetry'
@@ -79,6 +79,19 @@ function Agente() {
   // audioErrors é o "gerar áudio", então um erro de reprodução jogado lá ficaria grudado
   // na tela depois de o cliente conseguir ouvir. Este nasce e morre com a tentativa.
   const [playErros, setPlayErros] = useState<Record<number, string>>({})
+  // Áudio do "Ouvir" que está no ar agora. Sem rastrear isto, cada clique criava um novo
+  // Audio e eles tocavam por cima; agora o mesmo botão vira "Parar" e não sobrepõe.
+  const audioAtivoRef = useRef<{ audio: HTMLAudioElement; url: string; index: number } | null>(null)
+  const [tocandoIndex, setTocandoIndex] = useState<number | null>(null)
+
+  function pararAudioAtivo() {
+    const atual = audioAtivoRef.current
+    if (!atual) return
+    atual.audio.pause()
+    URL.revokeObjectURL(atual.url)
+    audioAtivoRef.current = null
+    setTocandoIndex(null)
+  }
   const [rateNotice, setRateNotice] = useState('')
 
   async function handleGenerateContent() {
@@ -253,6 +266,11 @@ function Agente() {
   async function handlePlayAudio(index: number) {
     const blob = audioBlobs[index]
     if (!blob) return
+    // Alternar: se ESTE card já está tocando, o mesmo botão PARA — e a gente sempre para o
+    // que estiver no ar antes de começar outro, pra dois cliques não empilharem dois áudios.
+    const jaTocavaEsse = audioAtivoRef.current?.index === index
+    pararAudioAtivo()
+    if (jaTocavaEsse) return
     // Spinner obrigatório: na PRIMEIRA vez com cama de conversa marcada, este clique
     // baixa e decodifica um MP3 de ~2MB antes de tocar. Sem indicador, o cliente ficava
     // alguns segundos olhando um botão que não reagia e clicava de novo. O Baixar e o
@@ -278,9 +296,22 @@ function Agente() {
       // deixava um WAV de alguns MB preso na memória da aba até recarregar a página —
       // num kit de 60 cards, ouvir tudo uma vez já pesava. Cada clique cria a SUA própria
       // URL e o SEU elemento, então revogar no 'ended' nunca atinge outra reprodução.
-      const soltar = () => URL.revokeObjectURL(url)
+      // Solta o blob E devolve o botão pra "Ouvir" quando a locução acaba (ou falha). Só
+      // limpa o estado se ESTE áudio ainda é o ativo, pra não pisar num play mais novo.
+      const soltar = () => {
+        URL.revokeObjectURL(url)
+        if (audioAtivoRef.current?.audio === audio) {
+          audioAtivoRef.current = null
+          setTocandoIndex(null)
+        }
+      }
       audio.addEventListener('ended', soltar, { once: true })
       audio.addEventListener('error', soltar, { once: true })
+      // Defensivo: se outro card começou a tocar durante o preparo desta cama, para antes
+      // de assumir o player — no máximo um áudio no ar.
+      pararAudioAtivo()
+      audioAtivoRef.current = { audio, url, index }
+      setTocandoIndex(index)
       await audio.play()
     } catch (err) {
       // O onClick do botão não tem .catch: sem este bloco, a rejeição de play() (gesto do
@@ -289,6 +320,11 @@ function Agente() {
       // apenas voltava pra "Ouvir" sem tocar nada e sem dizer por quê.
       console.error('=== ERRO ao tocar áudio ===', err)
       if (url) URL.revokeObjectURL(url)
+      // play() pode rejeitar DEPOIS de a gente marcar este áudio como ativo — desmarca.
+      if (audioAtivoRef.current?.url === url) {
+        audioAtivoRef.current = null
+        setTocandoIndex(null)
+      }
       setPlayErros((prev) => ({
         ...prev,
         [index]: 'Não foi possível tocar o áudio agora. Tente de novo ou use o Baixar.',
@@ -601,10 +637,12 @@ function Agente() {
                     >
                       {preparandoPlay === index ? (
                         <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : tocandoIndex === index ? (
+                        <Square className="w-4 h-4" />
                       ) : (
                         <Play className="w-4 h-4" />
                       )}
-                      {preparandoPlay === index ? 'Preparando…' : 'Ouvir'}
+                      {preparandoPlay === index ? 'Preparando…' : tocandoIndex === index ? 'Parar' : 'Ouvir'}
                     </Button>
                     <Button
                       onClick={() => handleDownloadAudio(index, post.dia, post.periodo)}

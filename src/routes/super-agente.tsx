@@ -3,7 +3,7 @@ import { createFileRoute } from '@tanstack/react-router'
 import JSZip from 'jszip'
 import { toPng } from 'html-to-image'
 import {
-  Lock, Loader2, AlertCircle, Rocket, Volume2, Download, Play, Package,
+  Lock, Loader2, AlertCircle, Rocket, Volume2, Download, Play, Square, Package,
   Users, Target, Hash, Clock, Megaphone, CheckCircle2, Copy, Check, ImagePlus, X, Pencil,
   ChevronDown, ChevronUp, CalendarDays, Share2, Sparkles, Brain, RefreshCw
 } from 'lucide-react'
@@ -579,14 +579,61 @@ function SuperAgente() {
     }
   }
 
+  // Áudio do "Ouvir" no ar agora — pra o mesmo botão virar "Parar" e não empilhar dois
+  // áudios no clique-duplo (mesmo padrão do agente.tsx).
+  const audioAtivoRef = useRef<{ audio: HTMLAudioElement; url: string; index: number } | null>(null)
+  const [tocandoIndex, setTocandoIndex] = useState<number | null>(null)
+
+  function pararAudioAtivo() {
+    const atual = audioAtivoRef.current
+    if (!atual) return
+    atual.audio.pause()
+    URL.revokeObjectURL(atual.url)
+    audioAtivoRef.current = null
+    setTocandoIndex(null)
+  }
+
   async function handlePlayAudio(index: number) {
     const blob = audioBlobs[index]
     if (!blob) return
-    // O "Ouvir" toca o resultado FINAL (voz + trilha no volume atual): o que o
-    // cliente escuta é exatamente o que sai no ZIP — sem surpresa no export.
-    const final = await aplicarTrilha(blob, estudio.trilha.buffer, estudio.trilha.volume)
-    const audio = new Audio(URL.createObjectURL(final))
-    audio.play()
+    // Alternar: se ESTE card já toca, o mesmo botão PARA; e para o que estiver no ar antes
+    // de começar outro, pra dois cliques não empilharem dois áudios.
+    const jaTocavaEsse = audioAtivoRef.current?.index === index
+    pararAudioAtivo()
+    if (jaTocavaEsse) return
+
+    let url = ''
+    try {
+      // O "Ouvir" toca o resultado FINAL (voz + trilha no volume atual): o que o cliente
+      // escuta é exatamente o que sai no ZIP — sem surpresa no export.
+      const final = await aplicarTrilha(blob, estudio.trilha.buffer, estudio.trilha.volume)
+      url = URL.createObjectURL(final)
+      const audio = new Audio(url)
+      // Solta o blob e devolve o botão pra "Ouvir" no fim (ou falha). Antes não revogava —
+      // cada clique deixava um WAV preso na memória da aba.
+      const soltar = () => {
+        URL.revokeObjectURL(url)
+        if (audioAtivoRef.current?.audio === audio) {
+          audioAtivoRef.current = null
+          setTocandoIndex(null)
+        }
+      }
+      audio.addEventListener('ended', soltar, { once: true })
+      audio.addEventListener('error', soltar, { once: true })
+      pararAudioAtivo()
+      audioAtivoRef.current = { audio, url, index }
+      setTocandoIndex(index)
+      await audio.play()
+    } catch (err) {
+      // play() pode rejeitar (gesto expirado no iOS/Safari, formato recusado). Antes subia
+      // como unhandled rejection e a tela não dizia nada; agora ao menos não vaza o blob.
+      console.error('=== ERRO ao tocar áudio ===', err)
+      if (url) URL.revokeObjectURL(url)
+      if (audioAtivoRef.current?.url === url) {
+        audioAtivoRef.current = null
+        setTocandoIndex(null)
+      }
+    }
   }
 
   // Agente Guia: adiciona um serviço à lista (campo é uma lista separada por vírgula),
@@ -1480,8 +1527,8 @@ function SuperAgente() {
                       onClick={() => handlePlayAudio(index)}
                       className="flex-1 bg-[#1A1A1A] hover:bg-[#252525] flex items-center justify-center gap-2"
                     >
-                      <Play className="w-4 h-4" />
-                      Ouvir
+                      {tocandoIndex === index ? <Square className="w-4 h-4" /> : <Play className="w-4 h-4" />}
+                      {tocandoIndex === index ? 'Parar' : 'Ouvir'}
                     </Button>
                   )}
                   {audioBlobs[index] && (
