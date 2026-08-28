@@ -18,6 +18,7 @@ import { buildIcsCalendar, downloadIcsFile, postDateTime } from '../lib/ics'
 import { convertToWhatsAppOgg, convertVoiceToMp3 } from '../lib/audioConvert'
 import { RedesSociais } from '../components/RedesSociais'
 import { PublicarNewPost } from '../components/PublicarNewPost'
+import { serieDoCalendario } from '../lib/newpost'
 import {
   ExportSlide, hookFontSize, bodyFontSize, slideRefKey, renderSlidesToBlobs,
   EXPORT_W, EXPORT_H, type SlideKey,
@@ -1564,6 +1565,7 @@ function SuperAgente() {
                   marca={nicho.trim() || 'Minha marca'}
                   chaveUnica={`voiceflow-${dataInicio}-${diaTag(post.dia, post.periodo, post.horario)}-${index}`}
                   prepararMidia={() => prepararMidiaNewPost(index)}
+                  serie={serieDoCalendario(nicho, dataInicio)}
                   disabled={exportingIndex !== null}
                 />
 

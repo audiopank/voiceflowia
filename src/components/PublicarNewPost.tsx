@@ -11,6 +11,7 @@ import {
   PrecisaNomeNewPost,
   URL_NEWPOST,
   type ResultadoPublicacao,
+  type SerieNewPost,
 } from '../lib/newpost'
 
 // Botão "Publicar na NewPost-IA" de um card do Super Agente.
@@ -27,6 +28,7 @@ export function PublicarNewPost({
   marca,
   chaveUnica,
   prepararMidia,
+  serie,
   disabled,
 }: {
   texto: string
@@ -36,6 +38,9 @@ export function PublicarNewPost({
   marca: string
   chaveUnica: string
   prepararMidia: () => Promise<{ imagens: Blob[]; audio: Blob | null }>
+  /** Presente = o post sai como EPISÓDIO desta série (temporada do calendário) na rede.
+   *  A série é criada sozinha na 1ª publicação; o nº do episódio é automático. */
+  serie?: SerieNewPost | null
   disabled?: boolean
 }) {
   const [estado, setEstado] = useState<'parado' | 'preparando' | 'enviando' | 'pronto'>('parado')
@@ -93,7 +98,7 @@ export function PublicarNewPost({
       const { imagens, audio } = await prepararMidia()
 
       setEstado('enviando')
-      const r = await publicarNaNewPost({ texto, imagens, audio, chaveUnica }, sessao)
+      const r = await publicarNaNewPost({ texto, imagens, audio, chaveUnica, serie }, sessao)
       setResultado(r)
       setEstado('pronto')
     } catch (e) {
@@ -130,14 +135,23 @@ export function PublicarNewPost({
           <CheckCircle2 className="w-4 h-4 shrink-0" />
           <span>Publicado na NewPost-IA</span>
           <a
-            href={URL_NEWPOST}
+            href={resultado.serieId ? `${URL_NEWPOST}/serie/${resultado.serieId}` : URL_NEWPOST}
             target="_blank"
             rel="noopener noreferrer"
             className="ml-auto flex items-center gap-1 text-xs text-[#8B5CF6] hover:underline"
           >
-            Ver no feed <ExternalLink className="w-3 h-3" />
+            {resultado.serieId ? 'Ver a série' : 'Ver no feed'} <ExternalLink className="w-3 h-3" />
           </a>
         </div>
+
+        {/* Episódio de temporada: o cliente vê que o calendário dele virou uma série
+            pública — é o gancho de retenção, então merece a linha própria. */}
+        {resultado.serieId && resultado.serieTitulo && (
+          <p className="text-[11px] text-gray-400">
+            🎙️ Episódio novo da série <span className="text-gray-200">{resultado.serieTitulo}</span> —
+            quem segue a série foi avisado agora.
+          </p>
+        )}
 
         {/* Conta criada agora: sem mostrar a senha, o cliente ficaria com um perfil
             na rede sem saber como entrar nele depois. */}

@@ -56,3 +56,7 @@ public/ffmpeg/
 # A barra inicial e OBRIGATORIA: "trilhas/" sem ela casaria tambem com
 # public/trilhas/ e os MP3s do app nao iriam pro deploy.
 /trilhas/
+
+# Estado local do Supabase CLI (qual projeto esta linkado nesta maquina).
+# Nao e migracao nem schema — nao deve viajar no repositorio.
+supabase/.temp/

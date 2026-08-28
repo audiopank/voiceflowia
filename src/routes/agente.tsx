@@ -7,6 +7,7 @@ import { fetchWithRetry, safeJson, friendlyApiError } from '../lib/apiRetry'
 import { textoLongoDemais, avisoTextoLongo } from '../lib/limites'
 import { Button } from '../components/ui/button'
 import { PublicarNewPost } from '../components/PublicarNewPost'
+import { serieDoCalendario } from '../lib/newpost'
 import {
   ExportSlide, hookFontSize, bodyFontSize, slideRefKey, renderSlidesToBlobs,
 } from '../components/CardExport'
@@ -700,6 +701,7 @@ function Agente() {
                   marca={nicho.trim() || 'Minha marca'}
                   chaveUnica={`voiceflow-agente-${dataInicio}-dia${post.dia}-${post.periodo}-${index}`}
                   prepararMidia={() => prepararMidiaNewPost(index)}
+                  serie={serieDoCalendario(nicho, dataInicio)}
                 />
               </div>
             ))}

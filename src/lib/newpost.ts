@@ -136,6 +136,83 @@ export interface PostNewPost {
   // Mesma chave = mesmo post. Protege contra clique duplo e contra o cliente publicar
   // duas vezes quando a conexão cai no meio.
   chaveUnica: string
+  // Quando presente, o post sai como EPISÓDIO desta série na NewPost-IA (a série é
+  // criada na primeira publicação e reusada nas seguintes; o número do episódio é
+  // automático, por trigger no banco da rede).
+  serie?: SerieNewPost | null
+}
+
+export interface SerieNewPost {
+  titulo: string
+  descricao?: string
+}
+
+const MESES = [
+  'janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho',
+  'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro',
+]
+
+// Nome da temporada a partir do calendário do cliente: "{marca} — Temporada de {mês} de {ano}".
+// O ano entra no título de propósito: a busca de série é por (autor, título), e sem o ano o
+// setembro do ano que vem cairia DENTRO da temporada de setembro deste ano.
+export function serieDoCalendario(nicho: string, dataInicio: string): SerieNewPost {
+  let d = new Date(`${dataInicio}T12:00:00`) // meio-dia: fuso não volta o dia
+  if (isNaN(d.getTime())) {
+    const m = dataInicio.match(/^(\d{2})\/(\d{2})\/(\d{4})$/)
+    d = m ? new Date(`${m[3]}-${m[2]}-${m[1]}T12:00:00`) : new Date()
+  }
+  const mes = MESES[d.getMonth()]
+  const ano = d.getFullYear()
+  const marca = nicho.trim() || 'Minha marca'
+  return {
+    titulo: `${marca} — Temporada de ${mes} de ${ano}`,
+    descricao: `Os conteúdos de ${mes} de ${ano}, um episódio por vez — com locução pronta. Siga a série pra não perder o próximo.`,
+  }
+}
+
+// Acha (ou cria) a série do cliente na rede. Série é EXTRA: se qualquer passo falhar,
+// devolve null e o post sai avulso — publicar nunca trava por causa da série.
+async function garantirSerie(
+  sessao: SessaoNewPost,
+  serie: SerieNewPost,
+  coverUrl: string | null,
+): Promise<string | null> {
+  const H = {
+    apikey: sessao.anonKey,
+    Authorization: `Bearer ${sessao.accessToken}`,
+    'Content-Type': 'application/json',
+  }
+  try {
+    const filtro = `author_id=eq.${sessao.newpostUserId}&title=eq.${encodeURIComponent(serie.titulo)}`
+    const busca = await fetch(`${sessao.supabaseUrl}/rest/v1/series?${filtro}&select=id&limit=1`, { headers: H })
+    if (busca.ok) {
+      const linhas = await busca.json().catch(() => null)
+      if (Array.isArray(linhas) && linhas[0]?.id) return linhas[0].id
+    }
+    const cria = await fetch(`${sessao.supabaseUrl}/rest/v1/series`, {
+      method: 'POST',
+      headers: { ...H, Prefer: 'return=representation' },
+      body: JSON.stringify({
+        author_id: sessao.newpostUserId,
+        title: serie.titulo,
+        description: serie.descricao ?? null,
+        cover_url: coverUrl, // capa da temporada = primeiro card publicado nela
+      }),
+    })
+    if (cria.ok) {
+      const novas = await cria.json().catch(() => null)
+      const id = Array.isArray(novas) ? (novas[0]?.id ?? null) : (novas?.id ?? null)
+      if (id) return id
+    }
+    // INSERT recusado (ex.: outro clique criou a série um instante antes — há unique de
+    // autor+título na rede): re-busca uma vez; se ainda assim nada, o post sai avulso.
+    const rebusca = await fetch(`${sessao.supabaseUrl}/rest/v1/series?${filtro}&select=id&limit=1`, { headers: H })
+    if (!rebusca.ok) return null
+    const achadas = await rebusca.json().catch(() => null)
+    return Array.isArray(achadas) ? (achadas[0]?.id ?? null) : null
+  } catch {
+    return null
+  }
 }
 
 // Hash curto e estável do texto (djb2). Entra na chave de idempotência pra separar
@@ -153,6 +230,9 @@ export interface ResultadoPublicacao {
   contaCriadaAgora: boolean
   senhaGerada: string | null
   email: string
+  // Preenchidos quando o post saiu como episódio de série (null = saiu avulso).
+  serieId: string | null
+  serieTitulo: string | null
 }
 
 export async function publicarNaNewPost(post: PostNewPost, sessao: SessaoNewPost): Promise<ResultadoPublicacao> {
@@ -174,6 +254,10 @@ export async function publicarNaNewPost(post: PostNewPost, sessao: SessaoNewPost
     const ext = post.audio.type.includes('mpeg') ? 'mp3' : post.audio.type.includes('ogg') ? 'ogg' : 'wav'
     audioUrl = await subirArquivo(sessao, 'post-audio', `${uid}/${carimbo}-locucao.${ext}`, post.audio)
   }
+
+  // Série (temporada): resolvida DEPOIS dos uploads pra usar o 1º card como capa.
+  // null aqui = segue avulso; a publicação nunca depende da série dar certo.
+  const serieId = post.serie ? await garantirSerie(sessao, post.serie, mediaUrls[0] ?? null) : null
 
   const res = await fetch(`${sessao.supabaseUrl}/rest/v1/posts`, {
     method: 'POST',
@@ -201,6 +285,12 @@ export async function publicarNaNewPost(post: PostNewPost, sessao: SessaoNewPost
       // mesma chave ("...-dia-01-manha-09h00-0") e o segundo teria a publicação recusada.
       // O hash do texto no fim libera republicar depois de regerar/editar o conteúdo.
       idempotency_key: `${uid}-${post.chaveUnica}-${hashTexto(post.texto)}`,
+      // Episódio de série: o número vem sozinho (trigger na rede numera na ordem).
+      // A chave só entra no corpo quando HÁ série: mandar `series_id: null` parece
+      // inofensivo, mas se a coluna ainda não existir no banco da rede o PostgREST
+      // recusa o INSERT inteiro (PGRST204) — e aí TODA publicação quebraria, não só
+      // as de série. Omitir a chave mantém o post avulso funcionando sempre.
+      ...(serieId ? { series_id: serieId } : {}),
     }),
   })
 
@@ -213,6 +303,8 @@ export async function publicarNaNewPost(post: PostNewPost, sessao: SessaoNewPost
     contaCriadaAgora: sessao.contaCriadaAgora,
     senhaGerada: sessao.senhaGerada,
     email: sessao.email,
+    serieId,
+    serieTitulo: serieId ? (post.serie?.titulo ?? null) : null,
   }
 }
 
