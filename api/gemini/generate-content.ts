@@ -26,8 +26,15 @@ const RESPONSE_SCHEMA = {
 
 // qtdDias = quantidade de DIAS de conteúdo; cada dia gera 2 posts (Manhã + Tarde),
 // então o array final tem qtdDias * 2 itens (pedido de cliente: fluxo de 2 posts/dia).
-function buildPrompt(nicho: string, tom: string, qtdDias: number): string {
-  return `Você é um social media sênior brasileiro. Gere um calendário de Reels de ${qtdDias} dias para o nicho: "${nicho}". Tom de voz: ${tom}.
+function buildPrompt(nicho: string, tom: string, qtdDias: number, campanha?: string): string {
+  // Gancho sazonal (Drops): quando presente, o calendário gira em torno da data —
+  // sem prometer brinde/desconto/material que o negócio não confirmou ter.
+  // Os \n vivem DENTRO do bloco: sem campanha o prompt fica byte-idêntico ao que
+  // sempre rodou em produção (nenhuma linha em branco extra).
+  const blocoCampanha = campanha
+    ? `\n\nGANCHO SAZONAL: os roteiros devem girar em torno de "${campanha}" — conecte o nicho à data de forma natural (celebração, conexão com o público), SEM prometer brindes, descontos ou materiais que o negócio não confirmou ter.`
+    : ''
+  return `Você é um social media sênior brasileiro. Gere um calendário de Reels de ${qtdDias} dias para o nicho: "${nicho}". Tom de voz: ${tom}.${blocoCampanha}
 
 Cada dia tem 2 roteiros: um para postar de Manhã e outro para postar à Tarde — ${qtdDias * 2} roteiros no total.
 
@@ -82,7 +89,7 @@ async function handler(request: Request): Promise<Response> {
       )
     }
 
-    const { nicho, tom, qtdPosts } = await request.json()
+    const { nicho, tom, qtdPosts, campanha } = await request.json()
 
     if (!nicho || typeof nicho !== 'string') {
       return new Response(
@@ -93,6 +100,8 @@ async function handler(request: Request): Promise<Response> {
 
     const tomFinal = tom && typeof tom === 'string' ? tom : 'Profissional'
     const qtdFinal = Math.min(Math.max(Number(qtdPosts) || 30, 1), 30)
+    // Campanha/data sazonal é opcional e limitada — vira instrução no prompt.
+    const campanhaFinal = typeof campanha === 'string' ? campanha.trim().slice(0, 200) : ''
 
     const response = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`,
@@ -106,7 +115,7 @@ async function handler(request: Request): Promise<Response> {
         body: JSON.stringify({
           contents: [
             {
-              parts: [{ text: buildPrompt(nicho, tomFinal, qtdFinal) }]
+              parts: [{ text: buildPrompt(nicho, tomFinal, qtdFinal, campanhaFinal || undefined) }]
             }
           ],
           generationConfig: {

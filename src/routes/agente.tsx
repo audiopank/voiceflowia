@@ -1,6 +1,7 @@
-import { Fragment, useRef, useState } from 'react'
+import { Fragment, useMemo, useRef, useState } from 'react'
 import { createFileRoute } from '@tanstack/react-router'
-import { Lock, Loader2, AlertCircle, Sparkles, Volume2, Download, Play, Square, CalendarDays, RefreshCw } from 'lucide-react'
+import { Lock, Loader2, AlertCircle, Sparkles, Volume2, Download, Play, Square, CalendarDays, RefreshCw, CheckCircle2 } from 'lucide-react'
+import { proximoDrop, chaveDrop, campanhaDoDrop, textoContagem } from '../lib/datasSazonais'
 import { useSubscription, devolverGeracaoTrial } from '../lib/useSubscription'
 import { supabase } from '../lib/supabase'
 import { fetchWithRetry, safeJson, friendlyApiError } from '../lib/apiRetry'
@@ -53,6 +54,25 @@ function Agente() {
   // Fluxo de 2 posts/dia (Manhã + Tarde): este campo é quantidade de DIAS, não de posts —
   // o total de cards gerados é o dobro.
   const [qtdDias, setQtdDias] = useState(15)
+
+  // DROP SAZONAL (agente proativo): mesma mecânica do Super Agente — data especial
+  // na janela → banner oferece o post da data (1 post, pendente de aprovação).
+  // A chave de dispensa é COMPARTILHADA com o Super Agente (mesma ocorrência):
+  // gerou/dispensou numa porta, a outra não cutuca de novo.
+  const dropProximo = useMemo(() => proximoDrop(), [])
+  const [dropEstado, setDropEstado] = useState<'novo' | 'gerado' | 'dispensado'>(() => {
+    if (!dropProximo) return 'dispensado'
+    try {
+      const salvo = localStorage.getItem(chaveDrop(dropProximo))
+      return salvo === 'gerado' || salvo === 'dispensado' ? salvo : 'novo'
+    } catch { return 'novo' }
+  })
+  function marcarDrop(estado: 'gerado' | 'dispensado') {
+    setDropEstado(estado)
+    if (dropProximo) {
+      try { localStorage.setItem(chaveDrop(dropProximo), estado) } catch { /* sem storage: só não persiste */ }
+    }
+  }
   // Data em que "Dia 1" cai de verdade — pro export do Google Agenda. Padrão: hoje.
   const [dataInicio, setDataInicio] = useState(todayIso)
   const [posts, setPosts] = useState<Post[] | null>(null)
@@ -95,7 +115,11 @@ function Agente() {
   }
   const [rateNotice, setRateNotice] = useState('')
 
-  async function handleGenerateContent() {
+  // dropNome: quando vem do banner de Drop Sazonal, gera 1 post único da data em
+  // vez do calendário. O botão principal chama via onClick={handleGenerateContent}
+  // e passa o EVENT como 1º argumento — daí a checagem de tipo, não remover.
+  async function handleGenerateContent(dropNome?: unknown) {
+    const dropCampanha = typeof dropNome === 'string' ? dropNome : undefined
     if (!nicho.trim()) return
 
     // Trial: consome 1 geração (o servidor valida os 7 dias + limite de 10).
@@ -124,7 +148,7 @@ function Agente() {
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ nicho, tom, qtdPosts: qtdDias })
+          body: JSON.stringify({ nicho, tom, qtdPosts: dropCampanha ? 1 : qtdDias, campanha: dropCampanha })
         },
         { onWait: (s) => setRateNotice(`⏳ Muita procura agora — tentando de novo em ${s}s...`) },
       )
@@ -140,6 +164,10 @@ function Agente() {
 
       const data = await safeJson(response)
       setPosts(data.posts)
+
+      // Drop sazonal entregue: só marca DEPOIS do sucesso — se falhar, o banner
+      // continua oferecendo (marcar antes deixaria o aviso mentindo).
+      if (dropCampanha) marcarDrop('gerado')
 
       const { data: { user } } = await supabase.auth.getUser()
       if (user) {
@@ -456,6 +484,59 @@ function Agente() {
           <div className="mb-6 p-4 bg-yellow-900/20 border border-yellow-700/50 rounded-xl flex items-center gap-3">
             <Loader2 className="w-5 h-5 text-yellow-400 shrink-0 animate-spin" />
             <span className="text-yellow-300">{rateNotice}</span>
+          </div>
+        )}
+
+        {/* DROP SAZONAL: o agente vigia o calendário e OFERECE o post da data
+            chegando — mesma mecânica (e mesma chave de dispensa) do Super Agente.
+            Portão humano sempre: publicar continua sendo o botão de sempre. */}
+        {dropProximo && dropEstado !== 'dispensado' && (
+          <div className="mb-6 rounded-2xl border border-[#22C55E]/40 bg-gradient-to-br from-[#22C55E]/10 to-transparent p-5">
+            {dropEstado === 'novo' ? (
+              <div className="flex flex-col md:flex-row md:items-center gap-4">
+                <div className="text-3xl shrink-0">{dropProximo.emoji}</div>
+                <div className="flex-1">
+                  <h2 className="text-white font-bold text-lg">
+                    {dropProximo.nome} {textoContagem(dropProximo.diasFaltando)}!
+                  </h2>
+                  <p className="text-sm text-gray-400 mt-0.5">
+                    {nicho.trim() ? (
+                      <>O agente prepara os posts da data (manhã + tarde) pra <b className="text-gray-200">{nicho.trim()}</b> — você revisa e só publica se aprovar.</>
+                    ) : (
+                      'Preencha o nicho abaixo e o agente prepara os posts da data (manhã + tarde) — você revisa antes de publicar.'
+                    )}
+                  </p>
+                </div>
+                <div className="flex items-center gap-3 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => marcarDrop('dispensado')}
+                    className="text-sm text-gray-500 hover:text-gray-300"
+                  >
+                    Agora não
+                  </button>
+                  <Button
+                    onClick={() => void handleGenerateContent(campanhaDoDrop(dropProximo))}
+                    disabled={isGenerating || !nicho.trim()}
+                    className="bg-[#22C55E] hover:bg-[#16A34A] disabled:opacity-50 font-bold"
+                  >
+                    {isGenerating ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                        Preparando drop...
+                      </>
+                    ) : (
+                      <>⚡ Gerar drop da data</>
+                    )}
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <p className="text-sm text-[#22C55E] flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 shrink-0" />
+                Drop de {dropProximo.nome} gerado — revise o card abaixo e publique quando aprovar. Nada sai sem o seu clique.
+              </p>
+            )}
           </div>
         )}
 
