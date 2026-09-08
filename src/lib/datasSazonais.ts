@@ -119,3 +119,49 @@ export function textoContagem(diasFaltando: number): string {
   if (diasFaltando === 1) return 'amanhã'
   return `em ${diasFaltando} dias`
 }
+
+// ---------------------------------------------------------------------------
+// DROPS SAZONAIS — o agente proativo que vigia o calendário. Gatilho LAZY (ao
+// abrir o painel), sem cron. Portão humano sempre: o drop nasce pendente e nada
+// é publicado sem o clique de aprovação do dono.
+// ---------------------------------------------------------------------------
+
+// Janela: a data está perto o bastante pra valer um post especial AGORA.
+export const JANELA_DROP_DIAS = 5
+
+// Virada de mês como "data" sintética: nos 2 últimos dias do mês (ou no dia 1º),
+// o drop é o post de gratidão pelo mês que fecha + boas-vindas ao que chega.
+export function viradaDeMes(base: Date = new Date()): DataProxima | null {
+  const hoje = meiaNoite(base)
+  const ultimoDia = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0).getDate()
+  const dia = hoje.getDate()
+  if (dia !== 1 && dia < ultimoDia - 1) return null
+  const alvo = dia === 1 ? hoje : meiaNoite(new Date(hoje.getFullYear(), hoje.getMonth() + 1, 1))
+  const diasFaltando = Math.round((alvo.getTime() - hoje.getTime()) / DAY_MS)
+  return { nome: 'Virada do mês', emoji: '🗓️', data: alvo, diasFaltando }
+}
+
+// O drop mais urgente do momento: virada de mês OU data comemorativa na janela.
+export function proximoDrop(base: Date = new Date()): DataProxima | null {
+  const candidatos = proximasDatasSazonais(JANELA_DROP_DIAS, base)
+  const virada = viradaDeMes(base)
+  if (virada) candidatos.push(virada)
+  if (candidatos.length === 0) return null
+  return candidatos.sort((a, b) => a.diasFaltando - b.diasFaltando)[0]
+}
+
+// Chave de dispensa por OCORRÊNCIA (nome + data-alvo): dispensar o 7 de Setembro
+// deste ano não silencia o do ano que vem.
+export function chaveDrop(d: DataProxima): string {
+  const iso = `${d.data.getFullYear()}-${String(d.data.getMonth() + 1).padStart(2, '0')}-${String(d.data.getDate()).padStart(2, '0')}`
+  return `voiceflow-drop-${d.nome.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${iso}`
+}
+
+// O texto que vai no campo `campanha` da geração. Regra da casa embutida:
+// nunca prometer brinde/material que o cliente não confirmou ter.
+export function campanhaDoDrop(d: DataProxima): string {
+  if (d.nome === 'Virada do mês') {
+    return 'Virada do mês — post de gratidão pelo mês que termina e boas-vindas ao novo mês (celebração e conexão, sem prometer brindes ou materiais)'
+  }
+  return d.nome
+}
