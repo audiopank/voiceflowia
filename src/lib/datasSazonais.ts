@@ -127,7 +127,9 @@ export function textoContagem(diasFaltando: number): string {
 // ---------------------------------------------------------------------------
 
 // Janela: a data está perto o bastante pra valer um post especial AGORA.
-export const JANELA_DROP_DIAS = 5
+// 7 dias = uma semana de antecedência — tempo de o cliente preparar a campanha
+// (e post de data forte uma semana antes é build-up normal de marketing).
+export const JANELA_DROP_DIAS = 7
 
 // Virada de mês como "data" sintética: nos 2 últimos dias do mês (ou no dia 1º),
 // o drop é o post de gratidão pelo mês que fecha + boas-vindas ao que chega.
