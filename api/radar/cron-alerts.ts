@@ -16,6 +16,7 @@ interface Hit {
   fonte: string
   classificacao: string
   motivo: string
+  propria?: boolean // publicado PELA própria marca (anúncio/post institucional)
 }
 
 // Serper.dev (Google Search API): POST com header X-API-KEY, resposta em `organic`.
@@ -54,12 +55,13 @@ async function geminiClassify(apiKey: string, nicho: string, brand: string, hits
       properties: {
         indice: { type: 'INTEGER' },
         classificacao: { type: 'STRING', enum: ['Positivo', 'Neutro', 'Negativo', 'Crise'] },
+        propria: { type: 'BOOLEAN' }, // publicado PELA marca (anúncio/post próprio)
         motivo: { type: 'STRING' },
       },
       required: ['indice', 'classificacao', 'motivo'],
     },
   }
-  const prompt = `Analise reputação da marca "${brand}" (nicho "${nicho}"). Classifique cada menção como Positivo, Neutro, Negativo ou Crise (Crise = golpe/fraude/processo/escândalo). Motivo em 1 frase. Array JSON com "indice", "classificacao", "motivo".\n\n${lista}`
+  const prompt = `Analise reputação da marca "${brand}" (nicho "${nicho}"). Classifique cada menção como Positivo, Neutro, Negativo ou Crise (Crise = golpe/fraude/processo/escândalo). Marque "propria": true se quem publicou foi a própria marca ou alguém divulgando por ela (anúncio, post institucional, comunicado); false se é um terceiro falando sobre ela. Motivo em 1 frase. Array JSON com "indice", "classificacao", "propria", "motivo".\n\n${lista}`
   try {
     const res = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`,
@@ -80,6 +82,7 @@ async function geminiClassify(apiKey: string, nicho: string, brand: string, hits
         const idx = Number(item.indice)
         if (hits[idx]) {
           hits[idx].classificacao = item.classificacao || 'Neutro'
+          hits[idx].propria = item.propria === true // só true explícito separa
           hits[idx].motivo = item.motivo || ''
         }
       }
@@ -241,16 +244,17 @@ async function handler(request: Request): Promise<Response> {
       const { data: recent } = await supabaseAdmin.from('radar_alertas').select('url').eq('user_id', cfg.user_id).gte('created_at', since)
       const alreadyAlerted = new Set((recent || []).map((r: any) => r.url).filter(Boolean))
 
-      // Crise SEMPRE alerta. Palavra-chave só alerta quando a menção NÃO é positiva:
-      // quem cadastra o nome da própria marca como palavra-chave fazia todo elogio
-      // virar alerta de crise, e alerta que apita pra elogio o cliente aprende a
-      // ignorar — justo pra quando vier problema de verdade.
+      // Sirene de incêndio, não campainha: só Negativo/Crise dispara, e publicação
+      // da PRÓPRIA marca nunca (anúncio informativo Neutro estava virando "alerta
+      // de crise" — e alerta que apita à toa o cliente aprende a ignorar, justo
+      // pra quando vier problema de verdade). Palavra-chave fica só como rede de
+      // segurança pra menção SEM classificação (IA fora do ar).
       const novos = hits.filter((h) => {
+        if (h.url && alreadyAlerted.has(h.url)) return false
+        if (h.propria === true) return false
         const c = h.classificacao.toLowerCase()
-        const dup = h.url && alreadyAlerted.has(h.url)
-        if (dup) return false
-        if (c === 'crise') return true
-        if (c === 'positivo') return false
+        if (c === 'crise' || c === 'negativo') return true
+        if (c === 'positivo' || c === 'neutro') return false
         return keywords.some((k) => k && h.texto.toLowerCase().includes(k))
       })
 

@@ -133,13 +133,16 @@ interface Alerta {
 
 const DEFAULT_KEYWORDS = ['golpe', 'não recomendo', 'processo', 'lixo', 'péssimo', 'horrível']
 
-// Alerta é pra problema. Menção POSITIVA nunca deveria ter virado alerta — mas
-// versões anteriores gravavam por palavra-chave sem olhar o sentimento, e quem
-// cadastrou o nome da própria marca ficou com a lista cheia de elogio marcado
-// com triângulo vermelho. Filtrar na EXIBIÇÃO conserta as linhas antigas que já
-// estão no banco, sem precisar apagar nada à mão.
+// Alerta é pra problema (Negativo/Crise). Positivo E Neutro ficam fora — um
+// post informativo da própria marca chegou a aparecer como "alerta de crise".
+// Menção SEM classificação (IA fora do ar) continua visível: é a rede de
+// segurança por palavra-chave. Filtrar na EXIBIÇÃO conserta as linhas antigas
+// que já estão no banco, sem precisar apagar nada à mão.
 function alertasReais(linhas: Alerta[]): Alerta[] {
-  return linhas.filter((a) => (a.classificacao || '').toLowerCase() !== 'positivo')
+  return linhas.filter((a) => {
+    const c = (a.classificacao || '').toLowerCase()
+    return c !== 'positivo' && c !== 'neutro'
+  })
 }
 
 function emptyConfig(email: string): RadarConfig {

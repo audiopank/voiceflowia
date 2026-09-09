@@ -478,21 +478,30 @@ Responda um array JSON com um item por menção: "indice" (número da menção),
     }
     if (relErr) return new Response(JSON.stringify({ error: `Erro ao salvar relatório: ${relErr.message}` }), { status: 500, headers: { 'Content-Type': 'application/json' } })
 
-    // 6) Gera alertas. Crise SEMPRE alerta. Palavra-chave alerta só quando a menção
-    // NÃO é positiva: quem põe o nome da própria marca como palavra-chave fazia todo
-    // elogio virar "alerta de crise" — e alerta que apita pra elogio é alerta que o
-    // cliente aprende a ignorar, justo pra quando vier problema de verdade.
+    // 6) Gera alertas. Sirene de incêndio, não campainha: só sentimento
+    // Negativo/Crise dispara, e publicação da PRÓPRIA marca nunca dispara
+    // (anúncio informativo Neutro estava virando "alerta de crise"). A palavra-
+    // chave fica como rede de segurança apenas pra menção SEM classificação
+    // (IA fora do ar) — melhor um possível falso alarme do que silêncio na pane.
     const lowerKeywords = keywords.map((k) => k.toLowerCase())
     const alertas = mencoesRel
       .filter((m) => {
+        // IA fora do ar: TODA menção já foi backfilled pra 'Neutro' logo após o
+        // Promise.all, então o sentimento aqui não informa nada — checar
+        // classificação engoliria a rede de segurança. Vale só a palavra-chave.
+        if (!sentimentoOk) return lowerKeywords.some((k) => k && m.texto.toLowerCase().includes(k))
+        if (m.propria === true) return false
         const c = m.classificacao.toLowerCase()
-        if (c === 'crise') return true
-        if (c === 'positivo') return false
-        return lowerKeywords.some((k) => k && m.texto.toLowerCase().includes(k))
+        return c === 'crise' || c === 'negativo'
       })
       .map((m) => ({
         user_id: user.id, config_id: config.id, mencao_texto: m.texto.slice(0, 300),
-        fonte: m.fonte, url: m.url, classificacao: m.classificacao, motivo: m.motivo, notified_email: false,
+        fonte: m.fonte, url: m.url,
+        // Sem classificação real da IA grava '' (não o 'Neutro' de fallback):
+        // a exibição (alertasReais) esconde 'Neutro' e manteria o alerta da
+        // rede de segurança invisível — vazio ela mostra, como sinal honesto.
+        classificacao: sentimentoOk ? m.classificacao : '',
+        motivo: m.motivo, notified_email: false,
       }))
     if (alertas.length) await supabaseAdmin.from('radar_alertas').insert(alertas)
 
