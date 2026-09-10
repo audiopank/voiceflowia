@@ -154,6 +154,12 @@ export function useSubscription() {
     (isPaidPlan && (!courtesyGated || state.courtesy.active)) ||
     state.trial.active
 
+  // Cortesia com prazo que JÁ venceu num plano pago: o plano continua escrito
+  // no perfil, mas o acesso morreu. Sem este estado a UI mentia — mostrava
+  // "Dominação ✅" no topo com cadeado "faça upgrade" embaixo, que parece BUG
+  // pra quem era cortesia (caso real: o próprio dono e o lead PC em 10/09).
+  const courtesyExpired = isPaidPlan && courtesyGated && !state.courtesy.active
+
   // Acesso ao módulo Radar (add-on independente): entitlement paralelo, NÃO
   // depende de hasAccess/subscription_plan. Cliente pode ter só Radar, ou
   // Dominação + Radar, etc.
@@ -165,6 +171,7 @@ export function useSubscription() {
     // Mesmo criterio de hasAccess; mantido pelo nome usado no Dashboard.
     hasContentAgentFeature: hasAccess,
     hasRadar,
+    courtesyExpired,
     startTrial,
     refresh: fetchSubscription,
   }

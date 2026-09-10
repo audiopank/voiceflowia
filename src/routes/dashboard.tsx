@@ -59,6 +59,9 @@ function Dashboard() {
   const hasContentAgentFeature = subscription.hasContentAgentFeature
   const hasRadar = subscription.hasRadar
   const subscriptionActive = subscription.status === 'active'
+  // Cortesia vencida: a tela conta a verdade e VENDE, em vez de parecer bug
+  // ("Dominação ✅" + cadeado pedindo upgrade era contradição na cara do lead).
+  const courtesyExpired = subscription.courtesyExpired
 
   // Trial mostra o que sobra das 10; pago é ilimitado; sem acesso mostra "—".
   const trial = subscription.trial
@@ -140,8 +143,9 @@ function Dashboard() {
           <div>
             <h1 className="text-3xl font-bold">Dashboard - VoiceFlow IA</h1>
             {subscription.plan && (
-              <p className="text-[#8B5CF6] mt-1">
-                Plano: {planLabel(subscription.plan)} {subscriptionActive ? '✅' : '(Inativo)'}
+              <p className={courtesyExpired ? 'text-amber-400 mt-1' : 'text-[#8B5CF6] mt-1'}>
+                Plano: {planLabel(subscription.plan)}{' '}
+                {courtesyExpired ? '— cortesia encerrada' : subscriptionActive ? '✅' : '(Inativo)'}
               </p>
             )}
           </div>
@@ -303,11 +307,11 @@ function Dashboard() {
             </button>
           ) : (
             <button
-              disabled
-              className="w-full bg-gray-800 text-gray-500 font-bold py-6 px-8 rounded-xl text-2xl flex items-center justify-center gap-3 cursor-not-allowed border border-gray-700"
+              onClick={() => navigate({ to: '/precos' })}
+              className="w-full bg-gray-800 text-gray-400 font-bold py-6 px-8 rounded-xl text-2xl flex items-center justify-center gap-3 border border-gray-700 hover:border-[#8B5CF6] hover:text-white transition-colors"
             >
               <Lock className="w-10 h-10" />
-              Editor de Voz 🔒 - Upgrade para Crescimento
+              {courtesyExpired ? 'Editor de Voz 🔒 — cortesia encerrada, assine pra continuar' : 'Editor de Voz 🔒 - Upgrade para Crescimento'}
             </button>
           )}
         </div>
@@ -324,11 +328,11 @@ function Dashboard() {
             </button>
           ) : (
             <button
-              disabled
-              className="w-full bg-gray-800 text-gray-500 font-bold py-6 px-8 rounded-xl text-2xl flex items-center justify-center gap-3 cursor-not-allowed border border-gray-700"
+              onClick={() => navigate({ to: '/precos' })}
+              className="w-full bg-gray-800 text-gray-400 font-bold py-6 px-8 rounded-xl text-2xl flex items-center justify-center gap-3 border border-gray-700 hover:border-[#8B5CF6] hover:text-white transition-colors"
             >
               <Lock className="w-9 h-9" />
-              Super Agente 🔒 - Upgrade para Crescimento
+              {courtesyExpired ? 'Super Agente 🔒 — cortesia encerrada, assine pra continuar' : 'Super Agente 🔒 - Upgrade para Crescimento'}
             </button>
           )}
         </div>
@@ -345,11 +349,11 @@ function Dashboard() {
             </button>
           ) : (
             <button
-              disabled
-              className="w-full bg-gray-800 text-gray-500 font-bold py-6 px-8 rounded-xl text-2xl flex items-center justify-center gap-3 cursor-not-allowed border border-gray-700"
+              onClick={() => navigate({ to: '/precos' })}
+              className="w-full bg-gray-800 text-gray-400 font-bold py-6 px-8 rounded-xl text-2xl flex items-center justify-center gap-3 border border-gray-700 hover:border-[#8B5CF6] hover:text-white transition-colors"
             >
               <Lock className="w-9 h-9" />
-              Card Mágico 🔒 - Upgrade para Crescimento
+              {courtesyExpired ? 'Card Mágico 🔒 — cortesia encerrada, assine pra continuar' : 'Card Mágico 🔒 - Upgrade para Crescimento'}
             </button>
           )}
         </div>
@@ -390,7 +394,7 @@ function Dashboard() {
               <p className="text-gray-400">Crie voiceovers profissionais em menos de 2 minutos</p>
             ) : (
               <div className="text-center">
-                <p className="text-gray-500 mb-3">Funcionalidade disponível apenas nos planos Crescimento e Dominação</p>
+                <p className="text-gray-500 mb-3">{courtesyExpired ? 'Sua cortesia terminou — assine pra continuar usando.' : 'Funcionalidade disponível apenas nos planos Crescimento e Dominação'}</p>
                 <button 
                   onClick={(e) => { e.stopPropagation(); navigate({ to: '/precos' }); }}
                   className="bg-[#8B5CF6] text-white px-4 py-2 rounded-lg hover:bg-[#7C3AED] text-sm"
@@ -412,7 +416,7 @@ function Dashboard() {
               <p className="text-gray-400">Ouça, compare e favorite as vozes dos seus projetos</p>
             ) : (
               <div className="text-center">
-                <p className="text-gray-500 mb-3">Funcionalidade disponível apenas nos planos Crescimento e Dominação</p>
+                <p className="text-gray-500 mb-3">{courtesyExpired ? 'Sua cortesia terminou — assine pra continuar usando.' : 'Funcionalidade disponível apenas nos planos Crescimento e Dominação'}</p>
                 <button
                   onClick={(e) => { e.stopPropagation(); navigate({ to: '/precos' }); }}
                   className="bg-[#8B5CF6] text-white px-4 py-2 rounded-lg hover:bg-[#7C3AED] text-sm"
@@ -434,7 +438,7 @@ function Dashboard() {
               <p className="text-gray-400">Crie conteúdos automaticamente para suas redes sociais</p>
             ) : (
               <div className="text-center">
-                <p className="text-gray-500 mb-3">Funcionalidade disponível apenas nos planos Crescimento e Dominação</p>
+                <p className="text-gray-500 mb-3">{courtesyExpired ? 'Sua cortesia terminou — assine pra continuar usando.' : 'Funcionalidade disponível apenas nos planos Crescimento e Dominação'}</p>
                 <button 
                   onClick={() => navigate({ to: '/precos' })}
                   className="bg-[#8B5CF6] text-white px-4 py-2 rounded-lg hover:bg-[#7C3AED] text-sm"
