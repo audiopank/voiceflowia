@@ -264,6 +264,10 @@ function SuperAgente() {
       try { localStorage.setItem(chaveDrop(dropProximo), estado) } catch { /* sem storage: só não persiste */ }
     }
   }
+  // O drop nasceu NESTA sessão? (o 'gerado' do localStorage pode vir de sessão
+  // antiga; e os cards na tela podem ser de um kit comum — só esta flag
+  // autoriza o banner a dizer "revise o card abaixo".)
+  const [dropNestaSessao, setDropNestaSessao] = useState(false)
 
   // First-run: guia aparece só pra quem NUNCA gerou (ativação — o cliente que
   // "não sabe usar" trava justamente aqui). Só liga quando a consulta confirma 0.
@@ -461,6 +465,7 @@ function SuperAgente() {
     setEstrategia(null)
     setEstrategiaAberta(false)
     setPosts(null)
+    setDropNestaSessao(false)
     setAudioBlobs({})
     setAudioErrors({})
     setAudioProgress({ done: 0, total: 0 })
@@ -495,7 +500,10 @@ function SuperAgente() {
 
       // Drop sazonal entregue: só marca DEPOIS do sucesso — se a geração falhar,
       // o banner continua oferecendo (marcar antes deixaria o aviso mentindo).
-      if (dropCampanha) marcarDrop('gerado')
+      if (dropCampanha) {
+        marcarDrop('gerado')
+        setDropNestaSessao(true)
+      }
 
       const { data: { user } } = await supabase.auth.getUser()
       if (user) {
@@ -1015,11 +1023,45 @@ function SuperAgente() {
                   </Button>
                 </div>
               </div>
-            ) : (
+            ) : dropNestaSessao ? (
               <p className="text-sm text-[#22C55E] flex items-center gap-2">
                 <CheckCircle2 className="w-4 h-4 shrink-0" />
                 Drop de {dropProximo.nome} gerado — revise o card abaixo e publique quando aprovar. Nada sai sem o seu clique.
               </p>
+            ) : (
+              /* 'gerado' veio de sessão anterior (dispensa por ocorrência,
+                 compartilhada entre as portas) — sem card nesta tela, prometer
+                 "revise abaixo" era mentira. Verdade + botão de gerar de novo. */
+              <div className="flex flex-col md:flex-row md:items-center gap-4">
+                <div className="text-3xl shrink-0">{dropProximo.emoji}</div>
+                <p className="flex-1 text-sm text-gray-300">
+                  O drop de <b className="text-[#22C55E]">{dropProximo.nome}</b> já foi gerado numa sessão anterior — o card fica na sessão em que nasce.
+                  {nicho.trim() ? ' Quer preparar outro agora?' : ' Preencha o nicho abaixo pra preparar outro.'}
+                </p>
+                <div className="flex items-center gap-3 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => marcarDrop('dispensado')}
+                    className="text-sm text-gray-500 hover:text-gray-300"
+                  >
+                    Agora não
+                  </button>
+                  <Button
+                    onClick={() => void handleGenerate(campanhaDoDrop(dropProximo))}
+                    disabled={isGenerating || !nicho.trim()}
+                    className="bg-[#22C55E] hover:bg-[#16A34A] disabled:opacity-50 font-bold"
+                  >
+                    {isGenerating ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                        Preparando drop...
+                      </>
+                    ) : (
+                      <>⚡ Gerar de novo</>
+                    )}
+                  </Button>
+                </div>
+              </div>
             )}
           </div>
         )}
