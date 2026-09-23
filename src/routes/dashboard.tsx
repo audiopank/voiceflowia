@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { createFileRoute, useNavigate } from "@tanstack/react-router"
 import { supabase } from '../lib/supabase'
 import { useSubscription } from '../lib/useSubscription'
-import { Lock, Volume2, Settings, Rocket, Radar as RadarIcon, ArrowRight, Wand2, CalendarDays, Clock, History, Bookmark } from 'lucide-react'
+import { Lock, Volume2, Settings, Rocket, Radar as RadarIcon, ArrowRight, Wand2, CalendarDays, Clock, History, Bookmark, MessageCircle } from 'lucide-react'
 import { proximasDatasSazonais, textoContagem } from '../lib/datasSazonais'
 import { BackButton } from '../components/BackButton'
 import { AtivarTrial } from '../components/AtivarTrial'
@@ -354,6 +354,28 @@ function Dashboard() {
             >
               <Lock className="w-9 h-9" />
               {courtesyExpired ? 'Card Mágico 🔒 — cortesia encerrada, assine pra continuar' : 'Card Mágico 🔒 - Upgrade para Crescimento'}
+            </button>
+          )}
+        </div>
+
+        {/* Kit de Respostas de WhatsApp — as perguntas de sempre, respondidas na voz
+            da marca, em texto (respostas rápidas) e áudio (mensagem de voz). */}
+        <div className="mb-8">
+          {hasContentAgentFeature ? (
+            <button
+              onClick={() => navigate({ to: '/kit-whatsapp' })}
+              className="w-full bg-gradient-to-r from-[#22C55E] to-[#0EA5E9] hover:from-[#16A34A] hover:to-[#0284C7] text-white font-bold py-6 px-8 rounded-xl text-2xl flex items-center justify-center gap-3 transition-all hover:scale-[1.02] shadow-lg shadow-[#22C55E]/30"
+            >
+              <MessageCircle className="w-9 h-9" />
+              Kit de Respostas de WhatsApp — Texto + Áudio na Voz da Marca 🎙️
+            </button>
+          ) : (
+            <button
+              onClick={() => navigate({ to: '/precos' })}
+              className="w-full bg-gray-800 text-gray-400 font-bold py-6 px-8 rounded-xl text-2xl flex items-center justify-center gap-3 border border-gray-700 hover:border-[#8B5CF6] hover:text-white transition-colors"
+            >
+              <Lock className="w-9 h-9" />
+              {courtesyExpired ? 'Kit de Respostas de WhatsApp 🔒 — cortesia encerrada, assine pra continuar' : 'Kit de Respostas de WhatsApp 🔒 - Upgrade para Crescimento'}
             </button>
           )}
         </div>

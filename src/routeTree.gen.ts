@@ -17,6 +17,7 @@ import { Route as PrecosRouteImport } from './routes/precos'
 import { Route as MeusTemplatesRouteImport } from './routes/meus-templates'
 import { Route as MeusConteudosRouteImport } from './routes/meus-conteudos'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as KitWhatsappRouteImport } from './routes/kit-whatsapp'
 import { Route as EsqueciSenhaRouteImport } from './routes/esqueci-senha'
 import { Route as EditorRouteImport } from './routes/editor'
 import { Route as DashboardRouteImport } from './routes/dashboard'
@@ -65,6 +66,11 @@ const MeusConteudosRoute = MeusConteudosRouteImport.update({
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
   path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const KitWhatsappRoute = KitWhatsappRouteImport.update({
+  id: '/kit-whatsapp',
+  path: '/kit-whatsapp',
   getParentRoute: () => rootRouteImport,
 } as any)
 const EsqueciSenhaRoute = EsqueciSenhaRouteImport.update({
@@ -123,6 +129,7 @@ export interface FileRoutesByFullPath {
   '/dashboard': typeof DashboardRoute
   '/editor': typeof EditorRoute
   '/esqueci-senha': typeof EsqueciSenhaRoute
+  '/kit-whatsapp': typeof KitWhatsappRoute
   '/login': typeof LoginRoute
   '/meus-conteudos': typeof MeusConteudosRoute
   '/meus-templates': typeof MeusTemplatesRoute
@@ -142,6 +149,7 @@ export interface FileRoutesByTo {
   '/dashboard': typeof DashboardRoute
   '/editor': typeof EditorRoute
   '/esqueci-senha': typeof EsqueciSenhaRoute
+  '/kit-whatsapp': typeof KitWhatsappRoute
   '/login': typeof LoginRoute
   '/meus-conteudos': typeof MeusConteudosRoute
   '/meus-templates': typeof MeusTemplatesRoute
@@ -162,6 +170,7 @@ export interface FileRoutesById {
   '/dashboard': typeof DashboardRoute
   '/editor': typeof EditorRoute
   '/esqueci-senha': typeof EsqueciSenhaRoute
+  '/kit-whatsapp': typeof KitWhatsappRoute
   '/login': typeof LoginRoute
   '/meus-conteudos': typeof MeusConteudosRoute
   '/meus-templates': typeof MeusTemplatesRoute
@@ -183,6 +192,7 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/editor'
     | '/esqueci-senha'
+    | '/kit-whatsapp'
     | '/login'
     | '/meus-conteudos'
     | '/meus-templates'
@@ -202,6 +212,7 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/editor'
     | '/esqueci-senha'
+    | '/kit-whatsapp'
     | '/login'
     | '/meus-conteudos'
     | '/meus-templates'
@@ -221,6 +232,7 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/editor'
     | '/esqueci-senha'
+    | '/kit-whatsapp'
     | '/login'
     | '/meus-conteudos'
     | '/meus-templates'
@@ -241,6 +253,7 @@ export interface RootRouteChildren {
   DashboardRoute: typeof DashboardRoute
   EditorRoute: typeof EditorRoute
   EsqueciSenhaRoute: typeof EsqueciSenhaRoute
+  KitWhatsappRoute: typeof KitWhatsappRoute
   LoginRoute: typeof LoginRoute
   MeusConteudosRoute: typeof MeusConteudosRoute
   MeusTemplatesRoute: typeof MeusTemplatesRoute
@@ -307,6 +320,13 @@ declare module '@tanstack/react-router' {
       path: '/login'
       fullPath: '/login'
       preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/kit-whatsapp': {
+      id: '/kit-whatsapp'
+      path: '/kit-whatsapp'
+      fullPath: '/kit-whatsapp'
+      preLoaderRoute: typeof KitWhatsappRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/esqueci-senha': {
@@ -385,6 +405,7 @@ const rootRouteChildren: RootRouteChildren = {
   DashboardRoute: DashboardRoute,
   EditorRoute: EditorRoute,
   EsqueciSenhaRoute: EsqueciSenhaRoute,
+  KitWhatsappRoute: KitWhatsappRoute,
   LoginRoute: LoginRoute,
   MeusConteudosRoute: MeusConteudosRoute,
   MeusTemplatesRoute: MeusTemplatesRoute,

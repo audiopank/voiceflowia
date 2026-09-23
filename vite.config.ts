@@ -20,6 +20,7 @@ function apiDevBridge(): Plugin {
     '/api/gemini/humanizar': './api/gemini/humanizar.ts',
     '/api/gemini/gerar-dialogo': './api/gemini/gerar-dialogo.ts',
     '/api/gemini/gerar-bio': './api/gemini/gerar-bio.ts',
+    '/api/gemini/gerar-kit-whatsapp': './api/gemini/gerar-kit-whatsapp.ts',
     '/api/elevenlabs/text-to-speech': './api/elevenlabs/text-to-speech.ts',
     '/api/kiwify/webhook': './api/kiwify/webhook.ts',
     '/api/radar/generate-report': './api/radar/generate-report.ts',
