@@ -1,7 +1,8 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import {
   Lock, Loader2, Sparkles, Download, Copy, Check, X, AlertCircle, MessageCircle, Play, Square, Plus,
+  Smartphone, Share2,
 } from 'lucide-react'
 import { useSubscription, devolverGeracaoTrial } from '../lib/useSubscription'
 import { supabase } from '../lib/supabase'
@@ -12,6 +13,7 @@ import { TONS, TOM_PADRAO } from '../lib/tons'
 import { GEMINI_VOICES_TEXTO_LONGO } from '../lib/voices'
 import { convertToWhatsAppOgg } from '../lib/audioConvert'
 import { realcarVoz } from '../lib/estudioCards'
+import { brandWhatsappKey, loadBrandWhatsapp, saveBrandWhatsapp, whatsappIncompleto, buildWaLink } from '../lib/brandWhatsapp'
 
 export const Route = createFileRoute('/kit-whatsapp')({
   component: KitWhatsapp,
@@ -80,6 +82,48 @@ function KitWhatsapp() {
   const [audioErros, setAudioErros] = useState<Record<number, string>>({})
   const audioAtivoRef = useRef<{ audio: HTMLAudioElement; url: string; index: number } | null>(null)
 
+  // "Enviar pro seu WhatsApp" — VERSÃO HONESTA (pedido do Mestre, 24/09): o link
+  // wa.me só pré-preenche TEXTO; mandar áudio pra um número exigiria a API da Meta
+  // ou bot banível (vetado). No celular, a Web Share API entrega o arquivo OGG direto
+  // na folha de compartilhar → WhatsApp. No computador não existe isso: só baixar.
+  // O número reaproveita o WhatsApp da marca (mesmo cofre do CtaObjetivo).
+  // OGG pronto por resposta: a Web Share API exige ativação do usuário RECENTE —
+  // qualquer await antes do share() (TTS, ffmpeg) estoura NotAllowedError. Então:
+  // 1º toque prepara e guarda aqui; 2º toque compartilha síncrono a partir do cache.
+  const [oggCache, setOggCache] = useState<Record<number, Blob>>({})
+  const [meuWhats, setMeuWhats] = useState('')
+  const [whatsKey, setWhatsKey] = useState('')
+  const [podeCompartilharArquivo] = useState(() => {
+    if (typeof navigator === 'undefined' || typeof navigator.share !== 'function' || typeof (navigator as any).canShare !== 'function') return false
+    // Sonda com um arquivo de mentira: navegador que tem share() mas recusa arquivos
+    // não ganha botão — sem botão morto, e sem gastar voz + ffmpeg pra descobrir depois.
+    try {
+      const sonda = new File([new Uint8Array(1)], 'sonda.ogg', { type: 'audio/ogg' })
+      return (navigator as any).canShare({ files: [sonda] }) === true
+    } catch {
+      return false
+    }
+  })
+
+  useEffect(() => {
+    let cancelado = false
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (cancelado) return
+      const key = brandWhatsappKey(user?.id)
+      setWhatsKey(key)
+      setMeuWhats(loadBrandWhatsapp(key).numero)
+    })
+    return () => { cancelado = true }
+  }, [])
+
+  function salvarMeuWhats() {
+    if (!whatsKey) return
+    const atual = loadBrandWhatsapp(whatsKey)
+    saveBrandWhatsapp(whatsKey, { ...atual, numero: meuWhats.trim() })
+  }
+
+  const whatsPronto = meuWhats.trim().length > 0 && !whatsappIncompleto(meuWhats)
+
   function pararAudioAtivo() {
     const ativo = audioAtivoRef.current
     if (!ativo) return
@@ -143,6 +187,7 @@ function KitWhatsapp() {
       setRespostas(lista)
       // Kit novo = áudios antigos não valem mais (texto mudou).
       setAudioBlobs({})
+      setOggCache({})
       setAudioErros({})
       if (trial.isTrial) void refresh()
     } catch (err) {
@@ -164,6 +209,12 @@ function KitWhatsapp() {
     // Texto mudou → o áudio gerado antes não corresponde mais; descarta pra nunca
     // entregar locução de uma versão antiga.
     setAudioBlobs((prev) => {
+      if (!prev[idx]) return prev
+      const proximo = { ...prev }
+      delete proximo[idx]
+      return proximo
+    })
+    setOggCache((prev) => {
       if (!prev[idx]) return prev
       const proximo = { ...prev }
       delete proximo[idx]
@@ -255,6 +306,8 @@ function KitWhatsapp() {
     setConvertingIndex(idx)
     try {
       const ogg = await convertToWhatsAppOgg(blob, 'wav')
+      // Já deixa pronto pro "Compartilhar áudio": Baixar → Compartilhar não converte 2x.
+      setOggCache((prev) => ({ ...prev, [idx]: ogg }))
       const url = URL.createObjectURL(ogg)
       const a = document.createElement('a')
       a.href = url
@@ -266,6 +319,48 @@ function KitWhatsapp() {
     } catch (err) {
       console.error('=== ERRO ao baixar áudio (kit) ===', err)
       setAudioErros((prev) => ({ ...prev, [idx]: 'Não consegui preparar o arquivo pra baixar. Tente de novo.' }))
+    } finally {
+      setConvertingIndex(null)
+    }
+  }
+
+  // Abre o WhatsApp no número informado com o TEXTO já digitado — o cliente só toca
+  // em enviar (pra si mesmo, vira a conversa "Você").
+  function enviarTexto(idx: number) {
+    const r = respostas[idx]
+    if (!r?.resposta.trim() || !whatsPronto) return
+    window.open(buildWaLink(meuWhats, r.resposta, true), '_blank', 'noopener,noreferrer')
+  }
+
+  // Celular: OGG vai pra folha de compartilhar do sistema — o cliente escolhe o
+  // WhatsApp e o contato (inclusive ele mesmo). Só aparece onde o navegador suporta.
+  async function compartilharAudio(idx: number) {
+    const pronto = oggCache[idx]
+    if (pronto) {
+      // 2º toque: share() SÍNCRONO a partir do cache — nenhum await antes dele.
+      const arquivo = new File([pronto], `resposta-whatsapp-${idx + 1}.ogg`, { type: pronto.type || 'audio/ogg' })
+      if (!(navigator as any).canShare?.({ files: [arquivo] })) {
+        setAudioErros((prev) => ({ ...prev, [idx]: 'Este navegador não compartilha arquivos de áudio. Use o Baixar e envie pelo WhatsApp.' }))
+        return
+      }
+      navigator.share({ files: [arquivo], title: `Resposta ${idx + 1}` }).catch((err) => {
+        // Fechar a folha de compartilhar não é erro.
+        if ((err as any)?.name === 'AbortError') return
+        console.error('=== ERRO ao compartilhar áudio (kit) ===', err)
+        setAudioErros((prev) => ({ ...prev, [idx]: 'Não consegui abrir o compartilhar. Use o Baixar e envie o arquivo pelo WhatsApp.' }))
+      })
+      return
+    }
+    // 1º toque: prepara (voz + OGG) e guarda; o botão vira "Compartilhar áudio".
+    const blob = await obterAudio(idx)
+    if (!blob) return
+    setConvertingIndex(idx)
+    try {
+      const ogg = await convertToWhatsAppOgg(blob, 'wav')
+      setOggCache((prev) => ({ ...prev, [idx]: ogg }))
+    } catch (err) {
+      console.error('=== ERRO ao preparar áudio pra compartilhar (kit) ===', err)
+      setAudioErros((prev) => ({ ...prev, [idx]: 'Não consegui preparar o áudio. Tente de novo ou use o Baixar.' }))
     } finally {
       setConvertingIndex(null)
     }
@@ -488,6 +583,27 @@ function KitWhatsapp() {
           <div className="space-y-4">
             {respostas.length ? (
               <>
+                <div className="bg-[#111111] border border-gray-800 rounded-xl p-3">
+                  <label className="text-sm font-medium text-gray-300 mb-1.5 flex items-center gap-1.5">
+                    <Smartphone className="w-4 h-4 text-[#22C55E]" /> Enviar pro seu WhatsApp
+                  </label>
+                  <input
+                    type="tel"
+                    value={meuWhats}
+                    onChange={(e) => setMeuWhats(e.target.value)}
+                    onBlur={salvarMeuWhats}
+                    placeholder="55 85 9 9226-2297"
+                    className="w-full bg-[#0A0A0A] border border-gray-800 rounded-lg px-3 py-2 text-white placeholder-gray-600 focus:border-[#22C55E] focus:outline-none text-sm"
+                  />
+                  <p className={`text-xs mt-1 ${meuWhats.trim() && whatsappIncompleto(meuWhats) ? 'text-amber-400' : 'text-gray-500'}`}>
+                    {meuWhats.trim() && whatsappIncompleto(meuWhats)
+                      ? '⚠️ Número incompleto — DDD + número (o 55 a gente põe).'
+                      : podeCompartilharArquivo
+                        ? 'O texto abre no WhatsApp já digitado — você só toca em enviar. Áudio: o 1º toque prepara, o 2º abre o compartilhar do aparelho → WhatsApp.'
+                        : 'O texto abre no WhatsApp já digitado — você só toca em enviar. Pra mandar o áudio pelo computador, baixe e anexe no WhatsApp.'}
+                  </p>
+                </div>
+
                 <div className="flex items-center justify-between gap-3">
                   <div>
                     <label className="block text-sm font-medium text-gray-300">🎙️ Voz dos áudios</label>
@@ -504,6 +620,7 @@ function KitWhatsapp() {
                               pararAudioAtivo()
                               setVoz(v.voice_id)
                               setAudioBlobs({})
+                              setOggCache({})
                             }}
                             aria-pressed={ativo}
                             className={`text-xs rounded-full border px-3 py-1.5 transition-colors ${
@@ -579,6 +696,35 @@ function KitWhatsapp() {
                             <><Download className="w-4 h-4 mr-1" /> Baixar pro WhatsApp</>
                           )}
                         </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={() => enviarTexto(idx)}
+                          disabled={!whatsPronto || !r.resposta.trim()}
+                          title={whatsPronto ? 'Abre o WhatsApp com este texto já digitado' : 'Informe seu WhatsApp acima'}
+                          className="border-[#22C55E]/50 text-[#22C55E] hover:bg-[#22C55E]/10"
+                        >
+                          <Smartphone className="w-4 h-4 mr-1" /> Enviar texto
+                        </Button>
+                        {podeCompartilharArquivo && (
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            onClick={() => compartilharAudio(idx)}
+                            disabled={ocupado || !r.resposta.trim()}
+                            className="border-[#22C55E]/50 text-[#22C55E] hover:bg-[#22C55E]/10"
+                          >
+                            {convertingIndex === idx ? (
+                              <><Loader2 className="w-4 h-4 mr-1 animate-spin" /> Preparando…</>
+                            ) : oggCache[idx] ? (
+                              <><Share2 className="w-4 h-4 mr-1" /> Compartilhar áudio</>
+                            ) : (
+                              <><Share2 className="w-4 h-4 mr-1" /> Preparar áudio pra compartilhar</>
+                            )}
+                          </Button>
+                        )}
                       </div>
                       {audioErros[idx] && (
                         <p className="text-amber-400 text-xs flex items-center gap-1">
