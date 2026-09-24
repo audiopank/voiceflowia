@@ -559,6 +559,37 @@ function KitWhatsapp() {
               )}
             </div>
 
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">🎙️ Voz dos áudios</label>
+              <div className="flex flex-wrap gap-2">
+                {GEMINI_VOICES_TEXTO_LONGO.map((v) => {
+                  const ativo = voz === v.voice_id
+                  return (
+                    <button
+                      key={v.voice_id}
+                      type="button"
+                      onClick={() => {
+                        if (voz === v.voice_id) return
+                        pararAudioAtivo()
+                        setVoz(v.voice_id)
+                        setAudioBlobs({})
+                        setOggCache({})
+                      }}
+                      aria-pressed={ativo}
+                      className={`text-sm rounded-full border px-3 py-1.5 transition-colors ${
+                        ativo
+                          ? 'border-[#22C55E] bg-[#22C55E]/15 text-white'
+                          : 'border-gray-700 bg-[#111111] text-gray-400 hover:border-gray-500 hover:text-white'
+                      }`}
+                    >
+                      {v.name}
+                    </button>
+                  )
+                })}
+              </div>
+              <p className="text-xs text-gray-500 mt-1">Cada resposta pode virar áudio nessa voz — você gera um por um, só os que quiser.</p>
+            </div>
+
             <Button
               onClick={handleGerar}
               disabled={!podeGerar}
@@ -570,6 +601,11 @@ function KitWhatsapp() {
                 <><Sparkles className="w-5 h-5 mr-2" /> {respostas.length ? 'Gerar de novo' : 'Gerar kit de respostas'}</>
               )}
             </Button>
+            {trial.isTrial && (
+              <p className="text-xs text-gray-500 text-center">
+                Usa 1 das suas {trial.generationsLeft} gerações do teste grátis — os áudios são livres.
+              </p>
+            )}
 
             {rateNotice && <p className="text-amber-400 text-sm text-center">{rateNotice}</p>}
             {erro && (
