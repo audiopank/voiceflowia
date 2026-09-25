@@ -28,6 +28,7 @@ function apiDevBridge(): Plugin {
     '/api/radar/cron-alerts': './api/radar/cron-alerts.ts',
     '/api/reminders/cron-reengajamento': './api/reminders/cron-reengajamento.ts',
     '/api/newpost/sessao': './api/newpost/sessao.ts',
+    '/api/og': './api/og.ts',
   }
 
   return {

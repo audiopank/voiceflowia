@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as VideosRouteImport } from './routes/videos'
+import { Route as TrialRouteImport } from './routes/trial'
 import { Route as SuperAgenteRouteImport } from './routes/super-agente'
 import { Route as RedefinirSenhaRouteImport } from './routes/redefinir-senha'
 import { Route as RadarRouteImport } from './routes/radar'
@@ -32,6 +33,11 @@ import { Route as IndexRouteImport } from './routes/index'
 const VideosRoute = VideosRouteImport.update({
   id: '/videos',
   path: '/videos',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TrialRoute = TrialRouteImport.update({
+  id: '/trial',
+  path: '/trial',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SuperAgenteRoute = SuperAgenteRouteImport.update({
@@ -144,6 +150,7 @@ export interface FileRoutesByFullPath {
   '/radar': typeof RadarRoute
   '/redefinir-senha': typeof RedefinirSenhaRoute
   '/super-agente': typeof SuperAgenteRoute
+  '/trial': typeof TrialRoute
   '/videos': typeof VideosRoute
 }
 export interface FileRoutesByTo {
@@ -165,6 +172,7 @@ export interface FileRoutesByTo {
   '/radar': typeof RadarRoute
   '/redefinir-senha': typeof RedefinirSenhaRoute
   '/super-agente': typeof SuperAgenteRoute
+  '/trial': typeof TrialRoute
   '/videos': typeof VideosRoute
 }
 export interface FileRoutesById {
@@ -187,6 +195,7 @@ export interface FileRoutesById {
   '/radar': typeof RadarRoute
   '/redefinir-senha': typeof RedefinirSenhaRoute
   '/super-agente': typeof SuperAgenteRoute
+  '/trial': typeof TrialRoute
   '/videos': typeof VideosRoute
 }
 export interface FileRouteTypes {
@@ -210,6 +219,7 @@ export interface FileRouteTypes {
     | '/radar'
     | '/redefinir-senha'
     | '/super-agente'
+    | '/trial'
     | '/videos'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -231,6 +241,7 @@ export interface FileRouteTypes {
     | '/radar'
     | '/redefinir-senha'
     | '/super-agente'
+    | '/trial'
     | '/videos'
   id:
     | '__root__'
@@ -252,6 +263,7 @@ export interface FileRouteTypes {
     | '/radar'
     | '/redefinir-senha'
     | '/super-agente'
+    | '/trial'
     | '/videos'
   fileRoutesById: FileRoutesById
 }
@@ -274,6 +286,7 @@ export interface RootRouteChildren {
   RadarRoute: typeof RadarRoute
   RedefinirSenhaRoute: typeof RedefinirSenhaRoute
   SuperAgenteRoute: typeof SuperAgenteRoute
+  TrialRoute: typeof TrialRoute
   VideosRoute: typeof VideosRoute
 }
 
@@ -284,6 +297,13 @@ declare module '@tanstack/react-router' {
       path: '/videos'
       fullPath: '/videos'
       preLoaderRoute: typeof VideosRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/trial': {
+      id: '/trial'
+      path: '/trial'
+      fullPath: '/trial'
+      preLoaderRoute: typeof TrialRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/super-agente': {
@@ -434,6 +454,7 @@ const rootRouteChildren: RootRouteChildren = {
   RadarRoute: RadarRoute,
   RedefinirSenhaRoute: RedefinirSenhaRoute,
   SuperAgenteRoute: SuperAgenteRoute,
+  TrialRoute: TrialRoute,
   VideosRoute: VideosRoute,
 }
 export const routeTree = rootRouteImport

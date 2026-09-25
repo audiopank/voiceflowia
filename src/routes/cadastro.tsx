@@ -4,15 +4,18 @@ import { supabase } from '../lib/supabase'
 import { BackButton } from '../components/BackButton'
 import { TRIAL_INTENT_KEY } from '../lib/trial'
 
+// Links antigos com aspas ("?trial=%221%22" — o serializador padrão do router
+// escrevia assim na barra até 25/09 e gente copiou/compartilhou) continuam valendo.
+const semAspas = (v: string) => v.replace(/^"(.*)"$/, '$1')
+
 export const Route = createFileRoute("/cadastro")({
-  // O router faz JSON.parse de cada valor da query. Um link escrito à mão —
-  // "/cadastro?trial=1", que é como um link de divulgação sempre vai ser digitado —
-  // chega aqui como o NÚMERO 1, não como a string "1". Exigir string descartava o
-  // parâmetro em silêncio: a pessoa se cadastrava, não ganhava trial nenhum e batia
-  // na tela trancada. Normaliza para texto e aceita as duas formas.
+  // O decode da query converte "1" em NÚMERO 1 (e "true" em boolean). Um link escrito
+  // à mão — "/cadastro?trial=1", que é como um link de divulgação sempre vai ser
+  // digitado — chegava aqui como 1, não como a string "1"; exigir string descartava o
+  // parâmetro em silêncio e a pessoa batia na tela trancada. Normaliza para texto.
   validateSearch: (search: Record<string, unknown>): { plano?: string; trial?: string } => ({
-    plano: search.plano == null ? undefined : String(search.plano),
-    trial: search.trial == null ? undefined : String(search.trial),
+    plano: search.plano == null ? undefined : semAspas(String(search.plano)),
+    trial: search.trial == null ? undefined : semAspas(String(search.trial)),
   }),
   component: Cadastro,
 })
