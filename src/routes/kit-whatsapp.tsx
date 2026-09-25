@@ -93,6 +93,9 @@ function KitWhatsapp() {
   const [gerando, setGerando] = useState(false)
   const [erro, setErro] = useState('')
   const [rateNotice, setRateNotice] = useState('')
+  // Modelo reserva: quando a IA principal está em fila, o endpoint gera com um
+  // "lite" e avisa — a tela conta a verdade e pede conferência das respostas.
+  const [modeloReserva, setModeloReserva] = useState('')
   const [copiadoIdx, setCopiadoIdx] = useState<number | null>(null)
   const [copiadoTudo, setCopiadoTudo] = useState(false)
 
@@ -204,6 +207,7 @@ function KitWhatsapp() {
       setLote({ ativo: false, aviso: '' })
       setAvisoTodos('')
       setErro('')
+      setModeloReserva('')
       setKitId(kit.id)
       setNichoSalvo(kit.nicho.trim())
       setEstadoKit({ tipo: 'salvo' })
@@ -274,7 +278,9 @@ function KitWhatsapp() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ nicho, tom, fatos, diferenciais, cta, perguntas }),
         },
-        { onWait: (s) => setRateNotice(`⏳ Muita procura agora — tentando de novo em ${s}s...`) },
+        // retries: 1 — o endpoint já tenta 3 modelos por dentro (reserva); insistir 3x
+        // aqui em cima só faria o cliente olhar o spinner por quase 4 minutos.
+        { retries: 1, onWait: (s) => setRateNotice(`⏳ Muita procura agora — tentando de novo em ${s}s...`) },
       )
       setRateNotice('')
 
@@ -289,6 +295,7 @@ function KitWhatsapp() {
         throw new Error('A IA não retornou respostas. Tente de novo.')
       }
       setRespostas(lista)
+      setModeloReserva(data.reserva === true ? String(data.modelo || 'reserva') : '')
       // Kit novo = áudios antigos não valem mais (texto mudou).
       setAudioBlobs({})
       setOggCache({})
@@ -699,6 +706,7 @@ function KitWhatsapp() {
     setLote({ ativo: false, aviso: '' })
     setAvisoTodos('')
     setErro('')
+    setModeloReserva('')
     navigate({ to: '/kit-whatsapp', search: {} })
   }
 
@@ -1001,6 +1009,15 @@ function KitWhatsapp() {
             </div>
             {respostas.length ? (
               <>
+                {modeloReserva && (
+                  <p className="text-xs text-amber-400 bg-amber-400/10 border border-amber-400/30 rounded-lg px-3 py-2 flex items-start gap-1.5">
+                    <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                    <span>
+                      Gerado com o <strong>modelo reserva</strong> ({modeloReserva}) porque a IA principal está em fila.
+                      Os fatos continuam sendo a única fonte, mas o reserva é menos afiado: confira as respostas antes de usar.
+                    </span>
+                  </p>
+                )}
                 <div className="bg-[#111111] border border-gray-800 rounded-xl p-3">
                   <label className="text-sm font-medium text-gray-300 mb-1.5 flex items-center gap-1.5">
                     <Smartphone className="w-4 h-4 text-[#22C55E]" /> Enviar pro seu WhatsApp
