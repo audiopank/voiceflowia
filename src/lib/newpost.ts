@@ -10,6 +10,9 @@
 //   - imagens-> os mesmos PNGs 1080x1350 do carrossel (bucket post-media)
 //   - áudio  -> a locução em MP3 (bucket post-audio). A NewPost-IA é a ÚNICA rede que
 //               aceita áudio no post; no Instagram a locução não teria pra onde ir.
+//   - transcrição -> o TEXTO FALADO da locução (IA de áudio 1b, 25/09): a rede transcreve
+//               áudio humano com a Gemini, mas o VoiceFlow já tem o roteiro — vai de graça
+//               como `transcricao` (fonte 'roteiro'), e o post nasce pesquisável pelo falado.
 
 import { supabase } from './supabase'
 
@@ -140,6 +143,9 @@ export interface PostNewPost {
   // criada na primeira publicação e reusada nas seguintes; o número do episódio é
   // automático, por trigger no banco da rede).
   serie?: SerieNewPost | null
+  // O que a locução FALA (hook + roteiro, ou as falas do diálogo). Só vale junto com
+  // `audio`: vira a transcrição do post na rede, com fonte 'roteiro'.
+  transcricao?: string | null
 }
 
 export interface SerieNewPost {
@@ -259,7 +265,21 @@ export async function publicarNaNewPost(post: PostNewPost, sessao: SessaoNewPost
   // null aqui = segue avulso; a publicação nunca depende da série dar certo.
   const serieId = post.serie ? await garantirSerie(sessao, post.serie, mediaUrls[0] ?? null) : null
 
-  const res = await fetch(`${sessao.supabaseUrl}/rest/v1/posts`, {
+  // Transcrição de graça: o texto falado só entra quando HÁ áudio (sem áudio, a rede
+  // marca o post como 'nao_aplicavel' por conta própria). Valores dos CHECKs da rede:
+  // status 'ok' + fonte 'roteiro'. Se a rede um dia recusar as colunas (PGRST204),
+  // republica sem elas — publicar nunca trava por causa da transcrição.
+  const textoFalado = (post.transcricao ?? '').trim()
+  const camposTranscricao = audioUrl && textoFalado
+    ? {
+        transcricao: textoFalado,
+        transcricao_status: 'ok',
+        transcricao_fonte: 'roteiro',
+        transcricao_atualizada_em: new Date().toISOString(),
+      }
+    : {}
+
+  const publicar = (extras: Record<string, unknown>) => fetch(`${sessao.supabaseUrl}/rest/v1/posts`, {
     method: 'POST',
     headers: {
       apikey: sessao.anonKey,
@@ -268,6 +288,7 @@ export async function publicarNaNewPost(post: PostNewPost, sessao: SessaoNewPost
       Prefer: 'return=representation',
     },
     body: JSON.stringify({
+      ...extras,
       author_id: uid,
       content: post.texto,
       media_urls: mediaUrls.length ? mediaUrls : null,
@@ -293,6 +314,17 @@ export async function publicarNaNewPost(post: PostNewPost, sessao: SessaoNewPost
       ...(serieId ? { series_id: serieId } : {}),
     }),
   })
+
+  let res = await publicar(camposTranscricao)
+  if (!res.ok && Object.keys(camposTranscricao).length > 0) {
+    const motivo = await res.text()
+    if (/transcricao/i.test(motivo)) {
+      console.warn('NewPost-IA recusou as colunas de transcrição; publicando sem elas:', motivo.slice(0, 200))
+      res = await publicar({})
+    } else {
+      throw new Error(`Falha ao publicar: ${motivo.slice(0, 200)}`)
+    }
+  }
 
   if (!res.ok) throw new Error(`Falha ao publicar: ${(await res.text()).slice(0, 200)}`)
   // Aqui o post JÁ está publicado (res.ok). Se o corpo vier sem ser JSON, não dá pra

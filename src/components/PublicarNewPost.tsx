@@ -30,8 +30,12 @@ export function PublicarNewPost({
   prepararMidia,
   serie,
   disabled,
+  roteiro,
 }: {
   texto: string
+  /** O que a locução FALA (hook + roteiro, ou as falas do diálogo). Vai pra rede como
+   *  transcrição do post (fonte 'roteiro') — de graça, sem Gemini. Só usado se há áudio. */
+  roteiro?: string
   /** Hoje as duas telas passam aqui o NICHO que o cliente digitou ("padaria artesanal em
    *  Fortaleza"). Serve pra sugerir o nome do perfil e como contexto da bio — repare que
    *  o nome que vai pro perfil é o que o cliente confirma na tela, não este. */
@@ -98,7 +102,7 @@ export function PublicarNewPost({
       const { imagens, audio } = await prepararMidia()
 
       setEstado('enviando')
-      const r = await publicarNaNewPost({ texto, imagens, audio, chaveUnica, serie }, sessao)
+      const r = await publicarNaNewPost({ texto, imagens, audio, chaveUnica, serie, transcricao: roteiro }, sessao)
       setResultado(r)
       setEstado('pronto')
     } catch (e) {

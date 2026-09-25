@@ -1691,6 +1691,9 @@ function SuperAgente() {
                   prepararMidia={() => prepararMidiaNewPost(index)}
                   serie={serieDoCalendario(nicho, dataInicio)}
                   disabled={exportingIndex !== null}
+                  // O MESMO texto que foi pra voz (hook + roteiro): vira a transcrição do post
+                  // na rede, fonte 'roteiro'.
+                  roteiro={`${post.hook} ${post.roteiro}`}
                 />
 
                 {/* Postar em: copia a legenda deste post e abre a rede pra colar. Só mostra

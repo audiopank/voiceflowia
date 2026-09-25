@@ -827,6 +827,9 @@ function Agente() {
                   chaveUnica={`voiceflow-agente-${dataInicio}-dia${post.dia}-${post.periodo}-${index}`}
                   prepararMidia={() => prepararMidiaNewPost(index)}
                   serie={serieDoCalendario(nicho, dataInicio)}
+                  // O MESMO texto que foi pra voz (ver textoDaVoz em gerarAudio): vira a
+                  // transcrição do post na rede, fonte 'roteiro'.
+                  roteiro={dialogos[index] ? montarTranscricao(dialogos[index].falas) : `${post.hook} ${post.roteiro}`}
                 />
               </div>
             ))}
