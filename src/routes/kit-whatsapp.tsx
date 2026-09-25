@@ -6,7 +6,7 @@ import {
 } from 'lucide-react'
 import { useSubscription, devolverGeracaoTrial } from '../lib/useSubscription'
 import { supabase } from '../lib/supabase'
-import { fetchWithRetry, safeJson, friendlyApiError, sleep } from '../lib/apiRetry'
+import { fetchWithRetry, safeJson, friendlyApiError, sleep, parseRetryMs } from '../lib/apiRetry'
 import { Button } from '../components/ui/button'
 import { BackButton } from '../components/BackButton'
 import { TONS, TOM_PADRAO } from '../lib/tons'
@@ -165,6 +165,11 @@ function KitWhatsapp() {
   const [estadoKit, setEstadoKit] = useState<{ tipo: 'carregando' | 'salvando' | 'salvo' | 'erro'; msg?: string } | null>(null)
   const autosaveRef = useRef<number | null>(null)
   const kitCarregadoRef = useRef<string | null>(null)
+  // "A espera": cota por minuto da voz (429) no meio da fila → a fila espera o tempo
+  // que a Google pede, com contagem na tela, e retoma a mesma resposta sozinha.
+  const ultimaEsperaMsRef = useRef(0)
+  const [esperaFim, setEsperaFim] = useState<number | null>(null)
+  const [agora, setAgora] = useState(() => Date.now())
 
   useEffect(() => {
     let cancelado = false
@@ -223,6 +228,13 @@ function KitWhatsapp() {
       if (kitCarregadoRef.current === id) kitCarregadoRef.current = null
     }
   }, [search.kit])
+
+  // Relógio da contagem regressiva (só roda enquanto há espera).
+  useEffect(() => {
+    if (esperaFim == null) return
+    const t = window.setInterval(() => setAgora(Date.now()), 500)
+    return () => window.clearInterval(t)
+  }, [esperaFim])
 
   function salvarMeuWhats() {
     if (!whatsKey) return
@@ -339,12 +351,17 @@ function KitWhatsapp() {
   }
 
   // Gera (ou reaproveita) a locução DESTA resposta. Sob demanda de propósito.
-  async function obterAudio(idx: number): Promise<Blob | null> {
+  // `emFila`: a fila cuida da espera de cota por conta própria (com contagem e
+  // Parar), então aqui o 429 volta na hora em vez de segurar 20s no escuro.
+  async function obterAudio(idx: number, opts: { emFila?: boolean } = {}): Promise<Blob | null> {
+    // Zera ANTES dos retornos antecipados: a fila lê estes refs depois de um null,
+    // e um valor velho (429 anterior) faria a fila esperar por uma resposta vazia.
+    ultimoErroAudioRef.current = ''
+    ultimaEsperaMsRef.current = 0
     const existente = audioBlobsRef.current[idx]
     if (existente) return existente
     const texto = respostasRef.current[idx]?.resposta?.trim()
     if (!texto) return null
-    ultimoErroAudioRef.current = ''
 
     setGerandoAudio(idx)
     setAudioErros((prev) => ({ ...prev, [idx]: '' }))
@@ -356,9 +373,20 @@ function KitWhatsapp() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ text: texto, voiceName: vozRef.current }),
         },
-        { onWait: (s) => setAudioErros((prev) => ({ ...prev, [idx]: `⏳ Muita procura — tentando de novo em ${s}s...` })) },
+        {
+          maxTotalWaitMs: opts.emFila ? 0 : 20000,
+          onWait: (s) => setAudioErros((prev) => ({ ...prev, [idx]: `⏳ Muita procura — tentando de novo em ${s}s...` })),
+        },
       )
       if (!response.ok) {
+        if (response.status === 429) {
+          // Quanto a Google pede de pausa ("retry in 43s") — a fila usa isso pra esperar.
+          try {
+            ultimaEsperaMsRef.current = parseRetryMs(await response.clone().text())
+          } catch {
+            ultimaEsperaMsRef.current = 30000
+          }
+        }
         const data = await response.json().catch(() => null)
         throw new Error(friendlyApiError(response.status, data?.error))
       }
@@ -529,6 +557,22 @@ function KitWhatsapp() {
     return ogg
   }
 
+  // Espera cancelável (Parar funciona no meio). Devolve true se o cliente parou.
+  async function esperarCota(ms: number): Promise<boolean> {
+    const fim = Date.now() + ms
+    setEsperaFim(fim)
+    setAgora(Date.now())
+    try {
+      while (Date.now() < fim) {
+        if (loteCancelRef.current) return true
+        await sleep(Math.min(500, Math.max(0, fim - Date.now())))
+      }
+      return loteCancelRef.current
+    } finally {
+      setEsperaFim(null)
+    }
+  }
+
   // Fila: gera os áudios que faltam, UM POR VEZ com pausa. Se a IA de voz travar
   // (cota/fila do modelo), para na hora, diz onde parou e mantém o que já saiu.
   async function gerarTodosAudios() {
@@ -540,22 +584,37 @@ function KitWhatsapp() {
     loteCancelRef.current = false
     setLote({ ativo: true, aviso: '' })
     setAvisoTodos('')
+    const MAX_ESPERAS = 3
+    let esperas = 0
     try {
-      for (let n = 0; n < pendentes.length; n++) {
+      let n = 0
+      while (n < pendentes.length) {
         const idx = pendentes[n]
         if (loteCancelRef.current) {
           setLote({ ativo: false, aviso: 'Fila parada. O que já saiu está guardado — toque em Continuar quando quiser.' })
           return
         }
-        const blob = await obterAudio(idx)
+        const blob = await obterAudio(idx, { emFila: true })
         if (!blob) {
+          // Cota por minuto da voz: espera o que a Google pediu e tenta A MESMA resposta.
+          const esperaMs = ultimaEsperaMsRef.current
+          if (esperaMs > 0 && esperas < MAX_ESPERAS) {
+            esperas++
+            const parou = await esperarCota(esperaMs + 1000)
+            if (parou) {
+              setLote({ ativo: false, aviso: 'Fila parada. O que já saiu está guardado — toque em Continuar quando quiser.' })
+              return
+            }
+            continue
+          }
           setLote({
             ativo: false,
             aviso: `Parei na resposta ${idx + 1}: ${ultimoErroAudioRef.current || 'a IA de voz não respondeu'} O que já saiu está guardado — toque em Continuar pra retomar daí.`,
           })
           return
         }
-        if (n < pendentes.length - 1) await sleep(PAUSA_ENTRE_AUDIOS_MS)
+        n++
+        if (n < pendentes.length) await sleep(PAUSA_ENTRE_AUDIOS_MS)
       }
       setLote({ ativo: false, aviso: '' })
     } catch (err) {
@@ -769,6 +828,7 @@ function KitWhatsapp() {
   const prontos = respostas.reduce((n, _, i) => n + (audioBlobs[i] ? 1 : 0), 0)
   const faltam = respostas.filter((r, i) => r.resposta.trim() && !audioBlobs[i]).length
   const todosOggProntos = prontos > 0 && respostas.every((_, i) => !audioBlobs[i] || !!oggCache[i])
+  const segundosEspera = esperaFim == null ? 0 : Math.max(0, Math.ceil((esperaFim - agora) / 1000))
 
   return (
     <div className="min-h-screen bg-[#0A0A0A] text-white">
@@ -1096,7 +1156,9 @@ function KitWhatsapp() {
                       disabled={lote.ativo || !!empacotando || gerandoAudio !== null || convertingIndex !== null || faltam === 0}
                       className="bg-[#22C55E] hover:bg-[#16A34A] disabled:opacity-60"
                     >
-                      {lote.ativo ? (
+                      {lote.ativo && esperaFim != null ? (
+                        <><Loader2 className="w-4 h-4 mr-1 animate-spin" /> Esperando a cota… {segundosEspera}s</>
+                      ) : lote.ativo ? (
                         <><Loader2 className="w-4 h-4 mr-1 animate-spin" /> Gerando {Math.min(prontos + 1, respostas.length)} de {respostas.length}…</>
                       ) : faltam === 0 ? (
                         <><Check className="w-4 h-4 mr-1" /> Todos os áudios prontos</>
@@ -1159,8 +1221,10 @@ function KitWhatsapp() {
                       <div className="h-full bg-[#22C55E] transition-all" style={{ width: `${respostas.length ? Math.round((prontos / respostas.length) * 100) : 0}%` }} />
                     </div>
                   )}
-                  <p className={`text-xs ${lote.aviso || avisoTodos ? 'text-amber-400' : 'text-gray-500'}`}>
-                    {lote.aviso || avisoTodos || (lote.ativo
+                  <p className={`text-xs ${lote.aviso || avisoTodos || esperaFim != null ? 'text-amber-400' : 'text-gray-500'}`}>
+                    {lote.aviso || avisoTodos || (lote.ativo && esperaFim != null
+                      ? `Cota da voz atingida — a Google pede uma pausa. Continuo sozinho em ${segundosEspera} s (${prontos} de ${respostas.length} prontos). Pode parar se quiser.`
+                      : lote.ativo
                       ? 'Um por vez, com pausa — a IA de voz não aceita rajada. Pode levar uns 2 a 3 minutos; pode continuar navegando nesta tela.'
                       : `${prontos} de ${respostas.length} áudios prontos. Gera um por vez, com pausa; se a IA travar no meio, o que já saiu fica guardado e você continua de onde parou.`)}
                   </p>
