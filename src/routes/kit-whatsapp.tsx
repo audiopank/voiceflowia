@@ -6,7 +6,7 @@ import {
 } from 'lucide-react'
 import { useSubscription, devolverGeracaoTrial } from '../lib/useSubscription'
 import { supabase } from '../lib/supabase'
-import { fetchWithRetry, safeJson, friendlyApiError } from '../lib/apiRetry'
+import { fetchWithRetry, safeJson, friendlyApiError, sleep } from '../lib/apiRetry'
 import { Button } from '../components/ui/button'
 import { BackButton } from '../components/BackButton'
 import { TONS, TOM_PADRAO } from '../lib/tons'
@@ -14,6 +14,7 @@ import { GEMINI_VOICES_TEXTO_LONGO } from '../lib/voices'
 import { convertToWhatsAppOgg } from '../lib/audioConvert'
 import { realcarVoz } from '../lib/estudioCards'
 import { brandWhatsappKey, loadBrandWhatsapp, saveBrandWhatsapp, whatsappIncompleto, buildWaLink } from '../lib/brandWhatsapp'
+import JSZip from 'jszip'
 
 export const Route = createFileRoute('/kit-whatsapp')({
   component: KitWhatsapp,
@@ -28,7 +29,8 @@ export const Route = createFileRoute('/kit-whatsapp')({
 // sem risco de banir número.
 //
 // Regras da casa aplicadas: 1 geração de trial por kit (texto); áudio é livre e
-// gerado SOB DEMANDA, um por clique (10 locuções em rajada estourariam a cota);
+// gerado SOB DEMANDA — um por clique ou todos em FILA cadenciada (um por vez, com
+// pausa; rajada estouraria a cota; se a IA travar, guarda o que saiu e retoma);
 // áudio sempre corresponde ao texto atual (editou a resposta → o áudio antigo é
 // descartado); a IA só afirma o que os FATOS DA MARCA dizem.
 
@@ -46,6 +48,20 @@ const PERGUNTAS_PADRAO = [
 ]
 
 const MAX_PERGUNTAS = 15
+
+// Pausa entre pedidos da fila "Gerar todos os áudios": cadência, não rajada.
+const PAUSA_ENTRE_AUDIOS_MS = 1500
+
+// Nome de arquivo sem acento/espaço: "02-qual-o-horario-de-funcionamento.ogg".
+function slug(texto: string): string {
+  return texto
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 40)
+}
 
 interface Resposta {
   pergunta: string
@@ -104,6 +120,32 @@ function KitWhatsapp() {
       return false
     }
   })
+
+  // Refs-espelho: a fila "Gerar todos" roda por minutos e não pode ler estado velho
+  // (closure) — texto editado ou voz trocada no meio valem na hora.
+  const respostasRef = useRef(respostas)
+  respostasRef.current = respostas
+  const vozRef = useRef(voz)
+  vozRef.current = voz
+  const audioBlobsRef = useRef(audioBlobs)
+  audioBlobsRef.current = audioBlobs
+  const oggCacheRef = useRef(oggCache)
+  oggCacheRef.current = oggCache
+  const ultimoErroAudioRef = useRef('')
+  // Fila "Gerar todos os áudios" (fatia 1.4, 25/09): um por vez, com pausa. Se a IA
+  // travar, para com honestidade, guarda o que saiu e oferece continuar de onde parou.
+  const [lote, setLote] = useState<{ ativo: boolean; aviso: string }>({ ativo: false, aviso: '' })
+  const loteCancelRef = useRef(false)
+  // "Baixar todos" (ZIP) / "Compartilhar todos" (celular) — empacotando OGGs.
+  const [empacotando, setEmpacotando] = useState<'zip' | 'share' | null>(null)
+  const [zipProgresso, setZipProgresso] = useState('')
+  const [avisoTodos, setAvisoTodos] = useState('')
+  // Web Share aceita UM compartilhar por vez: clique duplo no Windows dava
+  // InvalidStateError "An earlier share has not yet completed" (console do Mestre, 25/09),
+  // e a tela dizia só "não consegui abrir". Agora trava o 2º clique e conta o motivo.
+  const shareEmAndamentoRef = useRef(false)
+  const [shareAberto, setShareAberto] = useState<number | 'todos' | null>(null)
+  const [ehCelular] = useState(() => typeof navigator !== 'undefined' && /Android|iPhone|iPad|iPod/i.test(navigator.userAgent))
 
   useEffect(() => {
     let cancelado = false
@@ -189,6 +231,8 @@ function KitWhatsapp() {
       setAudioBlobs({})
       setOggCache({})
       setAudioErros({})
+      setLote({ ativo: false, aviso: '' })
+      setAvisoTodos('')
       if (trial.isTrial) void refresh()
     } catch (err) {
       setRateNotice('')
@@ -225,10 +269,11 @@ function KitWhatsapp() {
 
   // Gera (ou reaproveita) a locução DESTA resposta. Sob demanda de propósito.
   async function obterAudio(idx: number): Promise<Blob | null> {
-    const existente = audioBlobs[idx]
+    const existente = audioBlobsRef.current[idx]
     if (existente) return existente
-    const texto = respostas[idx]?.resposta?.trim()
+    const texto = respostasRef.current[idx]?.resposta?.trim()
     if (!texto) return null
+    ultimoErroAudioRef.current = ''
 
     setGerandoAudio(idx)
     setAudioErros((prev) => ({ ...prev, [idx]: '' }))
@@ -238,7 +283,7 @@ function KitWhatsapp() {
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text: texto, voiceName: voz }),
+          body: JSON.stringify({ text: texto, voiceName: vozRef.current }),
         },
         { onWait: (s) => setAudioErros((prev) => ({ ...prev, [idx]: `⏳ Muita procura — tentando de novo em ${s}s...` })) },
       )
@@ -252,10 +297,9 @@ function KitWhatsapp() {
       setAudioErros((prev) => ({ ...prev, [idx]: '' }))
       return polido
     } catch (err) {
-      setAudioErros((prev) => ({
-        ...prev,
-        [idx]: err instanceof Error ? err.message : 'Não consegui gerar o áudio agora.',
-      }))
+      const msg = err instanceof Error ? err.message : 'Não consegui gerar o áudio agora.'
+      ultimoErroAudioRef.current = msg
+      setAudioErros((prev) => ({ ...prev, [idx]: msg }))
       return null
     } finally {
       setGerandoAudio(null)
@@ -311,7 +355,7 @@ function KitWhatsapp() {
       const url = URL.createObjectURL(ogg)
       const a = document.createElement('a')
       a.href = url
-      a.download = `resposta-whatsapp-${idx + 1}.ogg`
+      a.download = nomeOgg(idx)
       document.body.appendChild(a)
       a.click()
       document.body.removeChild(a)
@@ -338,17 +382,8 @@ function KitWhatsapp() {
     const pronto = oggCache[idx]
     if (pronto) {
       // 2º toque: share() SÍNCRONO a partir do cache — nenhum await antes dele.
-      const arquivo = new File([pronto], `resposta-whatsapp-${idx + 1}.ogg`, { type: pronto.type || 'audio/ogg' })
-      if (!(navigator as any).canShare?.({ files: [arquivo] })) {
-        setAudioErros((prev) => ({ ...prev, [idx]: 'Este navegador não compartilha arquivos de áudio. Use o Baixar e envie pelo WhatsApp.' }))
-        return
-      }
-      navigator.share({ files: [arquivo], title: `Resposta ${idx + 1}` }).catch((err) => {
-        // Fechar a folha de compartilhar não é erro.
-        if ((err as any)?.name === 'AbortError') return
-        console.error('=== ERRO ao compartilhar áudio (kit) ===', err)
-        setAudioErros((prev) => ({ ...prev, [idx]: 'Não consegui abrir o compartilhar. Use o Baixar e envie o arquivo pelo WhatsApp.' }))
-      })
+      const arquivo = new File([pronto], nomeOgg(idx), { type: pronto.type || 'audio/ogg' })
+      dispararShare([arquivo], `Resposta ${idx + 1}`, idx)
       return
     }
     // 1º toque: prepara (voz + OGG) e guarda; o botão vira "Compartilhar áudio".
@@ -363,6 +398,167 @@ function KitWhatsapp() {
       setAudioErros((prev) => ({ ...prev, [idx]: 'Não consegui preparar o áudio. Tente de novo ou use o Baixar.' }))
     } finally {
       setConvertingIndex(null)
+    }
+  }
+
+  function nomeOgg(idx: number): string {
+    return `${String(idx + 1).padStart(2, '0')}-${slug(respostasRef.current[idx]?.pergunta || '') || 'resposta'}.ogg`
+  }
+
+  // Um share por vez (regra da Web Share API). Chamado SÍNCRONO dentro do clique.
+  function dispararShare(arquivos: File[], titulo: string, alvo: number | 'todos') {
+    const avisar = (msg: string) => {
+      if (alvo === 'todos') setAvisoTodos(msg)
+      else setAudioErros((prev) => ({ ...prev, [alvo]: msg }))
+    }
+    if (shareEmAndamentoRef.current) {
+      avisar('O painel de compartilhar já está aberto — escolha o WhatsApp nele. No Windows ele aparece na lateral direita, às vezes atrás desta janela.')
+      return
+    }
+    if (!(navigator as any).canShare?.({ files: arquivos })) {
+      avisar(arquivos.length > 1
+        ? 'Este navegador não compartilha vários arquivos de uma vez. Use o Baixar todos (ZIP) ou compartilhe um por um.'
+        : 'Este navegador não compartilha arquivos de áudio. Use o Baixar e envie pelo WhatsApp.')
+      return
+    }
+    shareEmAndamentoRef.current = true
+    setShareAberto(alvo)
+    avisar('')
+    // Válvula: no Windows, fechar o painel clicando fora às vezes deixa a promise pendurada.
+    let valvula = 0
+    const soltar = () => {
+      window.clearTimeout(valvula)
+      shareEmAndamentoRef.current = false
+      setShareAberto(null)
+    }
+    valvula = window.setTimeout(soltar, 90000)
+    navigator.share({ files: arquivos, title: titulo }).then(soltar, (err) => {
+      soltar()
+      const nome = (err as any)?.name as string | undefined
+      // Fechar a folha de compartilhar não é erro.
+      if (nome === 'AbortError') return
+      console.error('=== ERRO ao compartilhar áudio (kit) ===', err)
+      if (nome === 'InvalidStateError') {
+        avisar('O painel de compartilhar anterior ainda está aberto. Feche-o (Esc) e toque de novo.')
+        return
+      }
+      avisar(`Não consegui abrir o compartilhar (${nome || 'erro'}). Use o Baixar e envie o arquivo pelo WhatsApp.`)
+    })
+  }
+
+  // OGG desta resposta: converte uma vez e guarda no mesmo cache do Compartilhar.
+  async function obterOgg(idx: number): Promise<Blob | null> {
+    const emCache = oggCacheRef.current[idx]
+    if (emCache) return emCache
+    const blob = audioBlobsRef.current[idx]
+    if (!blob) return null
+    const ogg = await convertToWhatsAppOgg(blob, 'wav')
+    oggCacheRef.current = { ...oggCacheRef.current, [idx]: ogg }
+    setOggCache((prev) => ({ ...prev, [idx]: ogg }))
+    return ogg
+  }
+
+  // Fila: gera os áudios que faltam, UM POR VEZ com pausa. Se a IA de voz travar
+  // (cota/fila do modelo), para na hora, diz onde parou e mantém o que já saiu.
+  async function gerarTodosAudios() {
+    if (lote.ativo || empacotando) return
+    const lista = respostasRef.current
+    const pendentes = lista.map((_, i) => i).filter((i) => !audioBlobsRef.current[i] && lista[i].resposta.trim())
+    if (pendentes.length === 0) return
+    pararAudioAtivo()
+    loteCancelRef.current = false
+    setLote({ ativo: true, aviso: '' })
+    setAvisoTodos('')
+    try {
+      for (let n = 0; n < pendentes.length; n++) {
+        const idx = pendentes[n]
+        if (loteCancelRef.current) {
+          setLote({ ativo: false, aviso: 'Fila parada. O que já saiu está guardado — toque em Continuar quando quiser.' })
+          return
+        }
+        const blob = await obterAudio(idx)
+        if (!blob) {
+          setLote({
+            ativo: false,
+            aviso: `Parei na resposta ${idx + 1}: ${ultimoErroAudioRef.current || 'a IA de voz não respondeu'} O que já saiu está guardado — toque em Continuar pra retomar daí.`,
+          })
+          return
+        }
+        if (n < pendentes.length - 1) await sleep(PAUSA_ENTRE_AUDIOS_MS)
+      }
+      setLote({ ativo: false, aviso: '' })
+    } catch (err) {
+      console.error('=== ERRO na fila de áudios (kit) ===', err)
+      setLote({ ativo: false, aviso: 'A fila parou por um erro inesperado. O que já saiu está guardado — toque em Continuar.' })
+    }
+  }
+
+  function indicesComAudio(): number[] {
+    return respostasRef.current.map((_, i) => i).filter((i) => !!audioBlobsRef.current[i])
+  }
+
+  // ZIP com os OGGs prontos + o texto do kit (padrão do Super Agente).
+  async function baixarTodos() {
+    if (empacotando || lote.ativo) return
+    const indices = indicesComAudio()
+    if (indices.length === 0) return
+    pararAudioAtivo()
+    setEmpacotando('zip')
+    setAvisoTodos('')
+    try {
+      const zip = new JSZip()
+      zip.file('respostas.txt', textoDoKit())
+      for (let n = 0; n < indices.length; n++) {
+        setZipProgresso(`Empacotando ${n + 1} de ${indices.length}…`)
+        const ogg = await obterOgg(indices[n])
+        if (ogg) zip.file(nomeOgg(indices[n]), ogg)
+      }
+      const content = await zip.generateAsync({ type: 'blob' })
+      const url = URL.createObjectURL(content)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `kit-whatsapp-${slug(nicho) || 'respostas'}.zip`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+    } catch (err) {
+      console.error('=== ERRO ao empacotar o kit (zip) ===', err)
+      setAvisoTodos('Não consegui montar o ZIP agora. Tente de novo ou baixe um por um.')
+    } finally {
+      setEmpacotando(null)
+      setZipProgresso('')
+    }
+  }
+
+  // Celular: 1º toque prepara todos os OGGs; 2º toque compartilha TODOS de uma vez
+  // (síncrono, a partir do cache) — a folha do aparelho → WhatsApp → conversa "Você".
+  async function compartilharTodos() {
+    if (empacotando || lote.ativo) return
+    const indices = indicesComAudio()
+    if (indices.length === 0) return
+    if (indices.every((i) => !!oggCacheRef.current[i])) {
+      const arquivos = indices.map((i) => {
+        const b = oggCacheRef.current[i]
+        return new File([b], nomeOgg(i), { type: b.type || 'audio/ogg' })
+      })
+      dispararShare(arquivos, 'Kit de respostas', 'todos')
+      return
+    }
+    pararAudioAtivo()
+    setEmpacotando('share')
+    setAvisoTodos('')
+    try {
+      for (let n = 0; n < indices.length; n++) {
+        setZipProgresso(`Preparando ${n + 1} de ${indices.length}…`)
+        await obterOgg(indices[n])
+      }
+    } catch (err) {
+      console.error('=== ERRO ao preparar áudios pra compartilhar (kit) ===', err)
+      setAvisoTodos('Não consegui preparar os áudios. Tente de novo.')
+    } finally {
+      setEmpacotando(null)
+      setZipProgresso('')
     }
   }
 
@@ -421,7 +617,10 @@ function KitWhatsapp() {
     )
   }
 
-  const podeGerar = nicho.trim().length > 0 && perguntas.length > 0 && !gerando
+  const podeGerar = nicho.trim().length > 0 && perguntas.length > 0 && !gerando && !lote.ativo && !empacotando
+  const prontos = respostas.reduce((n, _, i) => n + (audioBlobs[i] ? 1 : 0), 0)
+  const faltam = respostas.filter((r, i) => r.resposta.trim() && !audioBlobs[i]).length
+  const todosOggProntos = prontos > 0 && respostas.every((_, i) => !audioBlobs[i] || !!oggCache[i])
 
   return (
     <div className="min-h-screen bg-[#0A0A0A] text-white">
@@ -437,6 +636,20 @@ function KitWhatsapp() {
             As perguntas que todo cliente manda, respondidas na voz da sua marca. Cole o texto nas
             respostas rápidas do WhatsApp Business — ou mande em áudio, com a voz que você escolher.
           </p>
+          {/* A dúvida real de um cliente (25/09): "como as perguntas chegam na plataforma?".
+              Não chegam — e a tela precisa dizer isso com todas as letras. */}
+          <div className="mt-4 bg-[#111111] border border-gray-800 rounded-xl p-4 text-sm">
+            <p className="font-medium text-white">Como funciona (não é robô)</p>
+            <p className="text-gray-400 mt-1">
+              Seus clientes continuam falando com você, no seu WhatsApp de sempre. Aqui você deixa as
+              respostas prontas antes — a plataforma não lê nem responde conversas.
+            </p>
+            <ol className="mt-2 space-y-1 text-gray-300 list-decimal list-inside">
+              <li>Preencha os fatos da marca e gere o kit: as respostas em texto.</li>
+              <li>Gere os áudios (um por um ou todos de uma vez) e mande pro seu WhatsApp — a conversa “Você” guarda tudo.</li>
+              <li>Cliente perguntou? Texto pelas respostas rápidas do WhatsApp Business; áudio encaminhando da conversa “Você”. Dois toques.</li>
+            </ol>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
@@ -568,12 +781,15 @@ function KitWhatsapp() {
                     <button
                       key={v.voice_id}
                       type="button"
+                      disabled={lote.ativo || !!empacotando}
                       onClick={() => {
                         if (voz === v.voice_id) return
                         pararAudioAtivo()
                         setVoz(v.voice_id)
                         setAudioBlobs({})
                         setOggCache({})
+                        setLote({ ativo: false, aviso: '' })
+                        setAvisoTodos('')
                       }}
                       aria-pressed={ativo}
                       className={`text-sm rounded-full border px-3 py-1.5 transition-colors ${
@@ -587,7 +803,7 @@ function KitWhatsapp() {
                   )
                 })}
               </div>
-              <p className="text-xs text-gray-500 mt-1">Cada resposta pode virar áudio nessa voz — você gera um por um, só os que quiser.</p>
+              <p className="text-xs text-gray-500 mt-1">Cada resposta pode virar áudio nessa voz — um por um ou todos de uma vez, depois de gerar o kit.</p>
             </div>
 
             <Button
@@ -634,9 +850,11 @@ function KitWhatsapp() {
                   <p className={`text-xs mt-1 ${meuWhats.trim() && whatsappIncompleto(meuWhats) ? 'text-amber-400' : 'text-gray-500'}`}>
                     {meuWhats.trim() && whatsappIncompleto(meuWhats)
                       ? '⚠️ Número incompleto — DDD + número (o 55 a gente põe).'
-                      : podeCompartilharArquivo
-                        ? 'O texto abre no WhatsApp já digitado — você só toca em enviar. Áudio: o 1º toque prepara, o 2º abre o compartilhar do aparelho → WhatsApp.'
-                        : 'O texto abre no WhatsApp já digitado — você só toca em enviar. Pra mandar o áudio pelo computador, baixe e anexe no WhatsApp.'}
+                      : podeCompartilharArquivo && ehCelular
+                        ? 'O texto abre no WhatsApp já digitado — você só toca em enviar. Áudio: o 1º toque prepara, o 2º abre o compartilhar do aparelho → WhatsApp (mande pra você mesmo: a conversa “Você”).'
+                        : podeCompartilharArquivo
+                          ? 'O texto abre no WhatsApp já digitado — você só toca em enviar. Áudio: o 1º toque prepara, o 2º abre o painel de compartilhar do Windows (lateral direita). No computador, Baixar + anexar no WhatsApp sempre funciona.'
+                          : 'O texto abre no WhatsApp já digitado — você só toca em enviar. Pra mandar o áudio pelo computador, baixe e anexe no WhatsApp.'}
                   </p>
                 </div>
 
@@ -650,6 +868,7 @@ function KitWhatsapp() {
                           <button
                             key={v.voice_id}
                             type="button"
+                            disabled={lote.ativo || !!empacotando}
                             onClick={() => {
                               if (voz === v.voice_id) return
                               // Trocar de voz invalida os áudios já gerados — eles nasceram na outra voz.
@@ -657,6 +876,8 @@ function KitWhatsapp() {
                               setVoz(v.voice_id)
                               setAudioBlobs({})
                               setOggCache({})
+                              setLote({ ativo: false, aviso: '' })
+                              setAvisoTodos('')
                             }}
                             aria-pressed={ativo}
                             className={`text-xs rounded-full border px-3 py-1.5 transition-colors ${
@@ -680,10 +901,91 @@ function KitWhatsapp() {
                   </button>
                 </div>
 
+                {/* Fatia 1.4: todos os áudios de uma vez — em FILA (um por vez, com pausa; a IA
+                    de voz não aceita rajada). Se travar, guarda o que saiu e retoma de onde parou. */}
+                <div className="bg-[#111111] border border-gray-800 rounded-xl p-3 space-y-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={gerarTodosAudios}
+                      disabled={lote.ativo || !!empacotando || gerandoAudio !== null || convertingIndex !== null || faltam === 0}
+                      className="bg-[#22C55E] hover:bg-[#16A34A] disabled:opacity-60"
+                    >
+                      {lote.ativo ? (
+                        <><Loader2 className="w-4 h-4 mr-1 animate-spin" /> Gerando {Math.min(prontos + 1, respostas.length)} de {respostas.length}…</>
+                      ) : faltam === 0 ? (
+                        <><Check className="w-4 h-4 mr-1" /> Todos os áudios prontos</>
+                      ) : prontos > 0 ? (
+                        <><Play className="w-4 h-4 mr-1" /> Continuar: faltam {faltam}</>
+                      ) : (
+                        <><Play className="w-4 h-4 mr-1" /> Gerar todos os áudios</>
+                      )}
+                    </Button>
+                    {lote.ativo && (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => { loteCancelRef.current = true }}
+                        className="border-gray-700"
+                      >
+                        <Square className="w-4 h-4 mr-1" /> Parar
+                      </Button>
+                    )}
+                    {prontos > 0 && !lote.ativo && (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={baixarTodos}
+                        disabled={!!empacotando}
+                        className="border-[#22C55E]/50 text-[#22C55E] hover:bg-[#22C55E]/10"
+                      >
+                        {empacotando === 'zip' ? (
+                          <><Loader2 className="w-4 h-4 mr-1 animate-spin" /> {zipProgresso || 'Empacotando…'}</>
+                        ) : (
+                          <><Download className="w-4 h-4 mr-1" /> Baixar todos ({prontos} .ogg em ZIP)</>
+                        )}
+                      </Button>
+                    )}
+                    {prontos > 0 && !lote.ativo && podeCompartilharArquivo && (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={compartilharTodos}
+                        disabled={!!empacotando || shareAberto !== null}
+                        className="border-[#22C55E]/50 text-[#22C55E] hover:bg-[#22C55E]/10"
+                      >
+                        {empacotando === 'share' ? (
+                          <><Loader2 className="w-4 h-4 mr-1 animate-spin" /> {zipProgresso || 'Preparando…'}</>
+                        ) : shareAberto === 'todos' ? (
+                          <><Loader2 className="w-4 h-4 mr-1 animate-spin" /> Escolha o WhatsApp no painel…</>
+                        ) : todosOggProntos ? (
+                          <><Share2 className="w-4 h-4 mr-1" /> Compartilhar todos ({prontos})</>
+                        ) : (
+                          <><Share2 className="w-4 h-4 mr-1" /> Preparar todos pra compartilhar</>
+                        )}
+                      </Button>
+                    )}
+                  </div>
+                  {(prontos > 0 || lote.ativo) && (
+                    <div className="h-1.5 rounded-full bg-gray-800 overflow-hidden" role="progressbar" aria-valuemin={0} aria-valuemax={respostas.length} aria-valuenow={prontos}>
+                      <div className="h-full bg-[#22C55E] transition-all" style={{ width: `${respostas.length ? Math.round((prontos / respostas.length) * 100) : 0}%` }} />
+                    </div>
+                  )}
+                  <p className={`text-xs ${lote.aviso || avisoTodos ? 'text-amber-400' : 'text-gray-500'}`}>
+                    {lote.aviso || avisoTodos || (lote.ativo
+                      ? 'Um por vez, com pausa — a IA de voz não aceita rajada. Pode levar uns 2 a 3 minutos; pode continuar navegando nesta tela.'
+                      : `${prontos} de ${respostas.length} áudios prontos. Gera um por vez, com pausa; se a IA travar no meio, o que já saiu fica guardado e você continua de onde parou.`)}
+                  </p>
+                </div>
+
                 {respostas.map((r, idx) => {
                   const temAudio = !!audioBlobs[idx]
                   const tocando = tocandoIndex === idx
-                  const ocupado = gerandoAudio === idx || convertingIndex === idx
+                  const ocupado = gerandoAudio === idx || convertingIndex === idx || lote.ativo || !!empacotando
                   return (
                     <div key={idx} className="bg-[#111111] border border-gray-800 rounded-xl p-4 space-y-2">
                       <p className="text-sm font-semibold text-[#22C55E]">
@@ -749,11 +1051,13 @@ function KitWhatsapp() {
                             size="sm"
                             variant="outline"
                             onClick={() => compartilharAudio(idx)}
-                            disabled={ocupado || !r.resposta.trim()}
+                            disabled={ocupado || !r.resposta.trim() || shareAberto !== null}
                             className="border-[#22C55E]/50 text-[#22C55E] hover:bg-[#22C55E]/10"
                           >
                             {convertingIndex === idx ? (
                               <><Loader2 className="w-4 h-4 mr-1 animate-spin" /> Preparando…</>
+                            ) : shareAberto === idx ? (
+                              <><Loader2 className="w-4 h-4 mr-1 animate-spin" /> Escolha o WhatsApp no painel…</>
                             ) : oggCache[idx] ? (
                               <><Share2 className="w-4 h-4 mr-1" /> Compartilhar áudio</>
                             ) : (
@@ -772,8 +1076,10 @@ function KitWhatsapp() {
                 })}
 
                 <p className="text-xs text-gray-500">
-                  Dica: no WhatsApp Business, vá em Ferramentas comerciais → Respostas rápidas e cole cada
-                  texto com um atalho (ex: /preco). O áudio baixado (.ogg) chega lá como mensagem de voz.
+                  Dica: no WhatsApp Business, Ferramentas comerciais → Respostas rápidas aceitam texto, foto e
+                  vídeo (áudio não) — cole cada texto com um atalho (ex: /preco). Os áudios (.ogg) ficam
+                  guardados na sua conversa “Você”: quando o cliente perguntar, é só encaminhar. Chega como
+                  mensagem de voz.
                 </p>
               </>
             ) : (
