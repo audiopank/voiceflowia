@@ -20,6 +20,11 @@ const buttonVariants = cva(
       size: {
         default: "h-10 px-4 py-2",
         lg: "h-12 px-8 text-base",
+        // "sm" nasceu no Kit de WhatsApp sem existir aqui: o cva ignorava o valor e os
+        // botões saíam só com as classes base (sem h-/px-). Esse visual foi aprovado em
+        // produção — a variante existe pra fechar o tipo SEM mudar nada na tela.
+        // Quando quiser um tamanho menor de verdade, ajuste aqui (ex: "h-8 px-3 text-xs").
+        sm: "",
       },
     },
     defaultVariants: {

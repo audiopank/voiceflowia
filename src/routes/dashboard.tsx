@@ -500,6 +500,21 @@ function Dashboard() {
               CTAs e ganchos que já converteram, prontos pra reusar em 1 clique
             </p>
           </div>
+
+          {/* Meus Kits — Kits de Respostas de WhatsApp salvos (tabela própria, RLS de dono);
+              sempre acessível, como Meus Conteúdos. */}
+          <div
+            className="border rounded-lg p-6 shadow-sm bg-[#111111] border-gray-800 hover:border-[#22C55E] cursor-pointer"
+            onClick={() => navigate({ to: '/meus-kits' })}
+          >
+            <div className="flex items-center gap-2 mb-3">
+              <MessageCircle className="w-6 h-6 text-[#22C55E]" />
+              <h3 className="text-xl font-semibold">Meus Kits de WhatsApp</h3>
+            </div>
+            <p className="text-gray-400">
+              Seus kits de respostas ficam guardados — reabra, edite e gere os áudios quando quiser
+            </p>
+          </div>
         </div>
       </div>
     </div>

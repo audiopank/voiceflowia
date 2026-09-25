@@ -15,6 +15,7 @@ import { Route as RedefinirSenhaRouteImport } from './routes/redefinir-senha'
 import { Route as RadarRouteImport } from './routes/radar'
 import { Route as PrecosRouteImport } from './routes/precos'
 import { Route as MeusTemplatesRouteImport } from './routes/meus-templates'
+import { Route as MeusKitsRouteImport } from './routes/meus-kits'
 import { Route as MeusConteudosRouteImport } from './routes/meus-conteudos'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as KitWhatsappRouteImport } from './routes/kit-whatsapp'
@@ -56,6 +57,11 @@ const PrecosRoute = PrecosRouteImport.update({
 const MeusTemplatesRoute = MeusTemplatesRouteImport.update({
   id: '/meus-templates',
   path: '/meus-templates',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MeusKitsRoute = MeusKitsRouteImport.update({
+  id: '/meus-kits',
+  path: '/meus-kits',
   getParentRoute: () => rootRouteImport,
 } as any)
 const MeusConteudosRoute = MeusConteudosRouteImport.update({
@@ -132,6 +138,7 @@ export interface FileRoutesByFullPath {
   '/kit-whatsapp': typeof KitWhatsappRoute
   '/login': typeof LoginRoute
   '/meus-conteudos': typeof MeusConteudosRoute
+  '/meus-kits': typeof MeusKitsRoute
   '/meus-templates': typeof MeusTemplatesRoute
   '/precos': typeof PrecosRoute
   '/radar': typeof RadarRoute
@@ -152,6 +159,7 @@ export interface FileRoutesByTo {
   '/kit-whatsapp': typeof KitWhatsappRoute
   '/login': typeof LoginRoute
   '/meus-conteudos': typeof MeusConteudosRoute
+  '/meus-kits': typeof MeusKitsRoute
   '/meus-templates': typeof MeusTemplatesRoute
   '/precos': typeof PrecosRoute
   '/radar': typeof RadarRoute
@@ -173,6 +181,7 @@ export interface FileRoutesById {
   '/kit-whatsapp': typeof KitWhatsappRoute
   '/login': typeof LoginRoute
   '/meus-conteudos': typeof MeusConteudosRoute
+  '/meus-kits': typeof MeusKitsRoute
   '/meus-templates': typeof MeusTemplatesRoute
   '/precos': typeof PrecosRoute
   '/radar': typeof RadarRoute
@@ -195,6 +204,7 @@ export interface FileRouteTypes {
     | '/kit-whatsapp'
     | '/login'
     | '/meus-conteudos'
+    | '/meus-kits'
     | '/meus-templates'
     | '/precos'
     | '/radar'
@@ -215,6 +225,7 @@ export interface FileRouteTypes {
     | '/kit-whatsapp'
     | '/login'
     | '/meus-conteudos'
+    | '/meus-kits'
     | '/meus-templates'
     | '/precos'
     | '/radar'
@@ -235,6 +246,7 @@ export interface FileRouteTypes {
     | '/kit-whatsapp'
     | '/login'
     | '/meus-conteudos'
+    | '/meus-kits'
     | '/meus-templates'
     | '/precos'
     | '/radar'
@@ -256,6 +268,7 @@ export interface RootRouteChildren {
   KitWhatsappRoute: typeof KitWhatsappRoute
   LoginRoute: typeof LoginRoute
   MeusConteudosRoute: typeof MeusConteudosRoute
+  MeusKitsRoute: typeof MeusKitsRoute
   MeusTemplatesRoute: typeof MeusTemplatesRoute
   PrecosRoute: typeof PrecosRoute
   RadarRoute: typeof RadarRoute
@@ -306,6 +319,13 @@ declare module '@tanstack/react-router' {
       path: '/meus-templates'
       fullPath: '/meus-templates'
       preLoaderRoute: typeof MeusTemplatesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/meus-kits': {
+      id: '/meus-kits'
+      path: '/meus-kits'
+      fullPath: '/meus-kits'
+      preLoaderRoute: typeof MeusKitsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/meus-conteudos': {
@@ -408,6 +428,7 @@ const rootRouteChildren: RootRouteChildren = {
   KitWhatsappRoute: KitWhatsappRoute,
   LoginRoute: LoginRoute,
   MeusConteudosRoute: MeusConteudosRoute,
+  MeusKitsRoute: MeusKitsRoute,
   MeusTemplatesRoute: MeusTemplatesRoute,
   PrecosRoute: PrecosRoute,
   RadarRoute: RadarRoute,

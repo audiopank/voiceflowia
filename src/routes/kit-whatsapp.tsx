@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
-import { createFileRoute, useNavigate } from '@tanstack/react-router'
+import { createFileRoute, useNavigate, useSearch } from '@tanstack/react-router'
 import {
   Lock, Loader2, Sparkles, Download, Copy, Check, X, AlertCircle, MessageCircle, Play, Square, Plus,
-  Smartphone, Share2,
+  Smartphone, Share2, FolderOpen,
 } from 'lucide-react'
 import { useSubscription, devolverGeracaoTrial } from '../lib/useSubscription'
 import { supabase } from '../lib/supabase'
@@ -15,8 +15,14 @@ import { convertToWhatsAppOgg } from '../lib/audioConvert'
 import { realcarVoz } from '../lib/estudioCards'
 import { brandWhatsappKey, loadBrandWhatsapp, saveBrandWhatsapp, whatsappIncompleto, buildWaLink } from '../lib/brandWhatsapp'
 import JSZip from 'jszip'
+import { salvarKit, atualizarKit, carregarKit } from '../lib/kitsWhatsapp'
 
 export const Route = createFileRoute('/kit-whatsapp')({
+  // ?kit=<id> reabre um kit salvo (Meus Kits). Normaliza pra texto: a query pode
+  // chegar como outro tipo (lição do ?trial=1 no /cadastro).
+  validateSearch: (search: Record<string, unknown>): { kit?: string } => ({
+    kit: search.kit == null || search.kit === '' ? undefined : String(search.kit),
+  }),
   component: KitWhatsapp,
 })
 
@@ -146,17 +152,73 @@ function KitWhatsapp() {
   const shareEmAndamentoRef = useRef(false)
   const [shareAberto, setShareAberto] = useState<number | 'todos' | null>(null)
   const [ehCelular] = useState(() => typeof navigator !== 'undefined' && /Android|iPhone|iPad|iPod/i.test(navigator.userAgent))
+  // Meus Kits F1 (25/09): o kit gerado é salvo NA HORA em tabela própria
+  // (`kits_whatsapp`, RLS de dono — nunca em `contents`). ?kit=<id> reabre; editar
+  // uma resposta salva sozinho; a tela sempre diz se salvou ou não.
+  const search = useSearch({ from: '/kit-whatsapp' })
+  const [userId, setUserId] = useState<string | null>(null)
+  const [kitId, setKitId] = useState<string | null>(null)
+  const [nichoSalvo, setNichoSalvo] = useState('')
+  const [estadoKit, setEstadoKit] = useState<{ tipo: 'carregando' | 'salvando' | 'salvo' | 'erro'; msg?: string } | null>(null)
+  const autosaveRef = useRef<number | null>(null)
+  const kitCarregadoRef = useRef<string | null>(null)
 
   useEffect(() => {
     let cancelado = false
     supabase.auth.getUser().then(({ data: { user } }) => {
       if (cancelado) return
+      setUserId(user?.id ?? null)
       const key = brandWhatsappKey(user?.id)
       setWhatsKey(key)
       setMeuWhats(loadBrandWhatsapp(key).numero)
     })
     return () => { cancelado = true }
   }, [])
+
+  // Reabrir kit salvo (?kit=<id>): preenche briefing + respostas. Áudios não são
+  // guardados — regeram sob demanda. null = apagado ou de outro usuário (RLS).
+  useEffect(() => {
+    const id = search.kit
+    if (!id || kitCarregadoRef.current === id) return
+    kitCarregadoRef.current = id
+    let cancelado = false
+    setEstadoKit({ tipo: 'carregando' })
+    carregarKit(id).then((kit) => {
+      if (cancelado) return
+      if (!kit) {
+        setEstadoKit({ tipo: 'erro', msg: 'Esse kit não foi encontrado — pode ter sido apagado, ou não é seu.' })
+        return
+      }
+      pararAudioAtivo()
+      setNicho(kit.nicho)
+      setFatos(kit.fatos)
+      setDiferenciais(kit.diferenciais)
+      setCta(kit.cta)
+      if (TONS.some((t) => t.value === kit.tom)) setTom(kit.tom)
+      if (GEMINI_VOICES_TEXTO_LONGO.some((v) => v.voice_id === kit.voz)) setVoz(kit.voz)
+      if (kit.respostas.length > 0) setPerguntas(kit.respostas.map((r) => r.pergunta))
+      setRespostas(kit.respostas)
+      setAudioBlobs({})
+      setOggCache({})
+      setAudioErros({})
+      setLote({ ativo: false, aviso: '' })
+      setAvisoTodos('')
+      setErro('')
+      setKitId(kit.id)
+      setNichoSalvo(kit.nicho.trim())
+      setEstadoKit({ tipo: 'salvo' })
+    }, (err) => {
+      if (cancelado) return
+      console.error('=== ERRO ao carregar kit salvo ===', err)
+      setEstadoKit({ tipo: 'erro', msg: 'Não consegui abrir esse kit agora. Tente recarregar a página.' })
+    })
+    return () => {
+      cancelado = true
+      // StrictMode (dev) roda o efeito 2x: solta a trava pra 2ª rodada carregar de
+      // verdade — senão o dev fica em "Abrindo kit salvo…" pra sempre (prod não muda).
+      if (kitCarregadoRef.current === id) kitCarregadoRef.current = null
+    }
+  }, [search.kit])
 
   function salvarMeuWhats() {
     if (!whatsKey) return
@@ -233,6 +295,7 @@ function KitWhatsapp() {
       setAudioErros({})
       setLote({ ativo: false, aviso: '' })
       setAvisoTodos('')
+      void persistirKit(lista)
       if (trial.isTrial) void refresh()
     } catch (err) {
       setRateNotice('')
@@ -265,6 +328,7 @@ function KitWhatsapp() {
       return proximo
     })
     if (audioAtivoRef.current?.index === idx) pararAudioAtivo()
+    agendarAutosave()
   }
 
   // Gera (ou reaproveita) a locução DESTA resposta. Sob demanda de propósito.
@@ -562,6 +626,82 @@ function KitWhatsapp() {
     }
   }
 
+  // Salva o kit assim que a IA responde. Mesmo negócio já salvo = atualiza o mesmo
+  // kit ("Gerar de novo"); negócio diferente = kit novo. Falha NÃO some: a tela diz.
+  async function persistirKit(lista: Resposta[]) {
+    setEstadoKit({ tipo: 'salvando' })
+    try {
+      let uid = userId
+      if (!uid) {
+        const { data: { user } } = await supabase.auth.getUser()
+        uid = user?.id ?? null
+        setUserId(uid)
+      }
+      if (!uid) throw new Error('sessão não encontrada')
+      const briefing = { nicho: nicho.trim(), fatos, diferenciais, cta, tom, voz, respostas: lista }
+      if (kitId && nichoSalvo === nicho.trim()) {
+        await atualizarKit(kitId, briefing)
+      } else {
+        const id = await salvarKit(uid, briefing)
+        setKitId(id)
+      }
+      setNichoSalvo(nicho.trim())
+      setEstadoKit({ tipo: 'salvo' })
+    } catch (err) {
+      console.error('=== ERRO ao salvar o kit (Meus Kits) ===', err)
+      const motivo = err instanceof Error ? err.message : 'erro desconhecido'
+      setEstadoKit({ tipo: 'erro', msg: `Kit gerado, mas NÃO foi salvo em Meus Kits (${motivo}). Copie ou baixe agora pra não perder.` })
+    }
+  }
+
+  // Resposta editada: salva sozinha 1,2s depois da última tecla (lê respostasRef,
+  // o texto mais novo — nunca closure velha). Só quando o kit já está em Meus Kits.
+  function agendarAutosave() {
+    if (!kitId) return
+    const id = kitId
+    if (autosaveRef.current) window.clearTimeout(autosaveRef.current)
+    setEstadoKit({ tipo: 'salvando' })
+    autosaveRef.current = window.setTimeout(() => {
+      autosaveRef.current = null
+      atualizarKit(id, { respostas: respostasRef.current }).then(
+        () => setEstadoKit({ tipo: 'salvo' }),
+        (err) => {
+          console.error('=== ERRO no autosave do kit ===', err)
+          setEstadoKit({ tipo: 'erro', msg: 'Sua edição NÃO foi salva em Meus Kits (sem conexão?). Copie o texto pra não perder.' })
+        },
+      )
+    }, 1200)
+  }
+
+  function salvarVozNoKit(novaVoz: string) {
+    if (!kitId) return
+    atualizarKit(kitId, { voz: novaVoz }).catch((err) => console.error('=== ERRO ao salvar a voz do kit ===', err))
+  }
+
+  // Começar outro negócio do zero (o kit atual continua salvo em Meus Kits).
+  function novoKit() {
+    pararAudioAtivo()
+    if (autosaveRef.current) window.clearTimeout(autosaveRef.current)
+    kitCarregadoRef.current = null
+    setKitId(null)
+    setNichoSalvo('')
+    setEstadoKit(null)
+    setNicho('')
+    setFatos('')
+    setDiferenciais('')
+    setCta('')
+    setTom(TOM_PADRAO)
+    setPerguntas(PERGUNTAS_PADRAO)
+    setRespostas([])
+    setAudioBlobs({})
+    setOggCache({})
+    setAudioErros({})
+    setLote({ ativo: false, aviso: '' })
+    setAvisoTodos('')
+    setErro('')
+    navigate({ to: '/kit-whatsapp', search: {} })
+  }
+
   async function copiar(texto: string, idx: number | 'tudo') {
     try {
       await navigator.clipboard.writeText(texto)
@@ -790,6 +930,7 @@ function KitWhatsapp() {
                         setOggCache({})
                         setLote({ ativo: false, aviso: '' })
                         setAvisoTodos('')
+                        salvarVozNoKit(v.voice_id)
                       }}
                       aria-pressed={ativo}
                       className={`text-sm rounded-full border px-3 py-1.5 transition-colors ${
@@ -833,6 +974,31 @@ function KitWhatsapp() {
 
           {/* Coluna direita: o kit */}
           <div className="space-y-4">
+            {/* Meus Kits: onde o kit está guardado + estado do salvamento (sempre visível). */}
+            <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => navigate({ to: '/meus-kits' })}
+                  className="text-gray-400 hover:text-white flex items-center gap-1"
+                >
+                  <FolderOpen className="w-3.5 h-3.5" /> Meus kits salvos
+                </button>
+                {kitId && (
+                  <button type="button" onClick={novoKit} className="text-gray-400 hover:text-white flex items-center gap-1">
+                    <Plus className="w-3.5 h-3.5" /> Novo kit
+                  </button>
+                )}
+              </div>
+              {estadoKit && (
+                <span className={`flex items-center gap-1 ${estadoKit.tipo === 'erro' ? 'text-amber-400' : estadoKit.tipo === 'salvo' ? 'text-[#22C55E]' : 'text-gray-400'}`}>
+                  {estadoKit.tipo === 'carregando' && <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Abrindo kit salvo…</>}
+                  {estadoKit.tipo === 'salvando' && <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Salvando em Meus Kits…</>}
+                  {estadoKit.tipo === 'salvo' && <><Check className="w-3.5 h-3.5" /> Salvo em Meus Kits</>}
+                  {estadoKit.tipo === 'erro' && <><AlertCircle className="w-3.5 h-3.5 shrink-0" /> {estadoKit.msg}</>}
+                </span>
+              )}
+            </div>
             {respostas.length ? (
               <>
                 <div className="bg-[#111111] border border-gray-800 rounded-xl p-3">
@@ -878,6 +1044,7 @@ function KitWhatsapp() {
                               setOggCache({})
                               setLote({ ativo: false, aviso: '' })
                               setAvisoTodos('')
+                              salvarVozNoKit(v.voice_id)
                             }}
                             aria-pressed={ativo}
                             className={`text-xs rounded-full border px-3 py-1.5 transition-colors ${
