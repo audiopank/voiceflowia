@@ -26,7 +26,9 @@ const CARTOES: Record<string, Cartao> = {
   },
   trial: {
     titulo: 'Teste grátis por 7 dias — VoiceFlow IA',
-    descricao: 'Roteiros, legendas e locução com IA na voz da sua marca. 10 gerações de conteúdo no teste, áudios livres, sem cartão.',
+    // ≤ 90 caracteres: o WhatsApp corta a descrição do cartão por volta de 100 (print do
+    // Mestre, 25/09: "…áudios livres, sem"). O título já diz "7 dias".
+    descricao: 'Roteiros, legendas e locução na voz da sua marca. 10 gerações, áudios livres, sem cartão.',
     caminho: '/trial',
   },
   cadastro: {
