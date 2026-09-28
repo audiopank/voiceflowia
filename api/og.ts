@@ -7,7 +7,12 @@
 // título, descrição e imagem de verdade. Copy só com o que o produto entrega:
 // texto + locução; nunca vídeo (regra da casa).
 //
-// Runtime Node (mesmo molde do gerar-kit-whatsapp): `export default { fetch }`.
+// Runtime EDGE (28/09): o plano Hobby da Vercel aceita no máximo 12 funções Node por
+// deploy e a Newsletter foi a 13ª (erro exceeded_serverless_functions_per_deployment).
+// Este cartão é HTML puro e instantâneo — Edge é o lugar certo e não conta no teto.
+export const config = {
+  runtime: 'edge',
+}
 
 const BASE = 'https://voiceflowia-up1.vercel.app'
 const IMAGEM = `${BASE}/og/voiceflow-ia.png`
@@ -56,7 +61,7 @@ function esc(s: string): string {
     .replace(/"/g, '&quot;')
 }
 
-async function handler(request: Request): Promise<Response> {
+export default async function handler(request: Request): Promise<Response> {
   const url = new URL(request.url)
   const rota = (url.searchParams.get('rota') || 'home').toLowerCase()
   const cartao = CARTOES[rota] || CARTOES.home
@@ -92,4 +97,3 @@ async function handler(request: Request): Promise<Response> {
   })
 }
 
-export default { fetch: handler }
