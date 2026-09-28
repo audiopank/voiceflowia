@@ -62,6 +62,16 @@ type Tentativa =
   | { ok: true; texto: string; modelo: string }
   | { ok: false; status: number; motivo: string; modelo: string; demorou: boolean }
 
+// TOM MARCADO (28/09): 'Divertido' saía sóbrio — o nome do tom sozinho não bastava.
+// Cada tom ganha instruções concretas de voz (o conteúdo continua só com lastro).
+const GUIA_DE_TOM: Record<string, string> = {
+  Profissional: 'sério e confiável; frases completas, sem gírias, sem exclamações em excesso.',
+  Divertido: 'leve e bem-humorado: brincadeiras leves, frases curtas, uma pitada de gíria brasileira, pode usar exclamação e 1-2 emojis no corpo; a graça vem do jeito de dizer, NUNCA de fato inventado.',
+  Vendedor: 'direto e focado em ação: começa pelo benefício, verbos no imperativo, frases curtas, urgência só se houver prazo nos fatos (nunca invente prazo).',
+  Inspirador: 'emocional e motivador: fala do sonho e da conquista do leitor, frases que tocam, sem exagero nem promessa de resultado.',
+  Técnico: 'autoridade que explica o porquê: como funciona, passo a passo, termos precisos, sem jargão vazio.',
+}
+
 function buildPrompt(p: Pedido): string {
   const lista = p.posts.length
     ? p.posts.map((post, i) => `${i + 1}) GANCHO: ${post.gancho}\n   TEXTO: ${post.texto}`).join('\n')
@@ -71,7 +81,7 @@ function buildPrompt(p: Pedido): string {
 Ela vai por e-mail para pessoas REAIS: precisa soar como o dono falando e só pode afirmar o que é verdade.
 
 NEGÓCIO: ${p.nicho}
-TOM DE VOZ: ${p.tom}
+TOM DE VOZ: ${p.tom} — ${GUIA_DE_TOM[p.tom] || 'natural e próximo.'} O tom tem que ser PERCEPTÍVEL em cada bloco.
 PERÍODO: últimas ${p.semanas} semana(s)
 
 FATOS DA MARCA (fonte de verdade junto com os posts — só afirme o que está aqui):
@@ -85,7 +95,8 @@ ${lista}
 CHAMADA PARA AÇÃO preferida: ${p.cta || 'não informada — convide a pessoa a responder o e-mail'}
 
 REGRAS OBRIGATÓRIAS:
-- Português do Brasil, no tom pedido. Direto, caloroso, sem jargão de marketing.
+- Português do Brasil com acentuação, cedilha e letras maiúsculas corretas (início de frase, nomes próprios, marcas) — texto sem acento é inaceitável.
+- Escreva no tom pedido, de forma perceptível. Direto, caloroso, sem jargão de marketing.
 - Cada BLOCO nasce de um post publicado (ou, se não houver posts, de um fato informado).
   Reescreva para e-mail — não copie a legenda inteira —, mas mantenha o que o post diz.
 - 3 a 5 blocos. Agrupe posts parecidos num bloco só. Títulos curtos (até 8 palavras).
@@ -181,7 +192,14 @@ function montarNewsletter(bruto: string) {
     blocos,
     fechamento: texto(n?.fechamento, 800),
   }
-  return out.assunto && out.blocos.length ? out : null
+  if (!out.assunto || !out.blocos.length) return null
+  // TRAVA DO ACENTO (28/09): um modelo reserva devolveu a newsletter inteira em
+  // minúsculas e sem acento. Português de verdade tem acento em quase todo parágrafo:
+  // texto longo sem NENHUM acento, ou sem nenhuma maiúscula, é resposta ruim → o
+  // próximo modelo da cadeia escreve de novo (montarNewsletter null = falha).
+  const corpo = [out.assunto, out.abertura, ...out.blocos.map((b: { titulo: string; texto: string }) => b.titulo + ' ' + b.texto), out.fechamento].join(' ')
+  if (corpo.length > 200 && (!/[áàâãéêíóôõúç]/i.test(corpo) || !/[A-ZÁÀÂÃÉÊÍÓÔÕÚÇ]/.test(corpo))) return null
+  return out
 }
 
 async function handler(request: Request): Promise<Response> {
