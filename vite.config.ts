@@ -29,6 +29,7 @@ function apiDevBridge(): Plugin {
     '/api/reminders/cron-reengajamento': './api/reminders/cron-reengajamento.ts',
     '/api/newpost/sessao': './api/newpost/sessao.ts',
     '/api/og': './api/og.ts',
+    '/api/gemini/gerar-newsletter': './api/gemini/gerar-newsletter.ts',
   }
 
   return {

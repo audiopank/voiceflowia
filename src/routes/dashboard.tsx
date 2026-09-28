@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { createFileRoute, useNavigate } from "@tanstack/react-router"
 import { supabase } from '../lib/supabase'
 import { useSubscription } from '../lib/useSubscription'
-import { Lock, Volume2, Settings, Rocket, Radar as RadarIcon, ArrowRight, Wand2, CalendarDays, Clock, History, Bookmark, MessageCircle } from 'lucide-react'
+import { Lock, Volume2, Settings, Rocket, Radar as RadarIcon, ArrowRight, Wand2, CalendarDays, Clock, History, Bookmark, MessageCircle, Newspaper } from 'lucide-react'
 import { proximasDatasSazonais, textoContagem } from '../lib/datasSazonais'
 import { BackButton } from '../components/BackButton'
 import { AtivarTrial } from '../components/AtivarTrial'
@@ -376,6 +376,28 @@ function Dashboard() {
             >
               <Lock className="w-9 h-9" />
               {courtesyExpired ? 'Kit de Respostas de WhatsApp 🔒 — cortesia encerrada, assine pra continuar' : 'Kit de Respostas de WhatsApp 🔒 - Upgrade para Crescimento'}
+            </button>
+          )}
+        </div>
+
+        {/* Newsletter Semanal (F1, 28/09) — a newsletter da semana a partir do que a marca
+            já publicou (Memória da Marca). Gera/edita/baixa; envio pra lista = F2. */}
+        <div className="mb-8">
+          {hasContentAgentFeature ? (
+            <button
+              onClick={() => navigate({ to: '/newsletter' })}
+              className="w-full bg-gradient-to-r from-[#F59E0B] to-[#EF4444] hover:from-[#D97706] hover:to-[#DC2626] text-white font-bold py-6 px-8 rounded-xl text-2xl flex items-center justify-center gap-3 transition-all hover:scale-[1.02] shadow-lg shadow-[#F59E0B]/30"
+            >
+              <Newspaper className="w-9 h-9" />
+              Newsletter Semanal — Feita com o que Você Já Criou Aqui 📰
+            </button>
+          ) : (
+            <button
+              onClick={() => navigate({ to: '/precos' })}
+              className="w-full bg-gray-800 text-gray-400 font-bold py-6 px-8 rounded-xl text-2xl flex items-center justify-center gap-3 border border-gray-700 hover:border-[#8B5CF6] hover:text-white transition-colors"
+            >
+              <Lock className="w-9 h-9" />
+              {courtesyExpired ? 'Newsletter Semanal 🔒 — cortesia encerrada, assine pra continuar' : 'Newsletter Semanal 🔒 - Upgrade para Crescimento'}
             </button>
           )}
         </div>

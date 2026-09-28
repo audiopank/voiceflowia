@@ -15,6 +15,7 @@ import { Route as SuperAgenteRouteImport } from './routes/super-agente'
 import { Route as RedefinirSenhaRouteImport } from './routes/redefinir-senha'
 import { Route as RadarRouteImport } from './routes/radar'
 import { Route as PrecosRouteImport } from './routes/precos'
+import { Route as NewsletterRouteImport } from './routes/newsletter'
 import { Route as MeusTemplatesRouteImport } from './routes/meus-templates'
 import { Route as MeusKitsRouteImport } from './routes/meus-kits'
 import { Route as MeusConteudosRouteImport } from './routes/meus-conteudos'
@@ -58,6 +59,11 @@ const RadarRoute = RadarRouteImport.update({
 const PrecosRoute = PrecosRouteImport.update({
   id: '/precos',
   path: '/precos',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const NewsletterRoute = NewsletterRouteImport.update({
+  id: '/newsletter',
+  path: '/newsletter',
   getParentRoute: () => rootRouteImport,
 } as any)
 const MeusTemplatesRoute = MeusTemplatesRouteImport.update({
@@ -146,6 +152,7 @@ export interface FileRoutesByFullPath {
   '/meus-conteudos': typeof MeusConteudosRoute
   '/meus-kits': typeof MeusKitsRoute
   '/meus-templates': typeof MeusTemplatesRoute
+  '/newsletter': typeof NewsletterRoute
   '/precos': typeof PrecosRoute
   '/radar': typeof RadarRoute
   '/redefinir-senha': typeof RedefinirSenhaRoute
@@ -168,6 +175,7 @@ export interface FileRoutesByTo {
   '/meus-conteudos': typeof MeusConteudosRoute
   '/meus-kits': typeof MeusKitsRoute
   '/meus-templates': typeof MeusTemplatesRoute
+  '/newsletter': typeof NewsletterRoute
   '/precos': typeof PrecosRoute
   '/radar': typeof RadarRoute
   '/redefinir-senha': typeof RedefinirSenhaRoute
@@ -191,6 +199,7 @@ export interface FileRoutesById {
   '/meus-conteudos': typeof MeusConteudosRoute
   '/meus-kits': typeof MeusKitsRoute
   '/meus-templates': typeof MeusTemplatesRoute
+  '/newsletter': typeof NewsletterRoute
   '/precos': typeof PrecosRoute
   '/radar': typeof RadarRoute
   '/redefinir-senha': typeof RedefinirSenhaRoute
@@ -215,6 +224,7 @@ export interface FileRouteTypes {
     | '/meus-conteudos'
     | '/meus-kits'
     | '/meus-templates'
+    | '/newsletter'
     | '/precos'
     | '/radar'
     | '/redefinir-senha'
@@ -237,6 +247,7 @@ export interface FileRouteTypes {
     | '/meus-conteudos'
     | '/meus-kits'
     | '/meus-templates'
+    | '/newsletter'
     | '/precos'
     | '/radar'
     | '/redefinir-senha'
@@ -259,6 +270,7 @@ export interface FileRouteTypes {
     | '/meus-conteudos'
     | '/meus-kits'
     | '/meus-templates'
+    | '/newsletter'
     | '/precos'
     | '/radar'
     | '/redefinir-senha'
@@ -282,6 +294,7 @@ export interface RootRouteChildren {
   MeusConteudosRoute: typeof MeusConteudosRoute
   MeusKitsRoute: typeof MeusKitsRoute
   MeusTemplatesRoute: typeof MeusTemplatesRoute
+  NewsletterRoute: typeof NewsletterRoute
   PrecosRoute: typeof PrecosRoute
   RadarRoute: typeof RadarRoute
   RedefinirSenhaRoute: typeof RedefinirSenhaRoute
@@ -332,6 +345,13 @@ declare module '@tanstack/react-router' {
       path: '/precos'
       fullPath: '/precos'
       preLoaderRoute: typeof PrecosRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/newsletter': {
+      id: '/newsletter'
+      path: '/newsletter'
+      fullPath: '/newsletter'
+      preLoaderRoute: typeof NewsletterRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/meus-templates': {
@@ -450,6 +470,7 @@ const rootRouteChildren: RootRouteChildren = {
   MeusConteudosRoute: MeusConteudosRoute,
   MeusKitsRoute: MeusKitsRoute,
   MeusTemplatesRoute: MeusTemplatesRoute,
+  NewsletterRoute: NewsletterRoute,
   PrecosRoute: PrecosRoute,
   RadarRoute: RadarRoute,
   RedefinirSenhaRoute: RedefinirSenhaRoute,
