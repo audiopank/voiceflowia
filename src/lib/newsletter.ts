@@ -103,8 +103,42 @@ function esc(s: string): string {
   return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 }
 
+// Endereço https:// no texto (sem a pontuação final da frase).
+const RE_URL = /https?:\/\/[^\s<>"]+[^\s<>".,;:!?)\]]/g
+
+// Texto CRU → HTML seguro com os endereços clicáveis (alguns programas de e-mail não
+// linkam sozinhos). Linka ANTES de escapar: cada pedaço passa por esc(), inclusive o
+// href — assim URL entre aspas ou < > não carrega "&quot;"/"&gt;" pra dentro do link.
+// Só http(s) casa na regex, então javascript: nunca vira href.
+function linkificar(cru: string): string {
+  let out = ''
+  let ultimo = 0
+  for (const m of cru.matchAll(RE_URL)) {
+    const i = m.index ?? 0
+    out += esc(cru.slice(ultimo, i))
+    out += `<a href="${esc(m[0])}" style="color:#16A34A;text-decoration:underline">${esc(m[0])}</a>`
+    ultimo = i + m[0].length
+  }
+  return out + esc(cru.slice(ultimo))
+}
+
 function paragrafos(s: string): string {
-  return esc(s).split(/\n{2,}/).map((p) => `<p style="margin:0 0 14px;line-height:1.6">${p.replace(/\n/g, '<br>')}</p>`).join('')
+  return String(s || '').split(/\n{2,}/).map((p) => `<p style="margin:0 0 14px;line-height:1.6">${linkificar(p).replace(/\n/g, '<br>')}</p>`).join('')
+}
+
+// Botão de chamada (28/09): o 1º link do fechamento — ou, se não houver, do último
+// bloco — vira um botão verde abaixo do texto. Rótulo honesto pelo destino: link de
+// trial = "Começar teste grátis"; qualquer outro = "Acessar".
+function botaoChamada(n: Newsletter): string {
+  const fonte = [n.fechamento, n.blocos[n.blocos.length - 1]?.texto || '']
+  let url = ''
+  for (const t of fonte) {
+    const achado = String(t || '').match(RE_URL)
+    if (achado) { url = achado[0]; break }
+  }
+  if (!url) return ''
+  const rotulo = /\/trial\b|trial=/.test(url) ? 'Começar teste grátis' : 'Acessar'
+  return `<tr><td align="center" style="padding:10px 0 4px"><a href="${esc(url)}" style="display:inline-block;background:#22C55E;color:#ffffff;font-weight:bold;font-size:16px;text-decoration:none;padding:14px 28px;border-radius:8px">${rotulo}</a></td></tr>`
 }
 
 // HTML de e-mail simples, com estilo inline (é o que os clientes de e-mail respeitam).
@@ -122,6 +156,7 @@ export function htmlDaNewsletter(n: Newsletter, marca: string): string {
 <tr><td>${paragrafos(n.abertura)}</td></tr>
 ${blocos}
 <tr><td style="padding-top:8px">${paragrafos(n.fechamento)}</td></tr>
+${botaoChamada(n)}
 </table></td></tr></table>
 </body></html>`
 }
