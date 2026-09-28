@@ -16,6 +16,7 @@ import { realcarVoz } from '../lib/estudioCards'
 import { brandWhatsappKey, loadBrandWhatsapp, saveBrandWhatsapp, whatsappIncompleto, buildWaLink } from '../lib/brandWhatsapp'
 import JSZip from 'jszip'
 import { salvarKit, atualizarKit, carregarKit } from '../lib/kitsWhatsapp'
+import { FALANTE_CLIENTE, FALANTE_DONO, VOZES_PADRAO, montarTranscricao, falantesParaApi } from '../lib/dialogo'
 
 export const Route = createFileRoute('/kit-whatsapp')({
   // ?kit=<id> reabre um kit salvo (Meus Kits). Normaliza pra texto: a query pode
@@ -87,6 +88,9 @@ function KitWhatsapp() {
   const [perguntas, setPerguntas] = useState<string[]>(PERGUNTAS_PADRAO)
   const [novaPergunta, setNovaPergunta] = useState('')
   const [voz, setVoz] = useState('Zephyr')
+  // Diálogo (28/09): a pergunta na voz do CLIENTE, a resposta na voz da MARCA (`voz`).
+  const [modoDialogo, setModoDialogo] = useState(false)
+  const [vozCliente, setVozCliente] = useState(VOZES_PADRAO[FALANTE_CLIENTE])
 
   // Resultado
   const [respostas, setRespostas] = useState<Resposta[]>([])
@@ -136,6 +140,10 @@ function KitWhatsapp() {
   respostasRef.current = respostas
   const vozRef = useRef(voz)
   vozRef.current = voz
+  const modoDialogoRef = useRef(modoDialogo)
+  modoDialogoRef.current = modoDialogo
+  const vozClienteRef = useRef(vozCliente)
+  vozClienteRef.current = vozCliente
   const audioBlobsRef = useRef(audioBlobs)
   audioBlobsRef.current = audioBlobs
   const oggCacheRef = useRef(oggCache)
@@ -235,6 +243,13 @@ function KitWhatsapp() {
     const t = window.setInterval(() => setAgora(Date.now()), 500)
     return () => window.clearInterval(t)
   }, [esperaFim])
+
+  // No diálogo as duas vozes precisam ser diferentes (senão soa como a mesma pessoa
+  // falando sozinha): trocou a voz da marca pra a mesma do cliente → o cliente muda.
+  useEffect(() => {
+    if (modoDialogo && vozCliente === voz) setVozCliente(outraVoz(voz))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [voz, modoDialogo])
 
   function salvarMeuWhats() {
     if (!whatsKey) return
@@ -371,7 +386,18 @@ function KitWhatsapp() {
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text: texto, voiceName: vozRef.current }),
+          body: JSON.stringify(
+          modoDialogoRef.current
+            ? {
+                // Cena de 2 vozes: a pergunta do card na voz do cliente, a resposta na da marca.
+                text: montarTranscricao([
+                  { quem: FALANTE_CLIENTE, texto: respostasRef.current[idx]?.pergunta || '' },
+                  { quem: FALANTE_DONO, texto },
+                ]),
+                falantes: falantesParaApi({ [FALANTE_CLIENTE]: vozClienteRef.current, [FALANTE_DONO]: vozRef.current }),
+              }
+            : { text: texto, voiceName: vozRef.current },
+        ),
         },
         {
           maxTotalWaitMs: opts.emFila ? 0 : 20000,
@@ -769,6 +795,33 @@ function KitWhatsapp() {
     navigate({ to: '/kit-whatsapp', search: {} })
   }
 
+  function outraVoz(atual: string): string {
+    return GEMINI_VOICES_TEXTO_LONGO.find((v) => v.voice_id !== atual)?.voice_id || atual
+  }
+
+  // Mudou o formato do áudio (1 voz ↔ diálogo, ou a voz do cliente): os áudios já
+  // gerados não correspondem mais — descarta, igual à troca de voz.
+  function descartarAudios() {
+    pararAudioAtivo()
+    setAudioBlobs({})
+    setOggCache({})
+    setLote({ ativo: false, aviso: '' })
+    setAvisoTodos('')
+  }
+
+  function trocarModoDialogo(ligar: boolean) {
+    if (ligar === modoDialogo) return
+    if (ligar && vozCliente === voz) setVozCliente(outraVoz(voz))
+    setModoDialogo(ligar)
+    descartarAudios()
+  }
+
+  function trocarVozCliente(nova: string) {
+    if (nova === vozCliente || nova === voz) return
+    setVozCliente(nova)
+    descartarAudios()
+  }
+
   async function copiar(texto: string, idx: number | 'tudo') {
     try {
       await navigator.clipboard.writeText(texto)
@@ -989,7 +1042,7 @@ function KitWhatsapp() {
                     <button
                       key={v.voice_id}
                       type="button"
-                      disabled={lote.ativo || !!empacotando}
+                      disabled={lote.ativo || !!empacotando || gerandoAudio !== null || convertingIndex !== null}
                       onClick={() => {
                         if (voz === v.voice_id) return
                         pararAudioAtivo()
@@ -1111,7 +1164,7 @@ function KitWhatsapp() {
                           <button
                             key={v.voice_id}
                             type="button"
-                            disabled={lote.ativo || !!empacotando}
+                            disabled={lote.ativo || !!empacotando || gerandoAudio !== null || convertingIndex !== null}
                             onClick={() => {
                               if (voz === v.voice_id) return
                               // Trocar de voz invalida os áudios já gerados — eles nasceram na outra voz.
@@ -1143,6 +1196,55 @@ function KitWhatsapp() {
                   >
                     {copiadoTudo ? <><Check className="w-3.5 h-3.5" /> Kit copiado</> : <><Copy className="w-3.5 h-3.5" /> Copiar kit inteiro</>}
                   </button>
+                </div>
+
+                {/* Diálogo (28/09): o cliente pergunta numa voz, a marca responde na outra. */}
+                <div className="bg-[#111111] border border-gray-800 rounded-xl p-3 space-y-2">
+                  <label className="flex items-center gap-2 text-sm text-gray-300 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={modoDialogo}
+                      // Também trava com um áudio/OGG em andamento: senão ele chega DEPOIS do
+                      // descarte e fica no cache do modo novo (áudio de 1 voz rotulado diálogo).
+                      disabled={lote.ativo || !!empacotando || gerandoAudio !== null || convertingIndex !== null}
+                      onChange={(e) => trocarModoDialogo(e.target.checked)}
+                      className="w-4 h-4 accent-[#22C55E]"
+                    />
+                    🎭 Diálogo: o cliente pergunta, a marca responde (2 vozes)
+                  </label>
+                  {modoDialogo && (
+                    <>
+                      <div className="flex flex-wrap items-center gap-2 text-xs">
+                        <span className="text-gray-400">Voz do cliente:</span>
+                        {GEMINI_VOICES_TEXTO_LONGO.map((v) => {
+                          const ativo = vozCliente === v.voice_id
+                          const daMarca = voz === v.voice_id
+                          return (
+                            <button
+                              key={v.voice_id}
+                              type="button"
+                              onClick={() => trocarVozCliente(v.voice_id)}
+                              disabled={daMarca || lote.ativo || !!empacotando || gerandoAudio !== null || convertingIndex !== null}
+                              aria-pressed={ativo}
+                              title={daMarca ? 'Esta é a voz da marca — escolha outra pro cliente' : undefined}
+                              className={`rounded-full border px-3 py-1.5 transition-colors disabled:opacity-40 ${
+                                ativo
+                                  ? 'border-[#8B5CF6] bg-[#8B5CF6]/15 text-white'
+                                  : 'border-gray-700 bg-[#0A0A0A] text-gray-400 hover:border-gray-500 hover:text-white'
+                              }`}
+                            >
+                              {v.name}
+                            </button>
+                          )
+                        })}
+                        <span className="text-gray-500">· voz da marca: {voz} (escolha acima)</span>
+                      </div>
+                      <p className="text-xs text-amber-400">
+                        Ótimo pra divulgação, como no spot. Pra responder um cliente de verdade, prefira uma voz só —
+                        senão ele ouve outra pessoa fazendo a pergunta dele.
+                      </p>
+                    </>
+                  )}
                 </div>
 
                 {/* Fatia 1.4: todos os áudios de uma vez — em FILA (um por vez, com pausa; a IA
