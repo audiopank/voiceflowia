@@ -97,6 +97,13 @@ REGRAS OBRIGATÓRIAS:
 - Assunto até 60 caracteres, sem caixa alta e sem clickbait. Pré-visualização até 90.
 - Sem hashtags, sem emojis em excesso (no máximo 1 no assunto e 2 no corpo).
 - Esta ferramenta entrega texto + locução; nunca prometa vídeo.
+- Nunca use "automação", "automatize", "automático", "robô", "bot" nem "atendimento
+  automatizado" — nem em título. Quem fala com o cliente é o dono (auditoria 28/09: a
+  newsletter titulou "Automatize as respostas do WhatsApp" num produto que promete "não é robô").
+- Nunca afirme resultado, alcance ou prova social que não esteja nos posts/fatos
+  ("estamos ajudando empresários a…", "milhares de clientes", "aumente suas vendas").
+- Não cite página, vitrine, site ou link que não apareça nos posts/fatos; se citar um que
+  aparece, escreva o endereço completo.
 
 Responda apenas o JSON.`
 }
