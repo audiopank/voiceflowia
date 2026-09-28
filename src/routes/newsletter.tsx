@@ -269,7 +269,7 @@ function NewsletterPage() {
                   : memoria === null
                     ? 'Lendo sua Memória da Marca…'
                     : !nicho.trim()
-                      ? 'Informe o negócio pra eu achar os posts que você já publicou.'
+                      ? 'Informe o negócio pra eu achar os posts que você já criou aqui.'
                       : periodo && periodo.posts.length > 0
                         ? `A newsletter vai nascer de ${periodo.posts.length} ${periodo.posts.length === 1 ? 'post' : 'posts'} que você gerou nesse período (${periodo.kits} ${periodo.kits === 1 ? 'geração' : 'gerações'}), mais os fatos abaixo.`
                         : 'Nenhum post desse negócio no período. A newsletter sai curta, só com os fatos que você informar — sem fingir novidade.'}
