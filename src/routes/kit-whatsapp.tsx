@@ -11,7 +11,7 @@ import { Button } from '../components/ui/button'
 import { BackButton } from '../components/BackButton'
 import { TONS, TOM_PADRAO } from '../lib/tons'
 import { GEMINI_VOICES_TEXTO_LONGO } from '../lib/voices'
-import { convertToWhatsAppOgg } from '../lib/audioConvert'
+import { convertToWhatsAppOgg, convertVoiceToMp3 } from '../lib/audioConvert'
 import { realcarVoz } from '../lib/estudioCards'
 import { brandWhatsappKey, loadBrandWhatsapp, saveBrandWhatsapp, whatsappIncompleto, buildWaLink } from '../lib/brandWhatsapp'
 import JSZip from 'jszip'
@@ -56,6 +56,25 @@ const PERGUNTAS_PADRAO = [
 
 const MAX_PERGUNTAS = 15
 
+// Objeções de venda (29/09): o que mais trava a venda no WhatsApp. A regra de ouro
+// vale igual: sem desconto/parcelamento nos FATOS, a resposta não oferece.
+const PACOTE_OBJECOES = [
+  'Está caro.',
+  'Vou pensar e te falo.',
+  'Tem desconto?',
+  'Posso pagar depois?',
+  'Quanto demora?',
+]
+
+// Formato do arquivo baixado (29/09, pedido de um prospect): OGG é o único que o
+// WhatsApp toca como mensagem de voz; MP3 e WAV servem pra Instagram, site, rádio e edição.
+type FormatoAudio = 'ogg' | 'mp3' | 'wav'
+const FORMATOS: { id: FormatoAudio; rotulo: string; dica: string }[] = [
+  { id: 'ogg', rotulo: 'WhatsApp (.ogg)', dica: 'chega como mensagem de voz' },
+  { id: 'mp3', rotulo: 'MP3', dica: 'Instagram, site, qualquer player' },
+  { id: 'wav', rotulo: 'WAV', dica: 'qualidade máxima, pra editar' },
+]
+
 // Pausa entre pedidos da fila "Gerar todos os áudios": cadência, não rajada.
 const PAUSA_ENTRE_AUDIOS_MS = 1500
 
@@ -87,6 +106,11 @@ function KitWhatsapp() {
   const [cta, setCta] = useState('')
   const [perguntas, setPerguntas] = useState<string[]>(PERGUNTAS_PADRAO)
   const [novaPergunta, setNovaPergunta] = useState('')
+  const [formato, setFormato] = useState<FormatoAudio>('ogg')
+  // Resposta rápida: a pergunta que o cliente ACABOU de mandar vira uma resposta nova no kit.
+  const [rapida, setRapida] = useState('')
+  const [gerandoRapida, setGerandoRapida] = useState(false)
+  const [rapidaAviso, setRapidaAviso] = useState<{ tipo: 'ok' | 'erro'; msg: string } | null>(null)
   const [voz, setVoz] = useState('Zephyr')
   // Diálogo (28/09): a pergunta na voz do CLIENTE, a resposta na voz da MARCA (`voz`).
   const [modoDialogo, setModoDialogo] = useState(false)
@@ -149,6 +173,16 @@ function KitWhatsapp() {
   const oggCacheRef = useRef(oggCache)
   oggCacheRef.current = oggCache
   const ultimoErroAudioRef = useRef('')
+  // Fila de conversão (29/09): o FFmpeg.wasm é um só e os conversores usam nomes de
+  // arquivo fixos (input.wav / voz.wav). Dois "Baixar" em respostas diferentes (ou um
+  // Baixar durante o ZIP) intercalavam writeFile/exec e um arquivo podia sair com o
+  // áudio do outro. Aqui cada conversão espera a anterior terminar.
+  const conversaoRef = useRef<Promise<unknown>>(Promise.resolve())
+  function naFilaDeConversao<T>(tarefa: () => Promise<T>): Promise<T> {
+    const vez = conversaoRef.current.then(tarefa, tarefa)
+    conversaoRef.current = vez.catch(() => undefined)
+    return vez
+  }
   // Fila "Gerar todos os áudios" (fatia 1.4, 25/09): um por vez, com pausa. Se a IA
   // travar, para com honestidade, guarda o que saiu e oferece continuar de onde parou.
   const [lote, setLote] = useState<{ ativo: boolean; aviso: string }>({ ativo: false, aviso: '' })
@@ -279,8 +313,17 @@ function KitWhatsapp() {
     setPerguntas((prev) => prev.filter((_, i) => i !== idx))
   }
 
+  // Acrescenta as objeções que ainda não estão na lista, até o teto de perguntas.
+  function adicionarObjecoes() {
+    setPerguntas((prev) => {
+      const ja = new Set(prev.map((p) => p.trim().toLowerCase()))
+      const novas = PACOTE_OBJECOES.filter((o) => !ja.has(o.toLowerCase()))
+      return [...prev, ...novas].slice(0, MAX_PERGUNTAS)
+    })
+  }
+
   async function handleGerar() {
-    if (!nicho.trim() || perguntas.length === 0 || gerando) return
+    if (!nicho.trim() || perguntas.length === 0 || gerando || gerandoRapida) return
 
     // Trial: o kit de texto consome 1 das 10 gerações (é conteúdo de IA). O áudio,
     // depois, é livre — regra da casa: conteúdo conta, voz não.
@@ -474,13 +517,12 @@ function KitWhatsapp() {
     if (!blob) return
     setConvertingIndex(idx)
     try {
-      const ogg = await convertToWhatsAppOgg(blob, 'wav')
-      // Já deixa pronto pro "Compartilhar áudio": Baixar → Compartilhar não converte 2x.
-      setOggCache((prev) => ({ ...prev, [idx]: ogg }))
-      const url = URL.createObjectURL(ogg)
+      const arquivo = await arquivoNoFormato(idx, formato)
+      if (!arquivo) throw new Error('sem áudio')
+      const url = URL.createObjectURL(arquivo.blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = nomeOgg(idx)
+      a.download = nomeArquivo(idx, arquivo.ext)
       document.body.appendChild(a)
       a.click()
       document.body.removeChild(a)
@@ -516,7 +558,7 @@ function KitWhatsapp() {
     if (!blob) return
     setConvertingIndex(idx)
     try {
-      const ogg = await convertToWhatsAppOgg(blob, 'wav')
+      const ogg = await naFilaDeConversao(() => convertToWhatsAppOgg(blob, 'wav'))
       setOggCache((prev) => ({ ...prev, [idx]: ogg }))
     } catch (err) {
       console.error('=== ERRO ao preparar áudio pra compartilhar (kit) ===', err)
@@ -526,8 +568,26 @@ function KitWhatsapp() {
     }
   }
 
+  function nomeArquivo(idx: number, ext: string): string {
+    return `${String(idx + 1).padStart(2, '0')}-${slug(respostasRef.current[idx]?.pergunta || '') || 'resposta'}.${ext}`
+  }
+
   function nomeOgg(idx: number): string {
-    return `${String(idx + 1).padStart(2, '0')}-${slug(respostasRef.current[idx]?.pergunta || '') || 'resposta'}.ogg`
+    return nomeArquivo(idx, 'ogg')
+  }
+
+  // Áudio desta resposta no formato pedido. OGG reaproveita o cache do compartilhar;
+  // MP3 pode cair pra WAV se o conversor falhar — o nome do arquivo diz a verdade (ext).
+  async function arquivoNoFormato(idx: number, f: FormatoAudio): Promise<{ blob: Blob; ext: string } | null> {
+    if (f === 'ogg') {
+      const ogg = await obterOgg(idx)
+      return ogg ? { blob: ogg, ext: 'ogg' } : null
+    }
+    const wav = audioBlobsRef.current[idx]
+    if (!wav) return null
+    if (f === 'wav') return { blob: wav, ext: 'wav' }
+    const { blob, ext } = await naFilaDeConversao(() => convertVoiceToMp3(wav))
+    return { blob, ext }
   }
 
   // Um share por vez (regra da Web Share API). Chamado SÍNCRONO dentro do clique.
@@ -577,7 +637,7 @@ function KitWhatsapp() {
     if (emCache) return emCache
     const blob = audioBlobsRef.current[idx]
     if (!blob) return null
-    const ogg = await convertToWhatsAppOgg(blob, 'wav')
+    const ogg = await naFilaDeConversao(() => convertToWhatsAppOgg(blob, 'wav'))
     oggCacheRef.current = { ...oggCacheRef.current, [idx]: ogg }
     setOggCache((prev) => ({ ...prev, [idx]: ogg }))
     return ogg
@@ -666,8 +726,8 @@ function KitWhatsapp() {
       zip.file('respostas.txt', textoDoKit())
       for (let n = 0; n < indices.length; n++) {
         setZipProgresso(`Empacotando ${n + 1} de ${indices.length}…`)
-        const ogg = await obterOgg(indices[n])
-        if (ogg) zip.file(nomeOgg(indices[n]), ogg)
+        const arquivo = await arquivoNoFormato(indices[n], formato)
+        if (arquivo) zip.file(nomeArquivo(indices[n], arquivo.ext), arquivo.blob)
       }
       const content = await zip.generateAsync({ type: 'blob' })
       const url = URL.createObjectURL(content)
@@ -822,6 +882,66 @@ function KitWhatsapp() {
     descartarAudios()
   }
 
+  // RESPOSTA RÁPIDA (29/09): o dono cola a pergunta que o cliente acabou de mandar e
+  // recebe a resposta com os MESMOS fatos do kit. Ela entra no fim do kit (texto, áudio,
+  // baixar e compartilhar como as outras) e é salva em Meus Kits. Conteúdo = 1 geração no trial.
+  async function gerarRespostaRapida() {
+    const q = rapida.trim()
+    if (!q || gerandoRapida || gerando || lote.ativo || !!empacotando) return
+    if (!nicho.trim()) { setRapidaAviso({ tipo: 'erro', msg: 'Preencha o seu negócio e os fatos da marca antes.' }); return }
+    if (respostasRef.current.length >= MAX_PERGUNTAS) {
+      setRapidaAviso({ tipo: 'erro', msg: `O kit já tem ${MAX_PERGUNTAS} respostas. Remova uma pergunta e gere de novo, ou comece um kit novo.` })
+      return
+    }
+    // Trava ANTES do débito do trial: Enter duplo não cobra 2 gerações.
+    setGerandoRapida(true)
+    setRapidaAviso(null)
+    if (trial.isTrial) {
+      const { error: trialErr } = await supabase.rpc('use_trial_generation')
+      if (trialErr) {
+        await refresh()
+        setRapidaAviso({ tipo: 'erro', msg: 'Seu trial acabou. Assine para continuar gerando.' })
+        setGerandoRapida(false)
+        return
+      }
+    }
+    try {
+      const response = await fetchWithRetry(
+        '/api/gemini/gerar-kit-whatsapp',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ nicho, tom, fatos, diferenciais, cta, perguntas: [q] }),
+        },
+        { retries: 1 },
+      )
+      if (!response.ok) {
+        const errData = await response.json().catch(() => null)
+        throw new Error(friendlyApiError(response.status, errData?.error))
+      }
+      const data = await safeJson(response)
+      const texto = typeof data?.respostas?.[0]?.resposta === 'string' ? data.respostas[0].resposta.trim() : ''
+      if (!texto) throw new Error('A IA não devolveu a resposta. Tente de novo.')
+      const posicao = respostasRef.current.length + 1
+      const nova = [...respostasRef.current, { pergunta: q, resposta: texto }]
+      respostasRef.current = nova
+      setRespostas(nova)
+      setPerguntas((prev) => (prev.some((p) => p.trim().toLowerCase() === q.toLowerCase()) ? prev : [...prev, q].slice(0, MAX_PERGUNTAS)))
+      setRapida('')
+      setRapidaAviso({ tipo: 'ok', msg: `Pronta! Entrou no fim do kit como resposta nº ${posicao} — confira, gere o áudio e envie.` })
+      agendarAutosave()
+      if (trial.isTrial) void refresh()
+    } catch (err) {
+      if (trial.isTrial) {
+        await devolverGeracaoTrial()
+        void refresh()
+      }
+      setRapidaAviso({ tipo: 'erro', msg: err instanceof Error ? err.message : 'Não consegui gerar a resposta agora.' })
+    } finally {
+      setGerandoRapida(false)
+    }
+  }
+
   async function copiar(texto: string, idx: number | 'tudo') {
     try {
       await navigator.clipboard.writeText(texto)
@@ -877,7 +997,7 @@ function KitWhatsapp() {
     )
   }
 
-  const podeGerar = nicho.trim().length > 0 && perguntas.length > 0 && !gerando && !lote.ativo && !empacotando
+  const podeGerar = nicho.trim().length > 0 && perguntas.length > 0 && !gerando && !gerandoRapida && !lote.ativo && !empacotando
   const prontos = respostas.reduce((n, _, i) => n + (audioBlobs[i] ? 1 : 0), 0)
   const faltam = respostas.filter((r, i) => r.resposta.trim() && !audioBlobs[i]).length
   const todosOggProntos = prontos > 0 && respostas.every((_, i) => !audioBlobs[i] || !!oggCache[i])
@@ -1032,6 +1152,16 @@ function KitWhatsapp() {
                 </div>
               )}
             </div>
+
+            {perguntas.length < MAX_PERGUNTAS && PACOTE_OBJECOES.some((o) => !perguntas.some((p) => p.trim().toLowerCase() === o.toLowerCase())) && (
+              <button
+                type="button"
+                onClick={adicionarObjecoes}
+                className="-mt-3 text-xs text-[#F59E0B] hover:text-white flex items-center gap-1"
+              >
+                <Plus className="w-3.5 h-3.5" /> Adicionar respostas pra objeções (“Está caro”, “Vou pensar”, “Tem desconto?”…)
+              </button>
+            )}
 
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-2">🎙️ Voz dos áudios</label>
@@ -1198,6 +1328,56 @@ function KitWhatsapp() {
                   </button>
                 </div>
 
+                {/* Resposta rápida (29/09): a pergunta que o cliente acabou de mandar. */}
+                <div className="bg-[#111111] border border-[#F59E0B]/40 rounded-xl p-3 space-y-2">
+                  <label className="block text-sm font-medium text-gray-300">⚡ Resposta rápida — cole a pergunta que o cliente acabou de mandar</label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={rapida}
+                      onChange={(e) => setRapida(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void gerarRespostaRapida() } }}
+                      placeholder="Ex: Vocês atendem domingo?"
+                      maxLength={200}
+                      className="flex-1 bg-[#0A0A0A] border border-gray-800 rounded-lg px-3 py-2 text-white placeholder-gray-600 focus:border-[#F59E0B] focus:outline-none text-sm"
+                    />
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={() => void gerarRespostaRapida()}
+                      disabled={!rapida.trim() || gerandoRapida || gerando || lote.ativo || !!empacotando}
+                      className="bg-[#F59E0B] hover:bg-[#D97706]"
+                    >
+                      {gerandoRapida ? <><Loader2 className="w-4 h-4 mr-1 animate-spin" /> Respondendo…</> : <><Sparkles className="w-4 h-4 mr-1" /> Responder</>}
+                    </Button>
+                  </div>
+                  <p className={`text-xs ${rapidaAviso?.tipo === 'erro' ? 'text-amber-400' : rapidaAviso?.tipo === 'ok' ? 'text-[#22C55E]' : 'text-gray-500'}`}>
+                    {rapidaAviso?.msg || `Usa os mesmos fatos do kit — sem o fato, a resposta pede o dado ao cliente.${trial.isTrial ? ` Usa 1 das suas ${trial.generationsLeft} gerações do teste grátis.` : ''}`}
+                  </p>
+                </div>
+
+                {/* Formato do áudio baixado (29/09). */}
+                <div className="flex flex-wrap items-center gap-2 text-xs">
+                  <span className="text-gray-400">⬇️ Formato do download:</span>
+                  {FORMATOS.map((f) => (
+                    <button
+                      key={f.id}
+                      type="button"
+                      onClick={() => setFormato(f.id)}
+                      aria-pressed={formato === f.id}
+                      title={f.dica}
+                      className={`rounded-full border px-3 py-1.5 transition-colors ${
+                        formato === f.id
+                          ? 'border-[#22C55E] bg-[#22C55E]/15 text-white'
+                          : 'border-gray-700 bg-[#111111] text-gray-400 hover:border-gray-500 hover:text-white'
+                      }`}
+                    >
+                      {f.rotulo}
+                    </button>
+                  ))}
+                  <span className="text-gray-500">{FORMATOS.find((f) => f.id === formato)?.dica}</span>
+                </div>
+
                 {/* Diálogo (28/09): o cliente pergunta numa voz, a marca responde na outra. */}
                 <div className="bg-[#111111] border border-gray-800 rounded-xl p-3 space-y-2">
                   <label className="flex items-center gap-2 text-sm text-gray-300 cursor-pointer">
@@ -1293,7 +1473,7 @@ function KitWhatsapp() {
                         {empacotando === 'zip' ? (
                           <><Loader2 className="w-4 h-4 mr-1 animate-spin" /> {zipProgresso || 'Empacotando…'}</>
                         ) : (
-                          <><Download className="w-4 h-4 mr-1" /> Baixar todos ({prontos} .ogg em ZIP)</>
+                          <><Download className="w-4 h-4 mr-1" /> Baixar todos ({prontos} .{formato} em ZIP)</>
                         )}
                       </Button>
                     )}
@@ -1381,7 +1561,7 @@ function KitWhatsapp() {
                           {convertingIndex === idx ? (
                             <><Loader2 className="w-4 h-4 mr-1 animate-spin" /> Preparando…</>
                           ) : (
-                            <><Download className="w-4 h-4 mr-1" /> Baixar pro WhatsApp</>
+                            <><Download className="w-4 h-4 mr-1" /> {formato === 'ogg' ? 'Baixar pro WhatsApp' : `Baixar ${formato.toUpperCase()}`}</>
                           )}
                         </Button>
                         <Button
