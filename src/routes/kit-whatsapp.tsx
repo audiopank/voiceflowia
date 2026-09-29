@@ -55,6 +55,10 @@ const PERGUNTAS_PADRAO = [
 ]
 
 const MAX_PERGUNTAS = 15
+// Teto do kit com as respostas rápidas (29/09): as 15 perguntas-base são o limite de UMA
+// geração; a resposta rápida é uma chamada à parte, então o kit cresce até 25 — senão
+// quem usou o pacote de objeções ficava sem a ferramenta de todo dia.
+const MAX_RESPOSTAS_KIT = 25
 
 // Objeções de venda (29/09): o que mais trava a venda no WhatsApp. A regra de ouro
 // vale igual: sem desconto/parcelamento nos FATOS, a resposta não oferece.
@@ -246,7 +250,7 @@ function KitWhatsapp() {
       setCta(kit.cta)
       if (TONS.some((t) => t.value === kit.tom)) setTom(kit.tom)
       if (GEMINI_VOICES_TEXTO_LONGO.some((v) => v.voice_id === kit.voz)) setVoz(kit.voz)
-      if (kit.respostas.length > 0) setPerguntas(kit.respostas.map((r) => r.pergunta))
+      if (kit.respostas.length > 0) setPerguntas(kit.respostas.map((r) => r.pergunta).slice(0, MAX_PERGUNTAS))
       setRespostas(kit.respostas)
       setAudioBlobs({})
       setOggCache({})
@@ -889,8 +893,8 @@ function KitWhatsapp() {
     const q = rapida.trim()
     if (!q || gerandoRapida || gerando || lote.ativo || !!empacotando) return
     if (!nicho.trim()) { setRapidaAviso({ tipo: 'erro', msg: 'Preencha o seu negócio e os fatos da marca antes.' }); return }
-    if (respostasRef.current.length >= MAX_PERGUNTAS) {
-      setRapidaAviso({ tipo: 'erro', msg: `O kit já tem ${MAX_PERGUNTAS} respostas. Remova uma pergunta e gere de novo, ou comece um kit novo.` })
+    if (respostasRef.current.length >= MAX_RESPOSTAS_KIT) {
+      setRapidaAviso({ tipo: 'erro', msg: `O kit chegou ao limite de ${MAX_RESPOSTAS_KIT} respostas. Comece um kit novo pra continuar.` })
       return
     }
     // Trava ANTES do débito do trial: Enter duplo não cobra 2 gerações.
@@ -928,7 +932,7 @@ function KitWhatsapp() {
       setRespostas(nova)
       setPerguntas((prev) => (prev.some((p) => p.trim().toLowerCase() === q.toLowerCase()) ? prev : [...prev, q].slice(0, MAX_PERGUNTAS)))
       setRapida('')
-      setRapidaAviso({ tipo: 'ok', msg: `Pronta! Entrou no fim do kit como resposta nº ${posicao} — confira, gere o áudio e envie.` })
+      setRapidaAviso({ tipo: 'ok', msg: `Pronta! Entrou no fim do kit como resposta nº ${posicao} — confira, gere o áudio e envie.${posicao > MAX_PERGUNTAS ? ` (Acima de ${MAX_PERGUNTAS}, ela fica salva no kit, mas o “Gerar de novo” refaz só as ${MAX_PERGUNTAS} perguntas-base.)` : ''}` })
       agendarAutosave()
       if (trial.isTrial) void refresh()
     } catch (err) {
