@@ -5,8 +5,7 @@
 export const maxDuration = 60
 
 import { createClient } from '@supabase/supabase-js'
-
-const GEMINI_MODEL = 'gemini-3.5-flash'
+import { gerarComReserva } from '../_lib/geminiReserva.js'
 
 interface Mencao {
   fonte: string
@@ -157,47 +156,28 @@ function reputationScore(s: SentCount): number {
 // Chama o Gemini com RETRY: o free tier engasga (429/timeout) com frequência e uma 2ª
 // tentativa costuma pegar. Em caso de erro HTTP, inclui o motivo real do Google (ex:
 // "quota exceeded") na mensagem — pra diagnóstico, em vez de só "Gemini 429".
-async function geminiJson(apiKey: string, prompt: string, schema: any, attempts = 2): Promise<any> {
-  let lastErr: unknown = null
-  for (let i = 0; i < attempts; i++) {
-    try {
-      const res = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: [{ parts: [{ text: prompt }] }],
-            generationConfig: { responseMimeType: 'application/json', responseSchema: schema },
-          }),
-          signal: AbortSignal.timeout(20_000),
-        }
-      )
-      if (!res.ok) {
-        const body = await res.text().catch(() => '')
-        let detalhe = ''
-        try {
-          detalhe = JSON.parse(body)?.error?.message || ''
-        } catch {
-          detalhe = body.slice(0, 140)
-        }
-        const httpErr = new Error(`Gemini ${res.status}${detalhe ? `: ${detalhe}` : ''}`)
-        ;(httpErr as any).status = res.status
-        throw httpErr
-      }
-      const data: any = await res.json()
-      const text = data.candidates?.[0]?.content?.parts?.find((p: any) => typeof p.text === 'string')?.text
-      if (!text) throw new Error('Gemini sem conteúdo')
-      return JSON.parse(text)
-    } catch (err) {
-      lastErr = err
-      // 429 = cota estourada: a janela só reseta em ~37s e retentar em 1.5s só queima outra
-      // das 20 req/min do free tier. Não retenta (só timeout/rede/5xx é que vale retry).
-      if ((err as any)?.status === 429) break
-      if (i < attempts - 1) await new Promise((r) => setTimeout(r, 1500))
-    }
+// 13/10/2026: a "2ª tentativa no mesmo modelo" virou MODELO RESERVA (api/_lib/geminiReserva):
+// fila e cota são por modelo, então tentar OUTRO modelo pega bem mais que repetir o mesmo.
+// Perfil 'curto' (até 22s): as 3 chamadas do relatório rodam em paralelo e cabem no maxDuration.
+// `_tentativas` ficou só pela assinatura dos chamadores antigos.
+async function geminiJson(apiKey: string, prompt: string, schema: any, _tentativas = 2): Promise<any> {
+  const r = await gerarComReserva({
+    apiKey,
+    rotulo: 'radar/generate-report',
+    perfil: 'curto',
+    corpo: {
+      contents: [{ parts: [{ text: prompt }] }],
+      generationConfig: { responseMimeType: 'application/json', responseSchema: schema },
+    },
+    aceita: (t) => typeof JSON.parse(t) === 'object',
+  })
+  if (!r.ok) {
+    // Mantém o contrato: lança com o motivo real (a UI mostra no "Detalhe técnico").
+    const erro = new Error(`Gemini ${r.status}${r.motivo ? `: ${r.motivo}` : ''}`)
+    ;(erro as any).status = r.status
+    throw erro
   }
-  throw lastErr instanceof Error ? lastErr : new Error('Gemini falhou')
+  return JSON.parse(r.texto)
 }
 
 // Análise de reputação dos concorrentes (dado já capturado na config, antes ignorado).

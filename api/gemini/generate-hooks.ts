@@ -1,3 +1,5 @@
+import { gerarComReserva, respostaDeFalha } from '../_lib/geminiReserva.js'
+
 export const config = {
   runtime: 'edge'
 }
@@ -71,44 +73,22 @@ export default async function handler(request: Request): Promise<Response> {
 
     const objetivoFinal = typeof objetivo === 'string' ? objetivo.trim() : ''
 
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: buildPrompt(nicho.trim(), objetivoFinal) }] }],
-          generationConfig: {
-            responseMimeType: 'application/json',
-            responseSchema: RESPONSE_SCHEMA
-          }
-        })
-      }
-    )
+    const r = await gerarComReserva({
+      apiKey,
+      rotulo: 'generate-hooks',
+      perfil: 'curto',
+      corpo: {
+        contents: [{ parts: [{ text: buildPrompt(nicho.trim(), objetivoFinal) }] }],
+        generationConfig: {
+          responseMimeType: 'application/json',
+          responseSchema: RESPONSE_SCHEMA
+        }
+      },
+      aceita: (t) => Array.isArray(JSON.parse(t)?.hooks)
+    })
+    if (!r.ok) return respostaDeFalha(r)
 
-    if (!response.ok) {
-      const errorData = await response.text()
-      console.error('Erro Gemini (generate-hooks):', errorData)
-      let detail = ''
-      try {
-        detail = JSON.parse(errorData)?.error?.message || ''
-      } catch {
-        // corpo não era JSON, ignora
-      }
-      return new Response(
-        JSON.stringify({ error: detail || `Erro na API Gemini: ${response.status}` }),
-        { status: response.status, headers: { 'Content-Type': 'application/json' } }
-      )
-    }
-
-    const data = await response.json()
-    const textPart = data.candidates?.[0]?.content?.parts?.find((p: any) => typeof p.text === 'string')
-
-    if (!textPart) {
-      throw new Error('Nenhuma ideia retornada pela API')
-    }
-
-    const parsed = JSON.parse(textPart.text)
+    const parsed = JSON.parse(r.texto)
 
     return new Response(JSON.stringify({ hooks: parsed.hooks }), {
       headers: { 'Content-Type': 'application/json' }

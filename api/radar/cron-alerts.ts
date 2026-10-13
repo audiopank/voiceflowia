@@ -6,8 +6,8 @@
 export const maxDuration = 60
 
 import { createClient } from '@supabase/supabase-js'
+import { gerarComReserva } from '../_lib/geminiReserva.js'
 
-const GEMINI_MODEL = 'gemini-3.5-flash'
 const MAX_CONFIGS = 25 // teto de segurança por execução (protege os créditos do Serper)
 
 interface Hit {
@@ -63,20 +63,17 @@ async function geminiClassify(apiKey: string, nicho: string, brand: string, hits
   }
   const prompt = `Analise reputação da marca "${brand}" (nicho "${nicho}"). Classifique cada menção como Positivo, Neutro, Negativo ou Crise (Crise = golpe/fraude/processo/escândalo). Marque "propria": true se quem publicou foi a própria marca ou alguém divulgando por ela (anúncio, post institucional, comunicado); false se é um terceiro falando sobre ela. Motivo em 1 frase. Array JSON com "indice", "classificacao", "propria", "motivo".\n\n${lista}`
   try {
-    const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { responseMimeType: 'application/json', responseSchema: schema } }),
-        signal: AbortSignal.timeout(40_000),
-      }
-    )
-    if (!res.ok) return
-    const data: any = await res.json()
-    const text = data.candidates?.[0]?.content?.parts?.find((p: any) => typeof p.text === 'string')?.text
-    if (!text) return
-    const arr = JSON.parse(text)
+    // Modelo reserva (13/10/2026). Perfil 'curto' (até 22s): o cron classifica várias marcas
+    // em série dentro do mesmo maxDuration.
+    const r = await gerarComReserva({
+      apiKey,
+      rotulo: 'radar/cron-alerts',
+      perfil: 'curto',
+      corpo: { contents: [{ parts: [{ text: prompt }] }], generationConfig: { responseMimeType: 'application/json', responseSchema: schema } },
+      aceita: (t) => Array.isArray(JSON.parse(t)),
+    })
+    if (!r.ok) return
+    const arr = JSON.parse(r.texto)
     if (Array.isArray(arr)) {
       for (const item of arr) {
         const idx = Number(item.indice)

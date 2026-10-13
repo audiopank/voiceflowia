@@ -9,6 +9,8 @@
 // Runtime Node.js (NAO Edge): Edge tem teto rígido de ~25s e IGNORA o `maxDuration`
 // (ver api/gemini/text-to-speech.ts). No Node o teto vale, mas o handler precisa ser
 // exportado como `export default { fetch: handler }`.
+import { gerarComReserva, respostaDeFalha } from '../_lib/geminiReserva.js'
+
 export const maxDuration = 60
 
 // Bio de rede social é curta por natureza, e a NewPost-IA mostra ela embaixo do nome no
@@ -84,42 +86,20 @@ async function handler(request: Request): Promise<Response> {
       )
     }
 
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`,
-      {
-        method: 'POST',
-        // Bio é resposta curta, mas o teto segue o padrão dos outros endpoints: uma Gemini
-        // pendurada sem timeout vira 504 em HTML, que o front não sabe interpretar.
-        signal: AbortSignal.timeout(30_000),
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: buildPrompt(marcaFinal, typeof nicho === 'string' ? nicho : '') }] }],
-        })
+    // Bio é resposta curta e o cliente espera na tela: perfil curto (até 22s).
+    const r = await gerarComReserva({
+      apiKey,
+      rotulo: 'gerar-bio',
+      perfil: 'curto',
+      corpo: {
+        contents: [{ parts: [{ text: buildPrompt(marcaFinal, typeof nicho === 'string' ? nicho : '') }] }]
       }
-    )
-
-    if (!response.ok) {
-      const errorData = await response.text()
-      console.error('Erro Gemini:', errorData)
-      let detail = ''
-      try {
-        detail = JSON.parse(errorData)?.error?.message || ''
-      } catch {
-        // corpo não era JSON, ignora
-      }
-      return new Response(
-        JSON.stringify({ error: detail || `Erro na API Gemini: ${response.status}` }),
-        { status: response.status, headers: { 'Content-Type': 'application/json' } }
-      )
-    }
-
-    const data = await response.json()
-    const textPart = data.candidates?.[0]?.content?.parts?.find((p: any) => typeof p.text === 'string')
-    if (!textPart) throw new Error('Nenhuma bio retornada pela API')
+    })
+    if (!r.ok) return respostaDeFalha(r)
 
     // A IA às vezes devolve com aspas ou quebra de linha mesmo sendo instruída a não fazer.
     const bio = cortarBio(
-      String(textPart.text)
+      String(r.texto)
         .replace(/^["'`\s]+|["'`\s]+$/g, '')
         .replace(/\s*\n+\s*/g, ' ')
         .trim()

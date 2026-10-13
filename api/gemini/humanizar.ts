@@ -1,3 +1,5 @@
+import { gerarComReserva, respostaDeFalha } from '../_lib/geminiReserva.js'
+
 export const config = {
   runtime: 'edge'
 }
@@ -62,41 +64,17 @@ export default async function handler(request: Request): Promise<Response> {
 
     const campoFinal = typeof campo === 'string' && CAMPO_LABEL[campo] ? campo : 'legenda'
 
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: buildPrompt(texto.trim(), campoFinal) }] }]
-        }),
-        signal: AbortSignal.timeout(45_000)
+    const r = await gerarComReserva({
+      apiKey,
+      rotulo: 'humanizar',
+      perfil: 'curto',
+      corpo: {
+        contents: [{ parts: [{ text: buildPrompt(texto.trim(), campoFinal) }] }]
       }
-    )
+    })
+    if (!r.ok) return respostaDeFalha(r)
 
-    if (!response.ok) {
-      const errorData = await response.text()
-      console.error('Erro Gemini (humanizar):', errorData)
-      let detail = ''
-      try {
-        detail = JSON.parse(errorData)?.error?.message || ''
-      } catch {
-        // corpo não era JSON, ignora
-      }
-      return new Response(
-        JSON.stringify({ error: detail || `Erro na API Gemini: ${response.status}` }),
-        { status: response.status, headers: { 'Content-Type': 'application/json' } }
-      )
-    }
-
-    const data = await response.json()
-    const textPart = data.candidates?.[0]?.content?.parts?.find((p: any) => typeof p.text === 'string')
-
-    if (!textPart) {
-      throw new Error('Nenhum texto retornado pela API')
-    }
-
-    return new Response(JSON.stringify({ texto: textPart.text.trim() }), {
+    return new Response(JSON.stringify({ texto: r.texto.trim() }), {
       headers: { 'Content-Type': 'application/json' }
     })
   } catch (error) {

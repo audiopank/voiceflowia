@@ -10,6 +10,8 @@
 // Runtime Node.js (NAO Edge): Edge tem teto rígido de ~25s e IGNORA o `maxDuration`
 // (ver api/gemini/text-to-speech.ts). No Node o teto vale, mas o handler precisa ser
 // exportado como `export default { fetch: handler }`.
+import { gerarComReserva, respostaDeFalha } from '../_lib/geminiReserva.js'
+
 export const maxDuration = 60
 
 // Os dois papéis são FIXOS de propósito. O TTS multi-locutor casa a fala com a voz
@@ -97,54 +99,34 @@ async function handler(request: Request): Promise<Response> {
       )
     }
 
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`,
-      {
-        method: 'POST',
-        // 50s deixa ~10s de folga dentro do maxDuration de 60: se a IA pendurar, a
-        // funcao ainda consegue devolver erro em JSON. Sem isso a Vercel mata a funcao
-        // e o cliente recebe o HTML de 504, que o front nao sabe interpretar.
-        signal: AbortSignal.timeout(50_000),
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [
-            {
-              parts: [{
-                text: buildPrompt(
-                  hookFinal,
-                  roteiroFinal,
-                  typeof nicho === 'string' ? nicho : '',
-                  typeof tom === 'string' && tom ? tom : 'Profissional'
-                )
-              }]
-            }
-          ],
-          generationConfig: {
-            responseMimeType: 'application/json',
-            responseSchema: RESPONSE_SCHEMA
+    // Reserva no perfil 'longo' (Node, maxDuration 60). `aceita` exige o JSON com falas:
+    // resposta cortada em MAX_TOKENS conta como falha e vai pro próximo modelo.
+    const r = await gerarComReserva({
+      apiKey,
+      rotulo: 'gerar-dialogo',
+      perfil: 'longo',
+      corpo: {
+        contents: [
+          {
+            parts: [{
+              text: buildPrompt(
+                hookFinal,
+                roteiroFinal,
+                typeof nicho === 'string' ? nicho : '',
+                typeof tom === 'string' && tom ? tom : 'Profissional'
+              )
+            }]
           }
-        })
-      }
-    )
-
-    if (!response.ok) {
-      const errorData = await response.text()
-      console.error('Erro Gemini:', errorData)
-      let detail = ''
-      try {
-        detail = JSON.parse(errorData)?.error?.message || ''
-      } catch {
-        // corpo não era JSON, ignora
-      }
-      return new Response(
-        JSON.stringify({ error: detail || `Erro na API Gemini: ${response.status}` }),
-        { status: response.status, headers: { 'Content-Type': 'application/json' } }
-      )
-    }
-
-    const data = await response.json()
-    const textPart = data.candidates?.[0]?.content?.parts?.find((p: any) => typeof p.text === 'string')
-    if (!textPart) throw new Error('Nenhum diálogo retornado pela API')
+        ],
+        generationConfig: {
+          responseMimeType: 'application/json',
+          responseSchema: RESPONSE_SCHEMA
+        }
+      },
+      aceita: (t) => Array.isArray(JSON.parse(t.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, ''))?.falas)
+    })
+    if (!r.ok) return respostaDeFalha(r)
+    const textPart = { text: r.texto }
 
     // responseSchema torna o JSON válido bem provável, mas não garantido (o modelo pode
     // cortar a resposta em MAX_TOKENS e devolver JSON truncado). Falhar aqui com mensagem

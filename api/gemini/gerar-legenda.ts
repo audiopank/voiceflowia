@@ -1,3 +1,5 @@
+import { gerarComReserva, respostaDeFalha } from '../_lib/geminiReserva.js'
+
 export const config = {
   runtime: 'edge'
 }
@@ -90,54 +92,29 @@ export default async function handler(request: Request): Promise<Response> {
     const contextoFinal = typeof contexto === 'string' ? contexto : ''
     const tamanhoFinal = typeof tamanho === 'string' ? tamanho : 'ideal'
 
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [
-            {
-              parts: [
-                { inline_data: { mime_type: mime, data: base64 } },
-                { text: buildPrompt(tomFinal, contextoFinal, tamanhoFinal) }
-              ]
-            }
-          ],
-          generationConfig: { responseMimeType: 'application/json' }
-        }),
-        // Sem timeout, um Gemini pendurado segura a função até o limite da plataforma
-        // e vira 504 sem mensagem; com ele, cai no catch e o cliente vê um erro claro.
-        signal: AbortSignal.timeout(45_000)
+    // Multimodal (foto + texto): os modelos "lite" da reserva também leem imagem.
+    const r = await gerarComReserva({
+      apiKey,
+      rotulo: 'gerar-legenda',
+      perfil: 'curto',
+      corpo: {
+        contents: [
+          {
+            parts: [
+              { inline_data: { mime_type: mime, data: base64 } },
+              { text: buildPrompt(tomFinal, contextoFinal, tamanhoFinal) }
+            ]
+          }
+        ],
+        generationConfig: { responseMimeType: 'application/json' }
       }
-    )
-
-    if (!response.ok) {
-      const errorData = await response.text()
-      console.error('Erro Gemini:', errorData)
-      let detail = ''
-      try {
-        detail = JSON.parse(errorData)?.error?.message || ''
-      } catch {
-        // corpo não era JSON, ignora
-      }
-      return new Response(
-        JSON.stringify({ error: detail || `Erro na API Gemini: ${response.status}` }),
-        { status: response.status, headers: { 'Content-Type': 'application/json' } }
-      )
-    }
-
-    const data = await response.json()
-    const textPart = data.candidates?.[0]?.content?.parts?.find((p: any) => typeof p.text === 'string')
-
-    if (!textPart) {
-      throw new Error('Nenhuma legenda retornada pela API')
-    }
+    })
+    if (!r.ok) return respostaDeFalha(r)
 
     // A IA responde JSON ({gancho, headline, legenda}), mas nunca confiamos cegamente:
     // se vier texto solto (modelo ignorou o formato), tratamos tudo como legenda e
     // derivamos a headline da primeira linha — a tela nunca fica sem card.
-    const raw = textPart.text.trim()
+    const raw = r.texto.trim()
     let gancho = ''
     let headline = ''
     let legenda = ''

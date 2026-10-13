@@ -1,3 +1,5 @@
+import { gerarComReserva, respostaDeFalha } from '../_lib/geminiReserva.js'
+
 export const config = {
   runtime: 'edge'
 }
@@ -65,44 +67,22 @@ export default async function handler(request: Request): Promise<Response> {
       )
     }
 
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: buildPrompt(nicho.trim()) }] }],
-          generationConfig: {
-            responseMimeType: 'application/json',
-            responseSchema: RESPONSE_SCHEMA
-          }
-        })
-      }
-    )
+    const r = await gerarComReserva({
+      apiKey,
+      rotulo: 'suggest-brand',
+      perfil: 'curto',
+      corpo: {
+        contents: [{ parts: [{ text: buildPrompt(nicho.trim()) }] }],
+        generationConfig: {
+          responseMimeType: 'application/json',
+          responseSchema: RESPONSE_SCHEMA
+        }
+      },
+      aceita: (t) => typeof JSON.parse(t) === 'object'
+    })
+    if (!r.ok) return respostaDeFalha(r)
 
-    if (!response.ok) {
-      const errorData = await response.text()
-      console.error('Erro Gemini (suggest-brand):', errorData)
-      let detail = ''
-      try {
-        detail = JSON.parse(errorData)?.error?.message || ''
-      } catch {
-        // corpo não era JSON, ignora
-      }
-      return new Response(
-        JSON.stringify({ error: detail || `Erro na API Gemini: ${response.status}` }),
-        { status: response.status, headers: { 'Content-Type': 'application/json' } }
-      )
-    }
-
-    const data = await response.json()
-    const textPart = data.candidates?.[0]?.content?.parts?.find((p: any) => typeof p.text === 'string')
-
-    if (!textPart) {
-      throw new Error('Nenhuma sugestão retornada pela API')
-    }
-
-    const suggestions = JSON.parse(textPart.text)
+    const suggestions = JSON.parse(r.texto)
 
     return new Response(JSON.stringify({ suggestions }), {
       headers: { 'Content-Type': 'application/json' }
