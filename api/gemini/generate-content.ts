@@ -7,6 +7,16 @@
 // `export default { fetch: handler }` (ver api/radar/cron-alerts.ts).
 export const maxDuration = 60
 
+// Cadeia de modelos (ordem = qualidade). Fila e cota são POR MODELO: quando o principal
+// está congestionado, os "lite" costumam responder. O orçamento corta antes dos 60s.
+const MODELOS: { id: string; tetoMs: number }[] = [
+  { id: 'gemini-3.5-flash', tetoMs: 28_000 },
+  { id: 'gemini-3.5-flash-lite', tetoMs: 16_000 },
+  { id: 'gemini-3.1-flash-lite', tetoMs: 16_000 }
+]
+const ORCAMENTO_MS = 54_000
+const MINIMO_TENTATIVA_MS = 8_000
+
 const RESPONSE_SCHEMA = {
   type: 'ARRAY',
   items: {
@@ -103,56 +113,81 @@ async function handler(request: Request): Promise<Response> {
     // Campanha/data sazonal é opcional e limitada — vira instrução no prompt.
     const campanhaFinal = typeof campanha === 'string' ? campanha.trim().slice(0, 200) : ''
 
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`,
-      {
-        method: 'POST',
-        // 50s deixa ~10s de folga dentro do maxDuration de 60: se a IA pendurar, a
-        // funcao ainda consegue devolver erro em JSON. Sem isso a Vercel mata a funcao e
-        // o cliente recebe o HTML de 504, que o front nao sabe interpretar.
-        signal: AbortSignal.timeout(50_000),
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [
-            {
-              parts: [{ text: buildPrompt(nicho, tomFinal, qtdFinal, campanhaFinal || undefined) }]
-            }
-          ],
-          generationConfig: {
-            responseMimeType: 'application/json',
-            responseSchema: RESPONSE_SCHEMA
-          }
-        })
+    const body = JSON.stringify({
+      contents: [
+        {
+          parts: [{ text: buildPrompt(nicho, tomFinal, qtdFinal, campanhaFinal || undefined) }]
+        }
+      ],
+      generationConfig: {
+        responseMimeType: 'application/json',
+        responseSchema: RESPONSE_SCHEMA
       }
-    )
-
-    if (!response.ok) {
-      const errorData = await response.text()
-      console.error('Erro Gemini:', errorData)
-      let detail = ''
-      try {
-        detail = JSON.parse(errorData)?.error?.message || ''
-      } catch {
-        // corpo não era JSON, ignora
-      }
-      return new Response(
-        JSON.stringify({ error: detail || `Erro na API Gemini: ${response.status}` }),
-        { status: response.status, headers: { 'Content-Type': 'application/json' } }
-      )
-    }
-
-    const data = await response.json()
-    const textPart = data.candidates?.[0]?.content?.parts?.find((p: any) => typeof p.text === 'string')
-
-    if (!textPart) {
-      throw new Error('Nenhum conteúdo retornado pela API')
-    }
-
-    const posts = JSON.parse(textPart.text)
-
-    return new Response(JSON.stringify({ posts }), {
-      headers: { 'Content-Type': 'application/json' }
     })
+
+    // MODELO RESERVA (13/10/2026): o 3.5-flash passou a tarde devolvendo 503 "high demand"
+    // e estourando os 50s — o Agente só sabia esse modelo e caía em "Erro ao gerar
+    // conteúdo". Mesma cadeia do Kit: em fila/cota/servidor/tempo, o MESMO pedido vai
+    // pro próximo modelo, tudo dentro do orçamento (o maxDuration de 60 mata a função).
+    const inicio = Date.now()
+    let ultimo = { status: 500, motivo: '', demorou: false }
+    for (let i = 0; i < MODELOS.length; i++) {
+      const restante = ORCAMENTO_MS - (Date.now() - inicio)
+      if (restante < MINIMO_TENTATIVA_MS) break
+      const { id, tetoMs } = MODELOS[i]
+      try {
+        const response = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/${id}:generateContent?key=${apiKey}`,
+          {
+            method: 'POST',
+            signal: AbortSignal.timeout(Math.min(tetoMs, restante)),
+            headers: { 'Content-Type': 'application/json' },
+            body
+          }
+        )
+        if (!response.ok) {
+          const errorData = await response.text()
+          console.error(`Erro Gemini (generate-content, ${id}):`, errorData.slice(0, 600))
+          let detail = ''
+          try {
+            detail = JSON.parse(errorData)?.error?.message || ''
+          } catch {
+            // corpo não era JSON, ignora
+          }
+          ultimo = { status: response.status, motivo: detail || `Erro na API Gemini: ${response.status}`, demorou: false }
+        } else {
+          const data = await response.json()
+          const textPart = data.candidates?.[0]?.content?.parts?.find((p: any) => typeof p.text === 'string')
+          const posts = textPart ? JSON.parse(textPart.text) : null
+          if (Array.isArray(posts) && posts.length > 0) {
+            if (i > 0) console.warn(`generate-content: gerado pelo RESERVA ${id}`)
+            return new Response(JSON.stringify({ posts, modelo: id, reserva: i > 0 }), {
+              headers: { 'Content-Type': 'application/json' }
+            })
+          }
+          ultimo = { status: 502, motivo: 'Nenhum conteúdo retornado pela API', demorou: false }
+        }
+      } catch (err) {
+        const demorou = (err as any)?.name === 'TimeoutError' || (err as any)?.name === 'AbortError'
+        console.error(`Falha em ${id} (generate-content):`, demorou ? 'timeout' : err)
+        ultimo = { status: demorou ? 504 : 502, motivo: demorou ? 'demorou demais' : 'resposta inválida da IA', demorou }
+      }
+      // Erro do pedido (400, chave) não muda de modelo pra modelo: não adianta insistir.
+      if (![429, 500, 502, 503, 504].includes(ultimo.status)) break
+      console.warn(`generate-content: ${id} falhou (${ultimo.status} ${ultimo.motivo}) → próximo modelo`)
+    }
+
+    // Nenhum modelo entregou: devolve o motivo honesto. Tempo/fila = 503, que a tela
+    // traduz como "alta demanda" (e o fetchWithRetry tenta de novo sozinho).
+    const filaOuTempo = ultimo.demorou || [429, 500, 502, 503, 504].includes(ultimo.status)
+    return new Response(
+      JSON.stringify({
+        error: filaOuTempo
+          ? 'A IA do Google está sobrecarregada agora (todos os modelos ocupados). Tente de novo em alguns minutos.'
+          : ultimo.motivo
+      }),
+      { status: filaOuTempo ? 503 : ultimo.status, headers: { 'Content-Type': 'application/json' } }
+    )
   } catch (error) {
     console.error('Erro ao gerar conteúdo:', error)
     return new Response(

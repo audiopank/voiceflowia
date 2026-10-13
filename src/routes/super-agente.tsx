@@ -483,7 +483,9 @@ function SuperAgente() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ nicho, tom, qtdPosts: dropCampanha ? 1 : qtdDias, instagram, servicos, tomMarca, cta, diferenciais, voz, hooksAnteriores, campanha: dropCampanha ?? campanha }) // V1.6: voz forçada ('' = automático); drop sazonal = 1 post da data
         },
-        { onWait: (s) => setRateNotice(`⏳ Muita procura agora — tentando de novo em ${s}s...`) },
+        // retries 1 (13/10): o servidor já percorre 3 modelos (até ~54s) antes de devolver
+        // 503 — repetir 3x aqui deixaria o cliente uns 4 min olhando "tentando de novo".
+        { retries: 1, onWait: (s) => setRateNotice(`⏳ Muita procura agora — tentando de novo em ${s}s...`) },
       )
       setRateNotice('')
 

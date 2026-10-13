@@ -6,6 +6,16 @@
 // plano Hobby da Vercel).
 export const maxDuration = 60
 
+// Cadeia de modelos (ordem = qualidade). Fila e cota são POR MODELO: quando o principal
+// está congestionado, os "lite" costumam responder. O orçamento corta antes dos 60s.
+const MODELOS: { id: string; tetoMs: number }[] = [
+  { id: 'gemini-3.5-flash', tetoMs: 28_000 },
+  { id: 'gemini-3.5-flash-lite', tetoMs: 16_000 },
+  { id: 'gemini-3.1-flash-lite', tetoMs: 16_000 }
+]
+const ORCAMENTO_MS = 54_000
+const MINIMO_TENTATIVA_MS = 8_000
+
 // V1.6: vozes válidas do Gemini TTS que o seletor manual oferece.
 const VOZES_VALIDAS = ['Zephyr', 'Puck', 'Kore']
 
@@ -221,63 +231,81 @@ async function handler(request: Request): Promise<Response> {
       .map((h: string) => h.trim().slice(0, 120))
       .slice(0, MAX_HOOKS_MEMORIA)
 
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [
-            {
-              parts: [{ text: buildPrompt(nicho, tomFinal, qtdFinal, marca, memoria, campanhaFinal) }]
-            }
-          ],
-          generationConfig: {
-            responseMimeType: 'application/json',
-            responseSchema: buildResponseSchema(vozesPermitidas) // V1.6
-          }
-        }),
-        // Sem isso, quando o Gemini fica "engasgado" (alta demanda) o fetch
-        // nunca desiste sozinho — a function fica pendurada até um timeout
-        // de infraestrutura da Vercel (~300s!), em vez de responder rápido
-        // com um erro. 45s deixa margem pro maxDuration=60 ainda processar
-        // e devolver a resposta antes da function ser morta.
-        signal: AbortSignal.timeout(45_000)
+    const body = JSON.stringify({
+      contents: [
+        {
+          parts: [{ text: buildPrompt(nicho, tomFinal, qtdFinal, marca, memoria, campanhaFinal) }]
+        }
+      ],
+      generationConfig: {
+        responseMimeType: 'application/json',
+        responseSchema: buildResponseSchema(vozesPermitidas) // V1.6
       }
-    )
-
-    if (!response.ok) {
-      const errorData = await response.text()
-      console.error('Erro Gemini:', errorData)
-      let detail = ''
-      try {
-        detail = JSON.parse(errorData)?.error?.message || ''
-      } catch {
-        // corpo não era JSON, ignora
-      }
-      return new Response(
-        JSON.stringify({ error: detail || `Erro na API Gemini: ${response.status}` }),
-        { status: response.status, headers: { 'Content-Type': 'application/json' } }
-      )
-    }
-
-    const data = await response.json()
-    const textPart = data.candidates?.[0]?.content?.parts?.find((p: any) => typeof p.text === 'string')
-
-    if (!textPart) {
-      throw new Error('Nenhum conteúdo retornado pela API')
-    }
-
-    const parsed = JSON.parse(textPart.text)
-
-    // V1.6: à prova de bala — se o usuário forçou uma voz, crava em todos os posts.
-    if (vozForcada && Array.isArray(parsed?.posts)) {
-      for (const post of parsed.posts) post.vozSugerida = vozForcada
-    }
-
-    return new Response(JSON.stringify(parsed), {
-      headers: { 'Content-Type': 'application/json' }
     })
+
+    // MODELO RESERVA (13/10/2026): mesma cadeia do Kit. Cada tentativa tem teto próprio
+    // (sem ele o fetch fica pendurado até a Vercel matar a função, ~300s) e o orçamento
+    // total corta antes do maxDuration de 60s.
+    const inicio = Date.now()
+    let ultimo = { status: 500, motivo: '', demorou: false }
+    for (let i = 0; i < MODELOS.length; i++) {
+      const restante = ORCAMENTO_MS - (Date.now() - inicio)
+      if (restante < MINIMO_TENTATIVA_MS) break
+      const { id, tetoMs } = MODELOS[i]
+      try {
+        const response = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/${id}:generateContent?key=${apiKey}`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body,
+            signal: AbortSignal.timeout(Math.min(tetoMs, restante))
+          }
+        )
+        if (!response.ok) {
+          const errorData = await response.text()
+          console.error(`Erro Gemini (generate-strategy, ${id}):`, errorData.slice(0, 600))
+          let detail = ''
+          try {
+            detail = JSON.parse(errorData)?.error?.message || ''
+          } catch {
+            // corpo não era JSON, ignora
+          }
+          ultimo = { status: response.status, motivo: detail || `Erro na API Gemini: ${response.status}`, demorou: false }
+        } else {
+          const data = await response.json()
+          const textPart = data.candidates?.[0]?.content?.parts?.find((p: any) => typeof p.text === 'string')
+          const parsed = textPart ? JSON.parse(textPart.text) : null
+          if (Array.isArray(parsed?.posts) && parsed.posts.length > 0) {
+            // V1.6: à prova de bala — se o usuário forçou uma voz, crava em todos os posts.
+            if (vozForcada) {
+              for (const post of parsed.posts) post.vozSugerida = vozForcada
+            }
+            if (i > 0) console.warn(`generate-strategy: gerado pelo RESERVA ${id}`)
+            return new Response(JSON.stringify({ ...parsed, modelo: id, reserva: i > 0 }), {
+              headers: { 'Content-Type': 'application/json' }
+            })
+          }
+          ultimo = { status: 502, motivo: 'Nenhum conteúdo retornado pela API', demorou: false }
+        }
+      } catch (err) {
+        const demorou = (err as any)?.name === 'TimeoutError' || (err as any)?.name === 'AbortError'
+        console.error(`Falha em ${id} (generate-strategy):`, demorou ? 'timeout' : err)
+        ultimo = { status: demorou ? 504 : 502, motivo: demorou ? 'demorou demais' : 'resposta inválida da IA', demorou }
+      }
+      if (![429, 500, 502, 503, 504].includes(ultimo.status)) break
+      console.warn(`generate-strategy: ${id} falhou (${ultimo.status} ${ultimo.motivo}) → próximo modelo`)
+    }
+
+    const filaOuTempo = ultimo.demorou || [429, 500, 502, 503, 504].includes(ultimo.status)
+    return new Response(
+      JSON.stringify({
+        error: filaOuTempo
+          ? 'A IA do Google está sobrecarregada agora (todos os modelos ocupados). Tente de novo em alguns minutos.'
+          : ultimo.motivo
+      }),
+      { status: filaOuTempo ? 503 : ultimo.status, headers: { 'Content-Type': 'application/json' } }
+    )
   } catch (error) {
     console.error('Erro ao gerar estratégia:', error)
     if (error instanceof Error && error.name === 'TimeoutError') {
