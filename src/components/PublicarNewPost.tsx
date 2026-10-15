@@ -13,6 +13,7 @@ import {
   type ResultadoPublicacao,
   type SerieNewPost,
 } from '../lib/newpost'
+import { palavrasSemAcento } from '../lib/conferirAcentos'
 
 // Botão "Publicar na NewPost-IA" de um card do Super Agente.
 //
@@ -283,7 +284,18 @@ export function PublicarNewPost({
   return (
     <div className="no-export space-y-1 pt-1">
       <Button
-        onClick={() => publicar()}
+        onClick={() => {
+          // Trava de acento (15/10): avisa ANTES de ir pro feed — não bloqueia, a decisão é do dono.
+          const semAcento = palavrasSemAcento(`${texto}\n${roteiro ?? ''}`)
+          if (
+            semAcento.length &&
+            !window.confirm(
+              `O texto tem palavras sem acento (${semAcento.slice(0, 6).join(', ')}). ` +
+                'Use "Corrigir acentos" no card antes de publicar.\n\nPublicar assim mesmo?'
+            )
+          ) return
+          void publicar()
+        }}
         disabled={disabled || ocupado}
         title="Publica este conteúdo no feed da NewPost-IA, no seu nome — com os cards e a locução"
         className="w-full bg-gradient-to-r from-[#0EA5A4] to-[#22C55E] hover:opacity-90 disabled:opacity-50 flex items-center justify-center gap-2"

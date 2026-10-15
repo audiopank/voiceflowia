@@ -18,6 +18,8 @@ import { buildIcsCalendar, downloadIcsFile, postDateTime } from '../lib/ics'
 import { convertToWhatsAppOgg, convertVoiceToMp3 } from '../lib/audioConvert'
 import { RedesSociais } from '../components/RedesSociais'
 import { PublicarNewPost } from '../components/PublicarNewPost'
+import { TravaAcento } from '../components/TravaAcento'
+import { corrigirAcentos } from '../lib/conferirAcentos'
 import { serieDoCalendario } from '../lib/newpost'
 import {
   ExportSlide, hookFontSize, bodyFontSize, slideRefKey, renderSlidesToBlobs,
@@ -1396,7 +1398,8 @@ function SuperAgente() {
               <Target className="w-6 h-6 text-[#8B5CF6]" />
               Estratégia do Mês
             </h2>
-            <p className="text-gray-300">{estrategia.resumo}</p>
+            {/* Resumo é só leitura: a trava de acento corrige direto (regra fixa, ver conferirAcentos). */}
+            <p className="text-gray-300">{corrigirAcentos(estrategia.resumo)}</p>
 
             <button
               onClick={() => setEstrategiaAberta((v) => !v)}
@@ -1599,6 +1602,14 @@ function SuperAgente() {
                   </div>
                   <HumanizarButton texto={post.legenda} campo="legenda" onHumanizado={(v) => updatePostField(index, 'legenda', v)} />
                 </div>
+                <TravaAcento
+                  textos={[post.hook, post.roteiro, post.legenda]}
+                  onCorrigir={() => {
+                    updatePostField(index, 'hook', corrigirAcentos(post.hook))
+                    updatePostField(index, 'roteiro', corrigirAcentos(post.roteiro))
+                    updatePostField(index, 'legenda', corrigirAcentos(post.legenda))
+                  }}
+                />
                 <div className="no-export">
                   <FeedPreview texto={post.legenda} />
                 </div>

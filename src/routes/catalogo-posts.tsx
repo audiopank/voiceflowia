@@ -17,6 +17,8 @@ import { listarKits } from '../lib/kitsWhatsapp'
 import {
   conferirPost, lerCatalogo, MAX_ITENS_CATALOGO, type ItemCatalogo, type PostCatalogo,
 } from '../lib/conferirCatalogo'
+import { TravaAcento } from '../components/TravaAcento'
+import { corrigirAcentos } from '../lib/conferirAcentos'
 
 export const Route = createFileRoute('/catalogo-posts')({
   component: CatalogoPosts,
@@ -495,6 +497,17 @@ function CatalogoPosts() {
                         <textarea value={r.post.locucao} onChange={(e) => editar(i, 'locucao', e.target.value)} rows={3}
                           className="w-full bg-[#1A1A1A] border border-gray-700 rounded-lg px-3 py-2 text-gray-200 text-sm" />
                       </div>
+
+                      <TravaAcento
+                        textos={[r.post.gancho, r.post.legenda, r.post.locucao]}
+                        onCorrigir={() => {
+                          // Só mexe no campo que muda: editar a locução descarta o áudio já gerado.
+                          for (const campo of ['gancho', 'legenda', 'locucao'] as const) {
+                            const certo = corrigirAcentos(r.post![campo])
+                            if (certo !== r.post![campo]) editar(i, campo, certo)
+                          }
+                        }}
+                      />
 
                       <ul className="text-sm space-y-1 bg-[#0A0A0A] rounded-lg p-3">
                         {conf.checagens.map((c, k) => (

@@ -8,6 +8,8 @@ import { fetchWithRetry, safeJson, friendlyApiError } from '../lib/apiRetry'
 import { textoLongoDemais, avisoTextoLongo } from '../lib/limites'
 import { Button } from '../components/ui/button'
 import { PublicarNewPost } from '../components/PublicarNewPost'
+import { TravaAcento } from '../components/TravaAcento'
+import { corrigirAcentos } from '../lib/conferirAcentos'
 import { serieDoCalendario } from '../lib/newpost'
 import {
   ExportSlide, hookFontSize, bodyFontSize, slideRefKey, renderSlidesToBlobs,
@@ -714,6 +716,14 @@ function Agente() {
                   </div>
                   <HumanizarButton texto={post.legenda} campo="legenda" onHumanizado={(v) => updatePostField(index, 'legenda', v)} />
                 </div>
+                <TravaAcento
+                  textos={[post.hook, post.roteiro, post.legenda]}
+                  onCorrigir={() => {
+                    updatePostField(index, 'hook', corrigirAcentos(post.hook))
+                    updatePostField(index, 'roteiro', corrigirAcentos(post.roteiro))
+                    updatePostField(index, 'legenda', corrigirAcentos(post.legenda))
+                  }}
+                />
                 <FeedPreview texto={post.legenda} />
                 <CtaObjetivo
                   legenda={post.legenda}

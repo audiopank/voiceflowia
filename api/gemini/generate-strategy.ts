@@ -100,8 +100,15 @@ Este mês precisa parecer continuação do trabalho, não recomeço.`
 
   // GANCHO SAZONAL: data/campanha em destaque (ex: "Dia dos Pais"). Quando vem,
   // parte do calendário fica temática, mas o mês não vira 100% sobre isso.
+  // QUANTIDADE EXATA calculada aqui (15/10/2026): o prompt dizia "20% a 40% dos posts" e, com
+  // 1 dia (2 posts), 20-40% de 2 arredondou pra ZERO — o "Dia dos Professores · é hoje" saiu
+  // sem nenhum post sobre professores. Calendário curto (até 4 posts) = todos na data.
+  const totalPosts = qtdDias * 2
+  const postsDaCampanha = totalPosts <= 4 ? totalPosts : Math.max(1, Math.round(totalPosts * 0.3))
   const campanhaBloco = campanha
-    ? `\n\nCAMPANHA SAZONAL EM DESTAQUE: "${campanha}". Dedique de 20% a 40% dos posts do calendário a esta data/campanha — ganchos, ofertas e CTAs conectados a ela, adaptados ao nicho "${nicho}". Os demais posts seguem o plano normal do mês. NÃO transforme o calendário inteiro na campanha, e mantenha TODAS as regras acima (produto sem vídeo, CTA por período, variação de redação, memória da marca).`
+    ? postsDaCampanha === totalPosts
+      ? `\n\nCAMPANHA SAZONAL EM DESTAQUE: "${campanha}". TODOS os ${totalPosts} posts deste calendário são sobre esta data/campanha — ganchos, roteiros, legendas e CTAs conectados a ela, adaptados ao nicho "${nicho}" (cada post por um ângulo diferente). Mantenha TODAS as regras acima (produto sem vídeo, CTA por período, variação de redação, memória da marca).`
+      : `\n\nCAMPANHA SAZONAL EM DESTAQUE: "${campanha}". Exatamente ${postsDaCampanha} dos ${totalPosts} posts do calendário (nem menos, nem mais) são sobre esta data/campanha — ganchos, ofertas e CTAs conectados a ela, adaptados ao nicho "${nicho}". Os demais seguem o plano normal do mês. Mantenha TODAS as regras acima (produto sem vídeo, CTA por período, variação de redação, memória da marca).`
     : ''
 
   return buildPromptBase(nicho, tom, qtdDias, marca, memoriaBloco + campanhaBloco)
