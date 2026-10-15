@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { createFileRoute, useNavigate } from "@tanstack/react-router"
 import { supabase } from '../lib/supabase'
 import { useSubscription } from '../lib/useSubscription'
-import { Lock, Volume2, Settings, Rocket, Radar as RadarIcon, ArrowRight, Wand2, CalendarDays, Clock, History, Bookmark, MessageCircle, Newspaper } from 'lucide-react'
+import { Lock, Volume2, Settings, Rocket, Radar as RadarIcon, ArrowRight, Wand2, CalendarDays, Clock, History, Bookmark, MessageCircle, Newspaper, ShoppingBag } from 'lucide-react'
 import { proximasDatasSazonais, textoContagem } from '../lib/datasSazonais'
 import { BackButton } from '../components/BackButton'
 import { AtivarTrial } from '../components/AtivarTrial'
@@ -354,6 +354,28 @@ function Dashboard() {
             >
               <Lock className="w-9 h-9" />
               {courtesyExpired ? 'Card Mágico 🔒 — cortesia encerrada, assine pra continuar' : 'Card Mágico 🔒 - Upgrade para Crescimento'}
+            </button>
+          )}
+        </div>
+
+        {/* Catálogo → Posts (06/10/2026) — Degrau 1 do VoiceFlow-agente: um post por
+            produto, conferido por código contra o catálogo antes de o cliente aprovar. */}
+        <div className="mb-8">
+          {hasContentAgentFeature ? (
+            <button
+              onClick={() => navigate({ to: '/catalogo-posts' })}
+              className="w-full bg-gradient-to-r from-[#F59E0B] to-[#EC4899] hover:from-[#D97706] hover:to-[#DB2777] text-white font-bold py-6 px-8 rounded-xl text-2xl flex items-center justify-center gap-3 transition-all hover:scale-[1.02] shadow-lg shadow-[#F59E0B]/30"
+            >
+              <ShoppingBag className="w-9 h-9" />
+              Catálogo → Posts — Cada Produto Vira Post Conferido ✔
+            </button>
+          ) : (
+            <button
+              onClick={() => navigate({ to: '/precos' })}
+              className="w-full bg-gray-800 text-gray-400 font-bold py-6 px-8 rounded-xl text-2xl flex items-center justify-center gap-3 border border-gray-700 hover:border-[#8B5CF6] hover:text-white transition-colors"
+            >
+              <Lock className="w-9 h-9" />
+              {courtesyExpired ? 'Catálogo → Posts 🔒 — cortesia encerrada, assine pra continuar' : 'Catálogo → Posts 🔒 - Upgrade para Crescimento'}
             </button>
           )}
         </div>

@@ -30,6 +30,7 @@ function apiDevBridge(): Plugin {
     '/api/newpost/sessao': './api/newpost/sessao.ts',
     '/api/og': './api/og.ts',
     '/api/gemini/gerar-newsletter': './api/gemini/gerar-newsletter.ts',
+    '/api/gemini/catalogo-posts': './api/gemini/catalogo-posts.ts',
   }
 
   return {

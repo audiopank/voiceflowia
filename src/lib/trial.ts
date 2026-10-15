@@ -51,7 +51,10 @@ export function computeTrial(profile: ProfileLike | null | undefined): TrialStat
   let daysLeft = 0
   if (startedAt) {
     const remainingMs = TRIAL_DAYS * DAY_MS - (Date.now() - startedAt.getTime())
-    daysLeft = Math.max(0, Math.ceil(remainingMs / DAY_MS))
+    // Teto em TRIAL_DAYS: trial_started_at vem do relógio do SERVIDOR; se o relógio do aparelho
+    // estiver uns segundos atrás, logo após o cadastro sobrava "7 dias e pouco" → ceil = 8
+    // (visto no E2E de 15/10: "Trial de 7 dias — faltam 8 dias").
+    daysLeft = Math.min(TRIAL_DAYS, Math.max(0, Math.ceil(remainingMs / DAY_MS)))
   }
 
   const generationsLeft = Math.max(0, TRIAL_GENERATIONS - used)

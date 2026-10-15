@@ -9,121 +9,32 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as VideosRouteImport } from './routes/videos'
-import { Route as TrialRouteImport } from './routes/trial'
-import { Route as SuperAgenteRouteImport } from './routes/super-agente'
-import { Route as RedefinirSenhaRouteImport } from './routes/redefinir-senha'
-import { Route as RadarRouteImport } from './routes/radar'
-import { Route as PrecosRouteImport } from './routes/precos'
-import { Route as NewsletterRouteImport } from './routes/newsletter'
-import { Route as MeusTemplatesRouteImport } from './routes/meus-templates'
-import { Route as MeusKitsRouteImport } from './routes/meus-kits'
-import { Route as MeusConteudosRouteImport } from './routes/meus-conteudos'
-import { Route as LoginRouteImport } from './routes/login'
-import { Route as KitWhatsappRouteImport } from './routes/kit-whatsapp'
-import { Route as EsqueciSenhaRouteImport } from './routes/esqueci-senha'
-import { Route as EditorRouteImport } from './routes/editor'
-import { Route as DashboardRouteImport } from './routes/dashboard'
-import { Route as CardMagicoRouteImport } from './routes/card-magico'
-import { Route as CadastroRouteImport } from './routes/cadastro'
-import { Route as BibliotecaRouteImport } from './routes/biblioteca'
-import { Route as AgenteRouteImport } from './routes/agente'
-import { Route as AdminRouteImport } from './routes/admin'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AdminRouteImport } from './routes/admin'
+import { Route as AgenteRouteImport } from './routes/agente'
+import { Route as BibliotecaRouteImport } from './routes/biblioteca'
+import { Route as CadastroRouteImport } from './routes/cadastro'
+import { Route as CardMagicoRouteImport } from './routes/card-magico'
+import { Route as CatalogoPostsRouteImport } from './routes/catalogo-posts'
+import { Route as DashboardRouteImport } from './routes/dashboard'
+import { Route as EditorRouteImport } from './routes/editor'
+import { Route as EsqueciSenhaRouteImport } from './routes/esqueci-senha'
+import { Route as KitWhatsappRouteImport } from './routes/kit-whatsapp'
+import { Route as LoginRouteImport } from './routes/login'
+import { Route as MeusConteudosRouteImport } from './routes/meus-conteudos'
+import { Route as MeusKitsRouteImport } from './routes/meus-kits'
+import { Route as MeusTemplatesRouteImport } from './routes/meus-templates'
+import { Route as NewsletterRouteImport } from './routes/newsletter'
+import { Route as PrecosRouteImport } from './routes/precos'
+import { Route as RadarRouteImport } from './routes/radar'
+import { Route as RedefinirSenhaRouteImport } from './routes/redefinir-senha'
+import { Route as SuperAgenteRouteImport } from './routes/super-agente'
+import { Route as TrialRouteImport } from './routes/trial'
+import { Route as VideosRouteImport } from './routes/videos'
 
-const VideosRoute = VideosRouteImport.update({
-  id: '/videos',
-  path: '/videos',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const TrialRoute = TrialRouteImport.update({
-  id: '/trial',
-  path: '/trial',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const SuperAgenteRoute = SuperAgenteRouteImport.update({
-  id: '/super-agente',
-  path: '/super-agente',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const RedefinirSenhaRoute = RedefinirSenhaRouteImport.update({
-  id: '/redefinir-senha',
-  path: '/redefinir-senha',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const RadarRoute = RadarRouteImport.update({
-  id: '/radar',
-  path: '/radar',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const PrecosRoute = PrecosRouteImport.update({
-  id: '/precos',
-  path: '/precos',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const NewsletterRoute = NewsletterRouteImport.update({
-  id: '/newsletter',
-  path: '/newsletter',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const MeusTemplatesRoute = MeusTemplatesRouteImport.update({
-  id: '/meus-templates',
-  path: '/meus-templates',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const MeusKitsRoute = MeusKitsRouteImport.update({
-  id: '/meus-kits',
-  path: '/meus-kits',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const MeusConteudosRoute = MeusConteudosRouteImport.update({
-  id: '/meus-conteudos',
-  path: '/meus-conteudos',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const LoginRoute = LoginRouteImport.update({
-  id: '/login',
-  path: '/login',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const KitWhatsappRoute = KitWhatsappRouteImport.update({
-  id: '/kit-whatsapp',
-  path: '/kit-whatsapp',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const EsqueciSenhaRoute = EsqueciSenhaRouteImport.update({
-  id: '/esqueci-senha',
-  path: '/esqueci-senha',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const EditorRoute = EditorRouteImport.update({
-  id: '/editor',
-  path: '/editor',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const DashboardRoute = DashboardRouteImport.update({
-  id: '/dashboard',
-  path: '/dashboard',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const CardMagicoRoute = CardMagicoRouteImport.update({
-  id: '/card-magico',
-  path: '/card-magico',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const CadastroRoute = CadastroRouteImport.update({
-  id: '/cadastro',
-  path: '/cadastro',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const BibliotecaRoute = BibliotecaRouteImport.update({
-  id: '/biblioteca',
-  path: '/biblioteca',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const AgenteRoute = AgenteRouteImport.update({
-  id: '/agente',
-  path: '/agente',
+const IndexRoute = IndexRouteImport.update({
+  id: '/',
+  path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AdminRoute = AdminRouteImport.update({
@@ -131,9 +42,104 @@ const AdminRoute = AdminRouteImport.update({
   path: '/admin',
   getParentRoute: () => rootRouteImport,
 } as any)
-const IndexRoute = IndexRouteImport.update({
-  id: '/',
-  path: '/',
+const AgenteRoute = AgenteRouteImport.update({
+  id: '/agente',
+  path: '/agente',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const BibliotecaRoute = BibliotecaRouteImport.update({
+  id: '/biblioteca',
+  path: '/biblioteca',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CadastroRoute = CadastroRouteImport.update({
+  id: '/cadastro',
+  path: '/cadastro',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CardMagicoRoute = CardMagicoRouteImport.update({
+  id: '/card-magico',
+  path: '/card-magico',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CatalogoPostsRoute = CatalogoPostsRouteImport.update({
+  id: '/catalogo-posts',
+  path: '/catalogo-posts',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DashboardRoute = DashboardRouteImport.update({
+  id: '/dashboard',
+  path: '/dashboard',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const EditorRoute = EditorRouteImport.update({
+  id: '/editor',
+  path: '/editor',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const EsqueciSenhaRoute = EsqueciSenhaRouteImport.update({
+  id: '/esqueci-senha',
+  path: '/esqueci-senha',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const KitWhatsappRoute = KitWhatsappRouteImport.update({
+  id: '/kit-whatsapp',
+  path: '/kit-whatsapp',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LoginRoute = LoginRouteImport.update({
+  id: '/login',
+  path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MeusConteudosRoute = MeusConteudosRouteImport.update({
+  id: '/meus-conteudos',
+  path: '/meus-conteudos',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MeusKitsRoute = MeusKitsRouteImport.update({
+  id: '/meus-kits',
+  path: '/meus-kits',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MeusTemplatesRoute = MeusTemplatesRouteImport.update({
+  id: '/meus-templates',
+  path: '/meus-templates',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const NewsletterRoute = NewsletterRouteImport.update({
+  id: '/newsletter',
+  path: '/newsletter',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PrecosRoute = PrecosRouteImport.update({
+  id: '/precos',
+  path: '/precos',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RadarRoute = RadarRouteImport.update({
+  id: '/radar',
+  path: '/radar',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RedefinirSenhaRoute = RedefinirSenhaRouteImport.update({
+  id: '/redefinir-senha',
+  path: '/redefinir-senha',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SuperAgenteRoute = SuperAgenteRouteImport.update({
+  id: '/super-agente',
+  path: '/super-agente',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TrialRoute = TrialRouteImport.update({
+  id: '/trial',
+  path: '/trial',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const VideosRoute = VideosRouteImport.update({
+  id: '/videos',
+  path: '/videos',
   getParentRoute: () => rootRouteImport,
 } as any)
 
@@ -144,6 +150,7 @@ export interface FileRoutesByFullPath {
   '/biblioteca': typeof BibliotecaRoute
   '/cadastro': typeof CadastroRoute
   '/card-magico': typeof CardMagicoRoute
+  '/catalogo-posts': typeof CatalogoPostsRoute
   '/dashboard': typeof DashboardRoute
   '/editor': typeof EditorRoute
   '/esqueci-senha': typeof EsqueciSenhaRoute
@@ -167,6 +174,7 @@ export interface FileRoutesByTo {
   '/biblioteca': typeof BibliotecaRoute
   '/cadastro': typeof CadastroRoute
   '/card-magico': typeof CardMagicoRoute
+  '/catalogo-posts': typeof CatalogoPostsRoute
   '/dashboard': typeof DashboardRoute
   '/editor': typeof EditorRoute
   '/esqueci-senha': typeof EsqueciSenhaRoute
@@ -191,6 +199,7 @@ export interface FileRoutesById {
   '/biblioteca': typeof BibliotecaRoute
   '/cadastro': typeof CadastroRoute
   '/card-magico': typeof CardMagicoRoute
+  '/catalogo-posts': typeof CatalogoPostsRoute
   '/dashboard': typeof DashboardRoute
   '/editor': typeof EditorRoute
   '/esqueci-senha': typeof EsqueciSenhaRoute
@@ -216,6 +225,7 @@ export interface FileRouteTypes {
     | '/biblioteca'
     | '/cadastro'
     | '/card-magico'
+    | '/catalogo-posts'
     | '/dashboard'
     | '/editor'
     | '/esqueci-senha'
@@ -239,6 +249,7 @@ export interface FileRouteTypes {
     | '/biblioteca'
     | '/cadastro'
     | '/card-magico'
+    | '/catalogo-posts'
     | '/dashboard'
     | '/editor'
     | '/esqueci-senha'
@@ -262,6 +273,7 @@ export interface FileRouteTypes {
     | '/biblioteca'
     | '/cadastro'
     | '/card-magico'
+    | '/catalogo-posts'
     | '/dashboard'
     | '/editor'
     | '/esqueci-senha'
@@ -286,6 +298,7 @@ export interface RootRouteChildren {
   BibliotecaRoute: typeof BibliotecaRoute
   CadastroRoute: typeof CadastroRoute
   CardMagicoRoute: typeof CardMagicoRoute
+  CatalogoPostsRoute: typeof CatalogoPostsRoute
   DashboardRoute: typeof DashboardRoute
   EditorRoute: typeof EditorRoute
   EsqueciSenhaRoute: typeof EsqueciSenhaRoute
@@ -305,137 +318,11 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/videos': {
-      id: '/videos'
-      path: '/videos'
-      fullPath: '/videos'
-      preLoaderRoute: typeof VideosRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/trial': {
-      id: '/trial'
-      path: '/trial'
-      fullPath: '/trial'
-      preLoaderRoute: typeof TrialRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/super-agente': {
-      id: '/super-agente'
-      path: '/super-agente'
-      fullPath: '/super-agente'
-      preLoaderRoute: typeof SuperAgenteRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/redefinir-senha': {
-      id: '/redefinir-senha'
-      path: '/redefinir-senha'
-      fullPath: '/redefinir-senha'
-      preLoaderRoute: typeof RedefinirSenhaRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/radar': {
-      id: '/radar'
-      path: '/radar'
-      fullPath: '/radar'
-      preLoaderRoute: typeof RadarRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/precos': {
-      id: '/precos'
-      path: '/precos'
-      fullPath: '/precos'
-      preLoaderRoute: typeof PrecosRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/newsletter': {
-      id: '/newsletter'
-      path: '/newsletter'
-      fullPath: '/newsletter'
-      preLoaderRoute: typeof NewsletterRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/meus-templates': {
-      id: '/meus-templates'
-      path: '/meus-templates'
-      fullPath: '/meus-templates'
-      preLoaderRoute: typeof MeusTemplatesRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/meus-kits': {
-      id: '/meus-kits'
-      path: '/meus-kits'
-      fullPath: '/meus-kits'
-      preLoaderRoute: typeof MeusKitsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/meus-conteudos': {
-      id: '/meus-conteudos'
-      path: '/meus-conteudos'
-      fullPath: '/meus-conteudos'
-      preLoaderRoute: typeof MeusConteudosRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/login': {
-      id: '/login'
-      path: '/login'
-      fullPath: '/login'
-      preLoaderRoute: typeof LoginRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/kit-whatsapp': {
-      id: '/kit-whatsapp'
-      path: '/kit-whatsapp'
-      fullPath: '/kit-whatsapp'
-      preLoaderRoute: typeof KitWhatsappRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/esqueci-senha': {
-      id: '/esqueci-senha'
-      path: '/esqueci-senha'
-      fullPath: '/esqueci-senha'
-      preLoaderRoute: typeof EsqueciSenhaRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/editor': {
-      id: '/editor'
-      path: '/editor'
-      fullPath: '/editor'
-      preLoaderRoute: typeof EditorRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/dashboard': {
-      id: '/dashboard'
-      path: '/dashboard'
-      fullPath: '/dashboard'
-      preLoaderRoute: typeof DashboardRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/card-magico': {
-      id: '/card-magico'
-      path: '/card-magico'
-      fullPath: '/card-magico'
-      preLoaderRoute: typeof CardMagicoRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/cadastro': {
-      id: '/cadastro'
-      path: '/cadastro'
-      fullPath: '/cadastro'
-      preLoaderRoute: typeof CadastroRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/biblioteca': {
-      id: '/biblioteca'
-      path: '/biblioteca'
-      fullPath: '/biblioteca'
-      preLoaderRoute: typeof BibliotecaRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/agente': {
-      id: '/agente'
-      path: '/agente'
-      fullPath: '/agente'
-      preLoaderRoute: typeof AgenteRouteImport
+    '/': {
+      id: '/'
+      path: '/'
+      fullPath: '/'
+      preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/admin': {
@@ -445,11 +332,144 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/': {
-      id: '/'
-      path: '/'
-      fullPath: '/'
-      preLoaderRoute: typeof IndexRouteImport
+    '/agente': {
+      id: '/agente'
+      path: '/agente'
+      fullPath: '/agente'
+      preLoaderRoute: typeof AgenteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/biblioteca': {
+      id: '/biblioteca'
+      path: '/biblioteca'
+      fullPath: '/biblioteca'
+      preLoaderRoute: typeof BibliotecaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/cadastro': {
+      id: '/cadastro'
+      path: '/cadastro'
+      fullPath: '/cadastro'
+      preLoaderRoute: typeof CadastroRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/card-magico': {
+      id: '/card-magico'
+      path: '/card-magico'
+      fullPath: '/card-magico'
+      preLoaderRoute: typeof CardMagicoRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/catalogo-posts': {
+      id: '/catalogo-posts'
+      path: '/catalogo-posts'
+      fullPath: '/catalogo-posts'
+      preLoaderRoute: typeof CatalogoPostsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/dashboard': {
+      id: '/dashboard'
+      path: '/dashboard'
+      fullPath: '/dashboard'
+      preLoaderRoute: typeof DashboardRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/editor': {
+      id: '/editor'
+      path: '/editor'
+      fullPath: '/editor'
+      preLoaderRoute: typeof EditorRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/esqueci-senha': {
+      id: '/esqueci-senha'
+      path: '/esqueci-senha'
+      fullPath: '/esqueci-senha'
+      preLoaderRoute: typeof EsqueciSenhaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/kit-whatsapp': {
+      id: '/kit-whatsapp'
+      path: '/kit-whatsapp'
+      fullPath: '/kit-whatsapp'
+      preLoaderRoute: typeof KitWhatsappRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/login': {
+      id: '/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/meus-conteudos': {
+      id: '/meus-conteudos'
+      path: '/meus-conteudos'
+      fullPath: '/meus-conteudos'
+      preLoaderRoute: typeof MeusConteudosRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/meus-kits': {
+      id: '/meus-kits'
+      path: '/meus-kits'
+      fullPath: '/meus-kits'
+      preLoaderRoute: typeof MeusKitsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/meus-templates': {
+      id: '/meus-templates'
+      path: '/meus-templates'
+      fullPath: '/meus-templates'
+      preLoaderRoute: typeof MeusTemplatesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/newsletter': {
+      id: '/newsletter'
+      path: '/newsletter'
+      fullPath: '/newsletter'
+      preLoaderRoute: typeof NewsletterRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/precos': {
+      id: '/precos'
+      path: '/precos'
+      fullPath: '/precos'
+      preLoaderRoute: typeof PrecosRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/radar': {
+      id: '/radar'
+      path: '/radar'
+      fullPath: '/radar'
+      preLoaderRoute: typeof RadarRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/redefinir-senha': {
+      id: '/redefinir-senha'
+      path: '/redefinir-senha'
+      fullPath: '/redefinir-senha'
+      preLoaderRoute: typeof RedefinirSenhaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/super-agente': {
+      id: '/super-agente'
+      path: '/super-agente'
+      fullPath: '/super-agente'
+      preLoaderRoute: typeof SuperAgenteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/trial': {
+      id: '/trial'
+      path: '/trial'
+      fullPath: '/trial'
+      preLoaderRoute: typeof TrialRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/videos': {
+      id: '/videos'
+      path: '/videos'
+      fullPath: '/videos'
+      preLoaderRoute: typeof VideosRouteImport
       parentRoute: typeof rootRouteImport
     }
   }
@@ -462,6 +482,7 @@ const rootRouteChildren: RootRouteChildren = {
   BibliotecaRoute: BibliotecaRoute,
   CadastroRoute: CadastroRoute,
   CardMagicoRoute: CardMagicoRoute,
+  CatalogoPostsRoute: CatalogoPostsRoute,
   DashboardRoute: DashboardRoute,
   EditorRoute: EditorRoute,
   EsqueciSenhaRoute: EsqueciSenhaRoute,
