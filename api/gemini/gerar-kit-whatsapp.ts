@@ -44,7 +44,8 @@ const MAX_PERGUNTAS = 15
 // Ordem = qualidade. Teto por tentativa cabe no maxDuration de 60s mesmo que os
 // três sejam usados; o orçamento total corta antes de a Vercel matar a function.
 const MODELOS: { id: string; tetoMs: number }[] = [
-  { id: 'gemini-3.5-flash', tetoMs: 28_000 },
+  { id: 'gemini-3.7-flash', tetoMs: 28_000 },
+  { id: 'gemini-3.5-flash', tetoMs: 20_000 },
   { id: 'gemini-3.5-flash-lite', tetoMs: 20_000 },
   { id: 'gemini-3.1-flash-lite', tetoMs: 20_000 }
 ]

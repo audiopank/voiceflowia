@@ -9,7 +9,8 @@ export const maxDuration = 60
 // Cadeia de modelos (ordem = qualidade). Fila e cota são POR MODELO: quando o principal
 // está congestionado, os "lite" costumam responder. O orçamento corta antes dos 60s.
 const MODELOS: { id: string; tetoMs: number }[] = [
-  { id: 'gemini-3.5-flash', tetoMs: 28_000 },
+  { id: 'gemini-3.7-flash', tetoMs: 28_000 },
+  { id: 'gemini-3.5-flash', tetoMs: 20_000 },
   { id: 'gemini-3.5-flash-lite', tetoMs: 16_000 },
   { id: 'gemini-3.1-flash-lite', tetoMs: 16_000 }
 ]

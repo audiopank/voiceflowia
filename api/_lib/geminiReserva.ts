@@ -18,12 +18,21 @@
 //
 // Padrão já provado no Kit de WhatsApp, Newsletter, Catálogo, Agente e Super Agente.
 
+// CADEIA 15/10/2026 (ordem do Mestre): 3.7-flash → 3.5-flash → 3.5-flash-lite → 3.1-flash-lite
+// (o 3.1-lite é a 4ª fila independente, só pra emergência: não custa tempo quando os outros respondem). O 3.7 respondeu
+// 3/3 no teste (4-11s, acentos certos) e tem cota PRÓPRIA; o 3.5-flash vira 1º reserva e o lite,
+// que perde acento ("cartao", "Voce" — visto em produção no Catálogo), só em último caso. O 3.8
+// ficou de fora: no dia do lançamento deu 503 "high demand" em 2 de 3. Reavaliar em ~2 semanas.
+// A mesma cadeia está copiada em generate-content, generate-strategy, gerar-kit-whatsapp e
+// gerar-newsletter (cadeias próprias) — mudar lá também.
+
 export type Perfil = 'curto' | 'longo'
 
 const CADEIAS: Record<Perfil, { modelos: { id: string; tetoMs: number }[]; orcamentoMs: number; minimoMs: number }> = {
   curto: {
     modelos: [
-      { id: 'gemini-3.5-flash', tetoMs: 12_000 },
+      { id: 'gemini-3.7-flash', tetoMs: 12_000 },
+      { id: 'gemini-3.5-flash', tetoMs: 8_000 },
       { id: 'gemini-3.5-flash-lite', tetoMs: 8_000 },
       { id: 'gemini-3.1-flash-lite', tetoMs: 8_000 }
     ],
@@ -32,7 +41,8 @@ const CADEIAS: Record<Perfil, { modelos: { id: string; tetoMs: number }[]; orcam
   },
   longo: {
     modelos: [
-      { id: 'gemini-3.5-flash', tetoMs: 28_000 },
+      { id: 'gemini-3.7-flash', tetoMs: 28_000 },
+      { id: 'gemini-3.5-flash', tetoMs: 20_000 },
       { id: 'gemini-3.5-flash-lite', tetoMs: 16_000 },
       { id: 'gemini-3.1-flash-lite', tetoMs: 16_000 }
     ],

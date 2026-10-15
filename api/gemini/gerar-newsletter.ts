@@ -36,7 +36,8 @@ const RESPONSE_SCHEMA = {
 }
 
 const MODELOS: { id: string; tetoMs: number }[] = [
-  { id: 'gemini-3.5-flash', tetoMs: 28_000 },
+  { id: 'gemini-3.7-flash', tetoMs: 28_000 },
+  { id: 'gemini-3.5-flash', tetoMs: 20_000 },
   { id: 'gemini-3.5-flash-lite', tetoMs: 20_000 },
   { id: 'gemini-3.1-flash-lite', tetoMs: 20_000 },
 ]
