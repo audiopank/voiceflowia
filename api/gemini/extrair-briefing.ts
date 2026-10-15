@@ -74,6 +74,57 @@ ${texto}
 Responda apenas o JSON, omitindo os campos que o material não sustenta.`
 }
 
+// BRIEFING POR VOZ (15/10/2026) — mesmo padrão provado na "pergunta por voz" da NewPost-IA
+// (F2, 29/09): o cliente fala sobre a marca, a Gemini ouve e devolve o TEXTO, que volta pra
+// caixa "Comece rápido" pro cliente CONFERIR antes de tocar em "Preencher com IA". O áudio é
+// ouvido e descartado (não é guardado em lugar nenhum). Mesma função (Edge), sem função nova.
+const MAX_AUDIO_BYTES = 2 * 1024 * 1024 // 1 min de voz (opus ~0,5 MB; WAV do Safari maior) cabe; o corpo do Edge vai até 4 MB
+const MIMES_OK = /^audio\/(webm|ogg|mp4|mpeg|mp3|wav|x-wav|aac|m4a)$/
+
+const SCHEMA_VOZ = {
+  type: 'OBJECT',
+  properties: {
+    entendeu: { type: 'BOOLEAN', description: 'true só se há fala inteligível' },
+    texto: { type: 'STRING', description: 'O que foi falado, transcrito fielmente (vazio se não entendeu)' }
+  },
+  required: ['entendeu', 'texto']
+}
+
+const PROMPT_VOZ = [
+  'Transcreva FIELMENTE, em português do Brasil, o que a pessoa fala neste áudio sobre um negócio (a marca, o que vende, preços, horários, diferenciais).',
+  'Pode tirar só as hesitações ("é...", "hã", "tipo assim") e pontuar as frases. NÃO resuma, NÃO complete o que não foi dito, NÃO invente preço, nome ou dado.',
+  'Nomes, marcas, números e preços exatamente como foram falados.',
+  'Se for silêncio, ruído ou fala que você não entende com segurança: entendeu=false e texto vazio.',
+  'Responda apenas o JSON.'
+].join('\n')
+
+function jsonResposta(corpo: unknown, status = 200): Response {
+  return new Response(JSON.stringify(corpo), { status, headers: { 'Content-Type': 'application/json' } })
+}
+
+async function transcreverBriefing(apiKey: string, body: { audio: string; mime?: unknown }): Promise<Response> {
+  const mime = String(body.mime || '').split(';')[0].trim().toLowerCase()
+  if (!MIMES_OK.test(mime)) return jsonResposta({ error: 'Formato de áudio não suportado neste navegador. Escreva o briefing.' }, 400)
+  const base64 = body.audio.replace(/^data:[^,]*,/, '')
+  if (base64.length * 0.75 > MAX_AUDIO_BYTES) return jsonResposta({ error: 'Áudio longo demais. Fale em até 1 minuto.' }, 413)
+
+  const r = await gerarComReserva({
+    apiKey,
+    rotulo: 'extrair-briefing/voz',
+    perfil: 'curto',
+    corpo: {
+      contents: [{ parts: [{ text: PROMPT_VOZ }, { inline_data: { mime_type: mime, data: base64 } }] }],
+      generationConfig: { responseMimeType: 'application/json', responseSchema: SCHEMA_VOZ, temperature: 0 }
+    },
+    aceita: (t) => typeof JSON.parse(t)?.entendeu === 'boolean'
+  })
+  if (!r.ok) return respostaDeFalha(r)
+  const out = JSON.parse(r.texto)
+  const texto = String(out.texto || '').trim().slice(0, MAX_CHARS)
+  if (out.entendeu !== true || texto.length < 10) return jsonResposta({ entendeu: false })
+  return jsonResposta({ entendeu: true, texto })
+}
+
 export default async function handler(request: Request): Promise<Response> {
   if (request.method !== 'POST') {
     return new Response(JSON.stringify({ error: 'Método não permitido' }), {
@@ -91,7 +142,13 @@ export default async function handler(request: Request): Promise<Response> {
       )
     }
 
-    const { texto } = await request.json()
+    const body = await request.json().catch(() => null)
+
+    // BRIEFING POR VOZ: o áudio só vira TEXTO aqui; quem preenche o briefing é a chamada
+    // normal, depois que o cliente conferiu o texto na tela.
+    if (body && typeof body.audio === 'string' && body.audio) return await transcreverBriefing(apiKey, body)
+
+    const texto = body?.texto
 
     if (!texto || typeof texto !== 'string' || texto.trim().length < 20) {
       return new Response(

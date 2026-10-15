@@ -19,6 +19,7 @@ import { convertToWhatsAppOgg, convertVoiceToMp3 } from '../lib/audioConvert'
 import { RedesSociais } from '../components/RedesSociais'
 import { PublicarNewPost } from '../components/PublicarNewPost'
 import { TravaAcento } from '../components/TravaAcento'
+import { GravarBriefing } from '../components/GravarBriefing'
 import { corrigirAcentos } from '../lib/conferirAcentos'
 import { serieDoCalendario } from '../lib/newpost'
 import {
@@ -1080,7 +1081,7 @@ function SuperAgente() {
               <h3 className="text-sm font-bold text-white">Comece rápido <span className="text-gray-500 font-normal">(opcional)</span></h3>
             </div>
             <p className="text-xs text-gray-500 mb-3">
-              Cole qualquer coisa sobre a marca — o site do cliente, a bio do Instagram, o que ele te mandou no WhatsApp — e a IA preenche o briefing abaixo pra você conferir.
+              Cole qualquer coisa sobre a marca — o site do cliente, a bio do Instagram, o que ele te mandou no WhatsApp — ou toque em <b className="text-gray-300">🎙️ Falar o briefing</b> e conte com a sua voz. A IA preenche o briefing abaixo pra você conferir.
             </p>
             <textarea
               value={briefingBruto}
@@ -1101,6 +1102,10 @@ function SuperAgente() {
                   <><Sparkles className="w-4 h-4" /> Preencher com IA</>
                 )}
               </Button>
+              <GravarBriefing
+                disabled={extraindo}
+                onTexto={(t) => setBriefingBruto((atual) => (atual.trim() ? `${atual.trim()}\n${t}` : t))}
+              />
               <span className="text-xs text-gray-600">Não gasta geração do seu plano.</span>
             </div>
 
