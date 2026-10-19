@@ -73,7 +73,12 @@ function buildResponseSchema(vozes: string[]) {
   }
 }
 
+// OBJETIVO DA MARCA (19/10/2026): "" = equilibrado (o comportamento de sempre, intocado).
+export type Objetivo = '' | 'alcance' | 'leads' | 'vendas'
+const OBJETIVOS_VALIDOS: Objetivo[] = ['alcance', 'leads', 'vendas']
+
 interface Marca {
+  objetivo: Objetivo
   instagram: string
   servicos: string
   tomMarca: string
@@ -127,13 +132,46 @@ function buildPromptBase(nicho: string, tom: string, qtdDias: number, marca: Mar
     ? '\n- Quando fizer sentido, destaque os diferenciais informados nos roteiros e legendas, fiel ao que foi dito (não invente benefícios nem regras), mas com palavras diferentes a cada vez — não repita a mesma frase.'
     : ''
 
+  // OBJETIVO DA MARCA (19/10/2026): muda o PAPEL de cada período e o fechamento das legendas.
+  // Sem objetivo ('') = o texto de sempre, palavra por palavra. O objetivo muda a escrita, nunca
+  // promete resultado (nada de "vai vender mais" / "vai viralizar").
+  const objetivoContexto = {
+    '': '',
+    alcance: '\n- OBJETIVO DO MÊS: ALCANCE — ser descoberto por gente nova (salvamentos, compartilhamentos, marcações).',
+    leads: '\n- OBJETIVO DO MÊS: LEADS — fazer a pessoa INICIAR UMA CONVERSA (direct, WhatsApp, pedir orçamento/avaliação).',
+    vendas: '\n- OBJETIVO DO MÊS: VENDAS — levar quem já conhece a marca a COMPRAR/CONTRATAR.'
+  }[marca.objetivo]
+  const regrasCta = {
+    '': `- CTA automático por período (Manhã = educativo, Tarde = venda):
+  - Posts de TARDE: a legenda deve terminar com o CTA de venda "${ctaObrigatorio}".
+  - Posts de MANHÃ: a legenda NUNCA usa o CTA de venda. Feche com um CTA leve de engajamento
+    (comentar, salvar, compartilhar, marcar um amigo), variando a frase a cada dia.`,
+    alcance: `- OBJETIVO ALCANCE — o mês inteiro é feito pra ser SALVO e COMPARTILHADO:
+  - Ganchos de curiosidade e utilidade; roteiros que ensinam algo prático ou contam algo que a
+    pessoa queira mandar pra alguém. Nada de pressão de venda.
+  - Posts de MANHÃ: feche pedindo pra SALVAR o post (variando a frase a cada dia).
+  - Posts de TARDE: feche pedindo pra COMPARTILHAR ou MARCAR alguém que precisa ver isso.
+  - O CTA de venda "${ctaObrigatorio}" aparece só no ÚLTIMO post de Tarde do calendário.`,
+    leads: `- OBJETIVO LEADS — cada post é um convite pra CONVERSAR com a marca:
+  - Roteiros que levantam uma dúvida ou dor comum do público e mostram que a marca resolve.
+  - Posts de MANHÃ: feche convidando a pessoa a COMENTAR a dúvida dela ou chamar no direct
+    (variando a frase a cada dia).
+  - Posts de TARDE: a legenda deve terminar com "${ctaObrigatorio}"; se essa chamada não for de
+    contato, acrescente antes dela um convite direto pra chamar no direct/WhatsApp.`,
+    vendas: `- OBJETIVO VENDAS — o mês conduz até a compra:
+  - Posts de MANHÃ: preparam a decisão — benefício concreto, como funciona, resposta a uma
+    objeção comum (preço, tempo, confiança). Feche com CTA leve (comentar, salvar), sem venda.
+  - Posts de TARDE: oferta clara do serviço, sempre fiel aos diferenciais informados (preço,
+    condição ou prazo SÓ se estiverem escritos acima), terminando com "${ctaObrigatorio}".`
+  }[marca.objetivo]
+
   return `Você é um estrategista de marketing digital sênior brasileiro. Crie um plano de conteúdo COMPLETO para o nicho: "${nicho}".
 
 CONTEXTO DA MARCA (use como REFERÊNCIA para deixar o conteúdo na cara dessa marca — NUNCA copie estes textos literalmente nos posts, apenas escreva no mesmo espírito, com palavras próprias):
 - Instagram de referência: ${instaLinha}
 - Serviços que devem aparecer nos posts: ${servicosLinha}
 - Tom de voz obrigatório (estilo/personalidade, não um texto pra repetir): ${tomObrigatorio}
-- CTA de venda (só entra nos posts de Tarde — ver regras abaixo): ${ctaObrigatorio}${diferenciaisContexto}
+- CTA de venda (${marca.objetivo ? 'onde ele entra está nas regras abaixo' : 'só entra nos posts de Tarde — ver regras abaixo'}): ${ctaObrigatorio}${diferenciaisContexto}${objetivoContexto}
 
 REGRA DE PRODUTO (vale para a estratégia E para os posts — nunca a quebre):
 - Esta ferramenta entrega ROTEIRO + LEGENDA + LOCUÇÃO (áudio de IA), além de cards em imagem
@@ -170,10 +208,7 @@ outro para Tarde (${qtdDias * 2} roteiros no total), cada um com:
 
 REGRAS OBRIGATÓRIAS para os posts:
 - Cada roteiro deve citar pelo menos 1 serviço da lista: ${servicosLinha}
-- CTA automático por período (Manhã = educativo, Tarde = venda):
-  - Posts de TARDE: a legenda deve terminar com o CTA de venda "${ctaObrigatorio}".
-  - Posts de MANHÃ: a legenda NUNCA usa o CTA de venda. Feche com um CTA leve de engajamento
-    (comentar, salvar, compartilhar, marcar um amigo), variando a frase a cada dia.
+${regrasCta}
 - Horário sugerido, baseado no nicho "${nicho}" e no período:
   - MANHÃ: escolha um horário entre 07:00 e 11:00 (horários com mais engajamento: 09:15, 10:30).
   - TARDE: escolha um horário entre 17:00 e 21:00 (horários com mais engajamento: 18:40, 20:15).
@@ -202,7 +237,7 @@ async function handler(request: Request): Promise<Response> {
       )
     }
 
-    const { nicho, tom, qtdPosts, instagram, servicos, tomMarca, cta, diferenciais, voz, hooksAnteriores, campanha } = await request.json()
+    const { nicho, tom, qtdPosts, instagram, servicos, tomMarca, cta, diferenciais, voz, hooksAnteriores, campanha, objetivo } = await request.json()
 
     if (!nicho || typeof nicho !== 'string') {
       return new Response(
@@ -217,6 +252,7 @@ async function handler(request: Request): Promise<Response> {
     // V1.5 Estudo de Marca: campos opcionais, retrocompatível se vierem vazios.
     const s = (v: unknown): string => (typeof v === 'string' ? v.trim() : '')
     const marca: Marca = {
+      objetivo: (OBJETIVOS_VALIDOS as string[]).includes(s(objetivo)) ? (s(objetivo) as Objetivo) : '',
       instagram: s(instagram),
       servicos: s(servicos),
       tomMarca: s(tomMarca),

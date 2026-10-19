@@ -20,6 +20,7 @@ import { RedesSociais } from '../components/RedesSociais'
 import { PublicarNewPost } from '../components/PublicarNewPost'
 import { TravaAcento } from '../components/TravaAcento'
 import { GravarBriefing } from '../components/GravarBriefing'
+import { OBJETIVOS_MARCA, papelDoPost, type ObjetivoMarca } from '../lib/objetivoMarca'
 import { corrigirAcentos } from '../lib/conferirAcentos'
 import { serieDoCalendario } from '../lib/newpost'
 import {
@@ -282,6 +283,10 @@ function SuperAgente() {
   const [tomMarca, setTomMarca] = useState('')
   const [cta, setCta] = useState('')
   const [diferenciais, setDiferenciais] = useState('')
+  // Objetivo do mês ('' = Equilibrado, o padrão de sempre). objetivoGerado = o que valeu na
+  // ÚLTIMA geração: o selo do card não muda se o cliente trocar o objetivo depois de gerar.
+  const [objetivo, setObjetivo] = useState<ObjetivoMarca>('')
+  const [objetivoGerado, setObjetivoGerado] = useState<ObjetivoMarca>('')
 
   // V1.6 Seletor de voz. '' = Automático (IA decide entre Zephyr/Puck).
   const [voz, setVoz] = useState('')
@@ -484,7 +489,7 @@ function SuperAgente() {
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ nicho, tom, qtdPosts: dropCampanha ? 1 : qtdDias, instagram, servicos, tomMarca, cta, diferenciais, voz, hooksAnteriores, campanha: dropCampanha ?? campanha }) // V1.6: voz forçada ('' = automático); drop sazonal = 1 post da data
+          body: JSON.stringify({ nicho, tom, qtdPosts: dropCampanha ? 1 : qtdDias, instagram, servicos, tomMarca, cta, diferenciais, voz, hooksAnteriores, campanha: dropCampanha ?? campanha, objetivo }) // V1.6: voz forçada ('' = automático); drop sazonal = 1 post da data
         },
         // retries 1 (13/10): o servidor já percorre 3 modelos (até ~54s) antes de devolver
         // 503 — repetir 3x aqui deixaria o cliente uns 4 min olhando "tentando de novo".
@@ -502,6 +507,7 @@ function SuperAgente() {
       const data = await safeJson(response)
       setEstrategia(data.estrategia)
       setPosts(data.posts)
+      setObjetivoGerado(objetivo)
 
       // Drop sazonal entregue: só marca DEPOIS do sucesso — se a geração falhar,
       // o banner continua oferecendo (marcar antes deixaria o aviso mentindo).
@@ -1341,6 +1347,30 @@ function SuperAgente() {
                 Regras, garantias, pós-venda, condições... A IA inclui isso nos roteiros, fiel ao que você escrever.
               </p>
             </div>
+
+            {/* Objetivo do mês: muda o papel de cada post (ver src/lib/objetivoMarca.ts). */}
+            <div className="mt-4">
+              <label className="block text-sm font-medium text-gray-300 mb-2">
+                Objetivo do mês <span className="text-gray-500 font-normal">(opcional)</span>
+              </label>
+              <div className="flex flex-wrap gap-2">
+                {OBJETIVOS_MARCA.map((o) => (
+                  <button
+                    key={o.valor || 'equilibrado'}
+                    type="button"
+                    onClick={() => setObjetivo(o.valor)}
+                    className={`px-3 py-1.5 rounded-full text-sm border transition-colors ${
+                      objetivo === o.valor ? 'bg-[#8B5CF6] border-[#8B5CF6] text-white' : 'bg-[#1A1A1A] border-gray-700 text-gray-300 hover:border-[#8B5CF6]'
+                    }`}
+                  >
+                    {o.rotulo}
+                  </button>
+                ))}
+              </div>
+              <p className="text-xs text-gray-600 mt-1">
+                {OBJETIVOS_MARCA.find((o) => o.valor === objetivo)?.explica} Muda a forma de escrever — não é promessa de resultado.
+              </p>
+            </div>
           </div>
 
           {/* Logo da marca: envia 1x, aparece em todos os cards automaticamente. */}
@@ -1625,7 +1655,7 @@ function SuperAgente() {
                   onAplicar={(v) => updatePostField(index, 'legenda', v)}
                 />
                 <span className="inline-block text-xs px-2 py-1 rounded-full bg-gray-700/50 text-gray-300">
-                  {post.periodo === 'Manhã' ? '🎯 Objetivo: Relacionamento' : '💰 Objetivo: Conversão/Venda'}
+                  {papelDoPost(post.periodo, objetivoGerado)}
                 </span>
 
                 {/* Upload de imagem/logo do cliente por card (client-side, entra no ZIP). */}
