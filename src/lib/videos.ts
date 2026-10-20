@@ -238,6 +238,22 @@ export async function alternarVertical(id: string, vertical: boolean) {
   return supabase.from(TABELA).update({ vertical }).eq('id', id)
 }
 
+// A página já envolve a frase em aspas (“…”). Aspas digitadas pelo admin viravam aspa dupla
+// (caso real 20/10/2026: `"Roteiros, legendas…`). Tira as das pontas, mantém as do meio.
+export function limparFrase(frase: string): string {
+  return frase.trim().replace(/^["'“”‘’]+|["'“”‘’]+$/g, '').trim()
+}
+
+// EDITAR (20/10/2026): título e frase de um vídeo JÁ publicado — antes, a única saída era
+// apagar e subir de novo (e um vídeo de 182 MB não volta: o teto do upload é 50 MB).
+export async function atualizarTextos(id: string, titulo: string, frase: string) {
+  const f = limparFrase(frase)
+  // .select(): com RLS, update barrado volta SEM erro e 0 linhas — conferir que salvou mesmo.
+  const { data, error } = await supabase.from(TABELA).update({ titulo: titulo.trim(), frase: f || null }).eq('id', id).select('id')
+  if (!error && (!data || data.length === 0)) return { error: new Error('nenhuma linha atualizada (sem permissão?)') }
+  return { error }
+}
+
 export async function atualizarOrdem(id: string, sortOrder: number) {
   return supabase.from(TABELA).update({ sort_order: sortOrder }).eq('id', id)
 }

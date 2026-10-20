@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Loader2, AlertCircle, CheckCircle2, Upload, Trash2, Eye, EyeOff, ArrowUp, ArrowDown, RectangleHorizontal, RectangleVertical } from 'lucide-react'
+import { Loader2, AlertCircle, CheckCircle2, Upload, Trash2, Eye, EyeOff, ArrowUp, ArrowDown, RectangleHorizontal, RectangleVertical, Pencil } from 'lucide-react'
 import {
   listarVideosAdmin,
   criarVideo,
@@ -8,6 +8,8 @@ import {
   alternarAtivo,
   alternarVertical,
   atualizarOrdem,
+  atualizarTextos,
+  limparFrase,
   gerarPoster,
   extrairYoutubeId,
   youtubeThumb,
@@ -37,6 +39,9 @@ export function VideosFundador() {
   const [enviando, setEnviando] = useState(false)
   const [etapa, setEtapa] = useState('')
   const fileInputRef = useRef<HTMLInputElement>(null)
+  // Edição de um vídeo já publicado (título + frase), um por vez.
+  const [editando, setEditando] = useState<{ id: string; titulo: string; frase: string } | null>(null)
+  const [salvandoEdicao, setSalvandoEdicao] = useState(false)
 
   const youtubeId = extrairYoutubeId(linkYoutube)
   const podeEnviar = titulo.trim() && (modo === 'youtube' ? !!youtubeId : !!file)
@@ -84,12 +89,12 @@ export function VideosFundador() {
 
       if (modo === 'youtube') {
         setEtapa('Publicando...')
-        await criarVideoYoutube(titulo.trim(), frase, youtubeId!, vertical, proximaOrdem)
+        await criarVideoYoutube(titulo.trim(), limparFrase(frase), youtubeId!, vertical, proximaOrdem)
       } else {
         setEtapa('Gerando miniatura...')
         const poster = await gerarPoster(file!)
         setEtapa('Enviando vídeo...')
-        await criarVideo({ titulo: titulo.trim(), frase, file: file!, poster, vertical, sortOrder: proximaOrdem })
+        await criarVideo({ titulo: titulo.trim(), frase: limparFrase(frase), file: file!, poster, vertical, sortOrder: proximaOrdem })
       }
 
       setSuccess('Vídeo publicado! Já está no ar na página de preços e em /videos.')
@@ -124,6 +129,18 @@ export function VideosFundador() {
       console.error('Erro ao apagar vídeo:', err)
       setError('Não consegui apagar o vídeo agora.')
     }
+  }
+
+  async function salvarEdicao() {
+    if (!editando || !editando.titulo.trim()) return
+    setSalvandoEdicao(true)
+    setError('')
+    const { error: err } = await atualizarTextos(editando.id, editando.titulo, editando.frase)
+    setSalvandoEdicao(false)
+    if (err) return setError('Não consegui salvar a edição agora.')
+    setEditando(null)
+    setSuccess('Vídeo atualizado — já vale na página de preços e em /videos.')
+    await carregar()
   }
 
   async function handleAlternar(video: VideoFundador) {
@@ -348,8 +365,33 @@ export function VideosFundador() {
               })()}
 
               <div className="flex-1 min-w-0">
-                <p className="text-white font-medium">{video.titulo}</p>
-                {video.frase && <p className="text-sm text-gray-400 mt-0.5">“{video.frase}”</p>}
+                {editando?.id === video.id ? (
+                  <div className="space-y-2">
+                    <input
+                      value={editando.titulo}
+                      onChange={(e) => setEditando({ ...editando, titulo: e.target.value })}
+                      placeholder="Título"
+                      className={inputClass}
+                    />
+                    <input
+                      value={editando.frase}
+                      onChange={(e) => setEditando({ ...editando, frase: e.target.value })}
+                      placeholder="Frase de destaque (opcional) — sem aspas, a página já coloca"
+                      className={inputClass}
+                    />
+                    <div className="flex gap-2">
+                      <Button onClick={salvarEdicao} disabled={salvandoEdicao || !editando.titulo.trim()} className="bg-[#8B5CF6] hover:bg-[#7C3AED] text-xs h-8">
+                        {salvandoEdicao ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : 'Salvar'}
+                      </Button>
+                      <button type="button" onClick={() => setEditando(null)} className="text-xs text-gray-400 hover:text-white">Cancelar</button>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <p className="text-white font-medium">{video.titulo}</p>
+                    {video.frase && <p className="text-sm text-gray-400 mt-0.5">“{video.frase}”</p>}
+                  </>
+                )}
                 <p className="text-xs text-gray-600 mt-1">
                   {video.youtube_id ? 'YouTube' : 'Arquivo próprio'} ·{' '}
                   {video.vertical ? 'Vertical' : 'Horizontal'} ·{' '}
@@ -381,6 +423,14 @@ export function VideosFundador() {
                     {video.vertical
                       ? <><RectangleHorizontal className="w-3.5 h-3.5" /> Virar p/ horizontal</>
                       : <><RectangleVertical className="w-3.5 h-3.5" /> Virar p/ vertical</>}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEditando({ id: video.id, titulo: video.titulo, frase: video.frase ?? '' })}
+                    disabled={editando?.id === video.id}
+                    className="text-xs px-3 py-1 rounded-md bg-[#1A1A1A] border border-gray-700 text-gray-300 hover:border-[#8B5CF6] disabled:opacity-30 flex items-center gap-1"
+                  >
+                    <Pencil className="w-3.5 h-3.5" /> Editar
                   </button>
                   <button
                     onClick={() => handleAlternar(video)}
