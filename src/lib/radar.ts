@@ -25,3 +25,10 @@ export function computeRadarAccess(profile: ProfileLike | null | undefined): Rad
 
   return { active: !expired, expiresAt, daysLeft, expired }
 }
+
+// DOMINAÇÃO INCLUI O RADAR (20/10/2026): Dominação = Crescimento + Radar. Espelho no front da
+// regra do servidor (api/_lib/radarAcesso.ts) — mudar os dois juntos. `acessoPagoValido` é o
+// mesmo critério do acesso ao conteúdo (plano pago com cortesia válida, se houver).
+export function temRadarPeloPlano(plan: string | null, acessoPagoValido: boolean): boolean {
+  return plan === 'dominacao' && acessoPagoValido
+}

@@ -306,6 +306,16 @@ export function PublicarNewPost({
           : 'Publicar na NewPost-IA'}
       </Button>
       {erro && <p className="text-yellow-500 text-xs">{erro}</p>}
+      {/* Convite honesto (19/10/2026, critério da casa: só vendemos a verdade). DESCREVE o que
+          acontece, não promete resultado — nada de "ganhar alcance"/"viralizar" (a rede ainda
+          tem pouca gente) nem "1 clique" (na 1ª vez há a confirmação do perfil). */}
+      {!erro && estado === 'parado' && (
+        <p className="text-[11px] leading-snug text-gray-500">
+          Mostre este post na NewPost-IA, a rede brasileira de criadores. Ele sai no seu perfil, com os
+          cards e a locução. Na primeira vez, você confirma o nome do perfil (a bio a gente sugere, e é
+          opcional) e, se já tiver conta na rede, digita a senha dela.
+        </p>
+      )}
     </div>
   )
 }

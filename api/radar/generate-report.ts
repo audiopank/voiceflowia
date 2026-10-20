@@ -6,6 +6,7 @@ export const maxDuration = 60
 
 import { createClient } from '@supabase/supabase-js'
 import { gerarComReserva } from '../_lib/geminiReserva.js'
+import { temRadar, COLUNAS_RADAR } from '../_lib/radarAcesso.js'
 
 interface Mencao {
   fonte: string
@@ -317,8 +318,9 @@ async function handler(request: Request): Promise<Response> {
     const user = userData.user
 
     // Confere entitlement do Radar (defesa em profundidade além do gate no client).
-    const { data: profile } = await supabaseAdmin.from('profiles').select('radar_expires_at').eq('id', user.id).maybeSingle()
-    const radarActive = profile?.radar_expires_at && new Date(profile.radar_expires_at).getTime() > Date.now()
+    // Radar avulso OU Plano Dominação ativo — regra única em api/_lib/radarAcesso.
+    const { data: profile } = await supabaseAdmin.from('profiles').select(COLUNAS_RADAR).eq('id', user.id).maybeSingle()
+    const radarActive = temRadar(profile)
     if (!radarActive) return new Response(JSON.stringify({ error: 'Sem acesso ao Radar' }), { status: 403, headers: { 'Content-Type': 'application/json' } })
 
     const { data: config } = await supabaseAdmin.from('radar_config').select('*').eq('user_id', user.id).maybeSingle()

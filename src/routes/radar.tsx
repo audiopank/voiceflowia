@@ -169,7 +169,7 @@ function Field({ label, hint, children }: { label: string; hint?: string; childr
 }
 
 function Radar() {
-  const { hasRadar, loading: subLoading, radar } = useSubscription()
+  const { hasRadar, loading: subLoading, radar, radarPeloPlano } = useSubscription()
   const navigate = useNavigate()
 
   const [userId, setUserId] = useState<string | null>(null)
@@ -394,8 +394,8 @@ function Radar() {
           <Lock className="w-16 h-16 text-gray-600 mx-auto mb-4" />
           <h2 className="text-2xl font-bold text-white mb-2">Acesso Restrito</h2>
           <p className="text-gray-400 mb-6">
-            O <span className="text-[#8B5CF6] font-bold">VoiceFlow Radar</span> está disponível no plano{' '}
-            <span className="text-[#22C55E] font-bold">RADAR PRO</span>.
+            O <span className="text-[#8B5CF6] font-bold">VoiceFlow Radar</span> está disponível no{' '}
+            <span className="text-[#22C55E] font-bold">Plano Dominação</span> (já incluso) ou como Radar avulso.
           </p>
           <Button className="bg-[#8B5CF6] hover:bg-[#7C3AED]" onClick={() => (window.location.href = '/precos')}>
             Ver Planos
@@ -468,11 +468,13 @@ function Radar() {
         </div>
         <p className="text-gray-400 mb-8">
           Monitore a reputação da sua marca na web, receba alertas de crise e descubra tendências do seu nicho.
-          {radar.expiresAt && (
+          {radar.active && radar.expiresAt ? (
             <span className="block text-xs text-gray-600 mt-1">
               Acesso ativo até {radar.expiresAt.toLocaleDateString('pt-BR')} · {radar.daysLeft} dias restantes
             </span>
-          )}
+          ) : radarPeloPlano ? (
+            <span className="block text-xs text-gray-600 mt-1">Incluso no seu Plano Dominação.</span>
+          ) : null}
         </p>
 
         <div className="space-y-6">

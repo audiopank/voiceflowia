@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { supabase } from './supabase'
 import { computeTrial, podeIniciarTrial, TRIAL_INTENT_KEY, type TrialState } from './trial'
 import { computeCourtesy, type CourtesyState } from './courtesy'
-import { computeRadarAccess, type RadarAccessState } from './radar'
+import { computeRadarAccess, temRadarPeloPlano, type RadarAccessState } from './radar'
 
 interface SubscriptionState {
   plan: string | null
@@ -160,10 +160,11 @@ export function useSubscription() {
   // pra quem era cortesia (caso real: o próprio dono e o lead PC em 10/09).
   const courtesyExpired = isPaidPlan && courtesyGated && !state.courtesy.active
 
-  // Acesso ao módulo Radar (add-on independente): entitlement paralelo, NÃO
-  // depende de hasAccess/subscription_plan. Cliente pode ter só Radar, ou
-  // Dominação + Radar, etc.
-  const hasRadar = state.radar.active
+  // Acesso ao módulo Radar: (1) Radar avulso — entitlement paralelo (radar_expires_at), não
+  // depende do plano; ou (2) PLANO DOMINAÇÃO ativo, que inclui o Radar desde 20/10/2026
+  // (mesma regra do servidor em api/_lib/radarAcesso.ts).
+  const radarPeloPlano = temRadarPeloPlano(state.plan, isPaidPlan && state.status === 'active' && (!courtesyGated || state.courtesy.active))
+  const hasRadar = state.radar.active || radarPeloPlano
 
   return {
     ...state,
@@ -171,6 +172,7 @@ export function useSubscription() {
     // Mesmo criterio de hasAccess; mantido pelo nome usado no Dashboard.
     hasContentAgentFeature: hasAccess,
     hasRadar,
+    radarPeloPlano,
     courtesyExpired,
     startTrial,
     refresh: fetchSubscription,

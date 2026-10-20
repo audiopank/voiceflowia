@@ -7,6 +7,7 @@ export const maxDuration = 60
 
 import { createClient } from '@supabase/supabase-js'
 import { gerarComReserva } from '../_lib/geminiReserva.js'
+import { temRadar, COLUNAS_RADAR } from '../_lib/radarAcesso.js'
 
 const MAX_CONFIGS = 25 // teto de segurança por execução (protege os créditos do Serper)
 
@@ -215,8 +216,10 @@ async function handler(request: Request): Promise<Response> {
 
   // Só configs de usuários com Radar ativo.
   const nowIso = new Date().toISOString()
-  const { data: profiles } = await supabaseAdmin.from('profiles').select('id, radar_expires_at').gt('radar_expires_at', nowIso)
-  const activeIds = new Set((profiles || []).map((p: any) => p.id))
+  // Radar avulso (radar_expires_at) OU Plano Dominação ativo — regra única em api/_lib/radarAcesso.
+  const { data: profiles, error: erroPerfis } = await supabaseAdmin.from('profiles').select(COLUNAS_RADAR).or(`radar_expires_at.gt."${nowIso}",subscription_plan.eq.dominacao`)
+  if (erroPerfis) console.error('radar/cron: falha ao listar quem tem Radar:', erroPerfis.message)
+  const activeIds = new Set((profiles || []).filter((p: any) => temRadar(p)).map((p: any) => p.id))
   if (activeIds.size === 0) return new Response(JSON.stringify({ ok: true, processed: 0 }), { headers: { 'Content-Type': 'application/json' } })
 
   const { data: configs } = await supabaseAdmin.from('radar_config').select('*').in('user_id', Array.from(activeIds)).limit(MAX_CONFIGS)
