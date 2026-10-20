@@ -184,18 +184,67 @@ export function conferirPost(post: PostCatalogo, item: ItemCatalogo, indice: num
 
 // "Bolo de pote — R$ 12,00 — 4 sabores" → item. Aceita tab, ;, |, " - ", " — ", " – ".
 // A parte que parece preço vira `preco`; o resto (depois do nome) vira `detalhes`.
-export function lerCatalogo(texto: string): ItemCatalogo[] {
+//
+// LEITURA ESPERTA (21/10/2026 — caso real do Mestre: colou o catálogo do Locutores com o nome
+// numa linha e o preço na de baixo, misturado com o texto de "como funciona" → virou 22
+// "produtos" e o post nº 1 saiu sobre "Você preenche o briefing"). Regras fixas, sem IA:
+//   1. linha que é SÓ preço ("R$ 127,00") gruda no produto de cima, se ele ainda não tem preço;
+//   2. linha sem nenhuma letra ("2", emoji, "---") é ignorada;
+//   3. frase de texto corrido (termina em . ! ? : ou passa de 10 palavras) sem preço é ignorada;
+//   4. preço no fim da linha sem separador ("Spot 30s R$ 127,00") é reconhecido.
+// O que foi ignorado volta em `ignoradas` pra tela MOSTRAR — nada some escondido.
+const PRECO = /^(r\$\s*)?\d[\d.]*(,\d{1,2})?(\s*reais)?$/i
+const PRECO_NO_FIM = /\s+(r\$\s*\d[\d.]*(?:,\d{1,2})?)$/i
+// Preço numa linha SOZINHA precisa parecer dinheiro (R$, centavos ou "reais"): um "2" solto é
+// número de passo de lista, não preço (caso real: grudou "2" no item "Você preenche o briefing").
+const PRECO_SOZINHO = /^(r\$\s*\d[\d.]*(,\d{1,2})?|\d[\d.]*,\d{2}|\d[\d.]*(,\d{1,2})?\s*reais)$/i
+
+export interface LeituraCatalogo {
+  itens: ItemCatalogo[]
+  ignoradas: string[]
+}
+
+export function lerCatalogoDetalhado(texto: string): LeituraCatalogo {
   const itens: ItemCatalogo[] = []
-  for (const linhaBruta of texto.split(/\r?\n/)) {
-    const linha = linhaBruta.trim()
-    if (!linha) continue
+  const ignoradas: string[] = []
+  const linhas = texto.split(/\r?\n/).map((l) => l.trim()).filter(Boolean)
+  // Guard 21/10: o preço só gruda no produto IMEDIATAMENTE acima. Se a linha de cima foi
+  // ignorada, o preço não pode "pular" pro produto anterior — a conferência aprovaria o preço
+  // errado ("Pão de mel / Brigadeiro gourmet! / R$ 5,00" dava R$ 5,00 ao Pão de mel).
+  let anteriorFoiItem = false
+  const ignorar = (l: string) => { ignoradas.push(l); anteriorFoiItem = false }
+  for (let n = 0; n < linhas.length; n++) {
+    const linha = linhas[n]
+    // 1. só preço → gruda no produto logo acima
+    if (PRECO_SOZINHO.test(linha)) {
+      const anterior = itens[itens.length - 1]
+      if (anteriorFoiItem && anterior && !anterior.preco) { anterior.preco = linha.slice(0, 40); anteriorFoiItem = false }
+      else ignorar(linha)
+      continue
+    }
+    // 2. sem letra nenhuma
+    if (!/\p{L}/u.test(linha)) { ignorar(linha); continue }
+    // A linha de baixo é um preço sozinho? Então esta é o nome do produto (não é texto corrido).
+    const precoNaProxima = n + 1 < linhas.length && PRECO_SOZINHO.test(linhas[n + 1])
     const partes = linha.split(/\t|;|\||\s[-—–]\s/).map((p) => p.trim()).filter(Boolean)
     if (partes.length === 0) continue
-    const [nome, ...resto] = partes
-    const iPreco = resto.findIndex((p) => /^(r\$\s*)?\d[\d.]*(,\d{1,2})?(\s*reais)?$/i.test(p))
+    let [nome, ...resto] = partes
+    // numeração de lista ("1. ", "2) ") não faz parte do nome
+    nome = nome.replace(/^\d{1,2}[.)]\s+/, '')
+    // 4. preço colado no fim do nome, sem separador
+    const fim = resto.length === 0 ? nome.match(PRECO_NO_FIM) : null
+    if (fim && fim.index !== undefined) { resto = [fim[1]]; nome = nome.slice(0, fim.index).trim() }
+    const iPreco = resto.findIndex((p) => PRECO.test(p))
     const preco = iPreco >= 0 ? resto[iPreco] : ''
+    // 3. frase de texto corrido, sem preço e sem separador → não é produto
+    if (!preco && !precoNaProxima && resto.length === 0 && (/[.!?…:]$/.test(nome) || nome.split(/\s+/).length > 10)) { ignorar(linha); continue }
     const detalhes = resto.filter((_, i) => i !== iPreco).join(' · ')
     itens.push({ nome: nome.slice(0, 120), preco: preco.slice(0, 40), detalhes: detalhes.slice(0, 400) })
+    anteriorFoiItem = true
   }
-  return itens
+  return { itens, ignoradas }
+}
+
+export function lerCatalogo(texto: string): ItemCatalogo[] {
+  return lerCatalogoDetalhado(texto).itens
 }

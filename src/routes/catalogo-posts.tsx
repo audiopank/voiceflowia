@@ -15,7 +15,7 @@ import { convertVoiceToMp3 } from '../lib/audioConvert'
 import { realcarVoz } from '../lib/estudioCards'
 import { listarKits } from '../lib/kitsWhatsapp'
 import {
-  conferirPost, lerCatalogo, MAX_ITENS_CATALOGO, type ItemCatalogo, type PostCatalogo,
+  conferirPost, lerCatalogoDetalhado, MAX_ITENS_CATALOGO, type ItemCatalogo, type PostCatalogo,
 } from '../lib/conferirCatalogo'
 import { TravaAcento } from '../components/TravaAcento'
 import { corrigirAcentos } from '../lib/conferirAcentos'
@@ -81,7 +81,15 @@ function CatalogoPosts() {
   const [gerandoAudio, setGerandoAudio] = useState<number | null>(null)
   const [audioErros, setAudioErros] = useState<Record<number, string>>({})
 
-  const itens = useMemo(() => lerCatalogo(catalogoTexto), [catalogoTexto])
+  // Leitura esperta (21/10/2026): junta nome + preço em linhas separadas, ignora linha sem
+  // produto e mostra o que ignorou. Lista MISTA (uns com preço, outros sem): os com preço vêm
+  // primeiro e os sem preço ganham aviso — no caso real, os sem preço eram títulos do texto.
+  const leitura = useMemo(() => lerCatalogoDetalhado(catalogoTexto), [catalogoTexto])
+  const listaMista = leitura.itens.some((it) => it.preco) && leitura.itens.some((it) => !it.preco)
+  const itens = useMemo(
+    () => (listaMista ? [...leitura.itens.filter((it) => it.preco), ...leitura.itens.filter((it) => !it.preco)] : leitura.itens),
+    [leitura, listaMista]
+  )
   const itensUsados = itens.slice(0, MAX_ITENS_CATALOGO)
 
   // MEMÓRIA: quem já fez um Kit de WhatsApp já contou os fatos da marca — puxa do
@@ -425,10 +433,17 @@ function CatalogoPosts() {
               {itensUsados.map((it, i) => (
                 <p key={i} className="text-gray-300">
                   <span className="text-gray-500">{i + 1}.</span> <strong>{it.nome}</strong>
-                  {' · '}{it.preco ? <span className="text-[#22C55E]">{it.preco}</span> : <span className="text-amber-400">sem preço (o post não vai citar preço)</span>}
+                  {' · '}{it.preco ? <span className="text-[#22C55E]">{it.preco}</span> : <span className="text-amber-400">{listaMista ? 'sem preço — é produto mesmo ou um título do texto? Se for título, apague a linha.' : 'sem preço (o post não vai citar preço)'}</span>}
                   {it.detalhes && <span className="text-gray-500"> · {it.detalhes}</span>}
                 </p>
               ))}
+              {leitura.ignoradas.length > 0 && (
+                <p className="text-xs text-gray-500">
+                  Ignorei {leitura.ignoradas.length} {leitura.ignoradas.length === 1 ? 'linha que não parece produto' : 'linhas que não parecem produto'}:{' '}
+                  {leitura.ignoradas.slice(0, 4).map((l) => `"${l.length > 40 ? l.slice(0, 40) + '…' : l}"`).join(', ')}
+                  {leitura.ignoradas.length > 4 ? '…' : ''}
+                </p>
+              )}
               {itens.length > MAX_ITENS_CATALOGO && (
                 <p className="text-amber-400">Só os {MAX_ITENS_CATALOGO} primeiros entram nesta rodada ({itens.length - MAX_ITENS_CATALOGO} ficam pra próxima).</p>
               )}
