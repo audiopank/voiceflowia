@@ -204,7 +204,9 @@ const PROMESSAS_MARCA: { rotulo: string; re: RegExp }[] = [
   { rotulo: 'promoção / oferta', re: /\bpromocao\b|\bpromocoes\b|\bpromo\b|\bofertas?\b/ },
   { rotulo: 'parcelamento', re: /\bparcel(a|as|ado|ados|amento)\b|sem juros/ },
   { rotulo: 'garantia', re: /\bgarantia\b|\bgarantimos\b|satisfacao garantida/ },
-  { rotulo: 'estoque / últimas unidades', re: /\bestoque\b|ultimas unidades|pronta entrega/ },
+  // "estoque" sozinho NÃO é promessa ("transforme seu estoque em posts" — teste ao vivo do
+  // Mestre 30/10): só a escassez/disponibilidade anunciada.
+  { rotulo: 'estoque / últimas unidades', re: /\bem estoque\b|estoque limitado|estoque acabando|acabando o estoque|ultimas unidades|poucas unidades|pronta entrega|restam (so|apenas) \d/ },
   { rotulo: 'urgência (só hoje, último dia…)', re: /so hoje|ultimo dia|ultimos dias|tempo limitado|corre que acaba|enquanto durar/ },
   { rotulo: 'brinde / grátis', re: /\bbrindes?\b|(?<!frete )\bgratis\b/ },
   { rotulo: 'fama / superlativo (mais pedido, o melhor da cidade, famoso…)', re: /mais (pedid|vendid|procurad|famos)|\b(o|a) melhor\b[^.!?\n]{0,30}\b(da|do|de) (cidade|regiao|bairro|brasil|mundo|estado|zona)\b|melhor da cidade|\bfamos[oa]s?\b|numero 1\b|\bcampea|\blider\b|sucesso de vendas/ },
