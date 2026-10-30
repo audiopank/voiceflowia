@@ -36,6 +36,9 @@ import { useTrilhaFundo, TrilhaFundoPanel } from '../components/TrilhaFundo'
 import { CtaObjetivo } from '../components/CtaObjetivo'
 import { FeedPreview } from '../components/FeedPreview'
 import { HumanizarButton } from '../components/HumanizarButton'
+import { useEstiloCard } from '../lib/useEstiloCard'
+import { PainelCoresCarrossel, DestacarNoPost, TextoComDestaque, alternarChave } from '../components/EstiloCardUI'
+import { coresDoSlide } from '../components/CardExport'
 
 // Espaça as gerações de voz para não estourar o limite/minuto do free tier.
 const VOICE_THROTTLE_MS = 3500
@@ -322,6 +325,10 @@ function SuperAgente() {
 
   // Logo da marca: enviada 1x, aplicada em TODOS os cards. base64 p/ embutir no PNG.
   const [brandLogo, setBrandLogo] = useState<string | null>(null)
+  // Cores dos cards do carrossel (mesma paleta e mesma memória do Card Mágico) + palavras
+  // em destaque no card do gancho, por post (chave = índice do post, nunca campo da IA).
+  const { corFundo, setCorFundo, corDestaque, setCorDestaque } = useEstiloCard()
+  const [destaquesPorPost, setDestaquesPorPost] = useState<Record<number, string[]>>({})
   const [logoError, setLogoError] = useState('')
   const [exportingIndex, setExportingIndex] = useState<number | null>(null)
   // Cada dia vira um carrossel de até 4 slides (Hook, Roteiro, Legenda, Imagem — pedido de
@@ -473,6 +480,7 @@ function SuperAgente() {
     setEstrategia(null)
     setEstrategiaAberta(false)
     setPosts(null)
+    setDestaquesPorPost({})
     setDropNestaSessao(false)
     setAudioBlobs({})
     setAudioErrors({})
@@ -771,7 +779,7 @@ function SuperAgente() {
           pixelRatio: 2,
           width: EXPORT_W,
           height: EXPORT_H,
-          backgroundColor: '#111111',
+          backgroundColor: coresDoSlide(corFundo).fundo,
         })
         const a = document.createElement('a')
         a.href = dataUrl
@@ -795,7 +803,7 @@ function SuperAgente() {
   async function prepararMidiaNewPost(index: number): Promise<{ imagens: Blob[]; audio: Blob | null }> {
     // Mesmo desenho de antes (pixelRatio 2, 540x675, fundo #111111): agora sai do
     // renderSlidesToBlobs em CardExport.tsx, a mesma máquina que o Agente usa.
-    const imagens = await renderSlidesToBlobs(exportRefs.current, index, slidesFor(index))
+    const imagens = await renderSlidesToBlobs(exportRefs.current, index, slidesFor(index), corFundo)
 
     let audio: Blob | null = null
     const bruto = audioBlobs[index]
@@ -849,7 +857,7 @@ function SuperAgente() {
               pixelRatio: 2,
               width: EXPORT_W,
               height: EXPORT_H,
-              backgroundColor: '#111111',
+              backgroundColor: coresDoSlide(corFundo).fundo,
             })
             cards?.file(`${diaTag(p.dia, p.periodo, p.horario)}-${i + 1}-${slide}.png`, dataUrl.split(',')[1], { base64: true })
           } catch (err) {
@@ -1500,7 +1508,9 @@ function SuperAgente() {
                   {errorCount > 0 && <span className="text-yellow-500"> · {errorCount} falharam (cota da API)</span>}
                 </p>
               </div>
-              <div className="flex gap-3">
+              {/* flex-wrap: no celular os 3 botões não cabem numa linha — sem quebrar, a fileira
+                  empurrava a página pra 656px de largura (rolagem lateral). */}
+              <div className="flex flex-wrap gap-3">
                 <Button
                   onClick={handleGenerateAllAudio}
                   disabled={generatingAll}
@@ -1556,6 +1566,14 @@ function SuperAgente() {
           <Fragment>
           {/* Estúdio: trilha de fundo única do kit + aviso do Realce automático. */}
           <TrilhaFundoPanel estudio={estudio} />
+          <PainelCoresCarrossel
+            corFundo={corFundo}
+            setCorFundo={setCorFundo}
+            corDestaque={corDestaque}
+            setCorDestaque={setCorDestaque}
+            previaTexto={posts[0]?.hook ?? ''}
+            previaDestaques={destaquesPorPost[0] ?? []}
+          />
           {/* Redes sociais do cliente: postar o conteúdo em 1 clique, sem sair do app. */}
           <RedesSociais
             links={socialLinks}
@@ -1609,6 +1627,12 @@ function SuperAgente() {
                   </div>
                   <HumanizarButton texto={post.hook} campo="hook" onHumanizado={(v) => updatePostField(index, 'hook', v)} />
                 </div>
+                <DestacarNoPost
+                  frase={post.hook}
+                  destaques={destaquesPorPost[index] ?? []}
+                  corDestaque={corDestaque}
+                  onAlternar={(chave) => setDestaquesPorPost((d) => ({ ...d, [index]: alternarChave(d[index] ?? [], chave) }))}
+                />
                 <div className="flex items-start gap-1">
                   <div className="flex-1 min-w-0">
                     <PostField
@@ -1793,10 +1817,11 @@ function SuperAgente() {
                   key={slide}
                   innerRef={(el) => { exportRefs.current[slideRefKey(index, slide)] = el }}
                   brandLogo={brandLogo}
+                  fundo={corFundo}
                 >
                   {slide === 'hook' && (
                     <p style={{ margin: 0, fontWeight: 700, lineHeight: 1.25, fontSize: hookFontSize(post.hook) }}>
-                      {post.hook}
+                      <TextoComDestaque texto={post.hook} destaques={destaquesPorPost[index] ?? []} cor={corDestaque} />
                     </p>
                   )}
                   {slide === 'roteiro' && (

@@ -13,10 +13,11 @@ import { CtaObjetivo } from '../components/CtaObjetivo'
 import { FeedPreview } from '../components/FeedPreview'
 import { HumanizarButton } from '../components/HumanizarButton'
 import {
-  PALETA, COR_FUNDO_PADRAO, COR_DESTAQUE_PADRAO, COR_TEXTO_CLARA, ESCALA_DESTAQUE, CONTRASTE_MINIMO_DESTAQUE,
+  COR_FUNDO_PADRAO, COR_TEXTO_CLARA, ESCALA_DESTAQUE, CONTRASTE_MINIMO_DESTAQUE,
   corDoTexto, contraste, chaveDaPalavra, palavrasDaFrase, quebrarComDestaque, larguraDaLinha, corDominante,
-  type CorPaleta,
 } from '../lib/estiloCard'
+import { useEstiloCard } from '../lib/useEstiloCard'
+import { PaletaCores, PalavrasDestaque, alternarChave } from '../components/EstiloCardUI'
 
 export const Route = createFileRoute('/card-magico')({
   component: CardMagico,
@@ -107,35 +108,6 @@ function wrapText(ctx: CanvasRenderingContext2D, texto: string, maxWidth: number
   return linhas
 }
 
-// As cores escolhidas ficam lembradas NESTE navegador (conveniência, não dado da conta).
-const CHAVE_ESTILO = 'vfia:card-estilo'
-function lerEstiloSalvo(): { fundo: string; destaque: string } {
-  try {
-    const salvo = JSON.parse(localStorage.getItem(CHAVE_ESTILO) || 'null')
-    const hex = (v: unknown) => typeof v === 'string' && /^#[0-9A-F]{6}$/i.test(v)
-    if (salvo && hex(salvo.fundo) && hex(salvo.destaque)) return salvo
-  } catch { /* navegador sem storage: usa o padrão */ }
-  return { fundo: COR_FUNDO_PADRAO, destaque: COR_DESTAQUE_PADRAO }
-}
-
-function Bolinha({ cor, ativa, onClick }: { cor: CorPaleta; ativa: boolean; onClick: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-pressed={ativa}
-      aria-label={cor.nome}
-      title={cor.nome}
-      className={`w-8 h-8 rounded-full flex items-center justify-center border transition-transform ${
-        ativa ? 'ring-2 ring-white ring-offset-2 ring-offset-[#111111] scale-110' : 'border-white/15 hover:scale-110'
-      }`}
-      style={{ backgroundColor: cor.hex }}
-    >
-      {ativa && <Check className="w-4 h-4" style={{ color: corDoTexto(cor.hex) }} />}
-    </button>
-  )
-}
-
 function CardMagico() {
   const navigate = useNavigate()
   const { hasContentAgentFeature, trial, loading: subLoading, refresh } = useSubscription()
@@ -152,16 +124,13 @@ function CardMagico() {
   const [uploadErro, setUploadErro] = useState('')
   const [rateNotice, setRateNotice] = useState('')
   const [copiado, setCopiado] = useState(false)
-  const [corFundo, setCorFundo] = useState(() => lerEstiloSalvo().fundo)
-  const [corDestaque, setCorDestaque] = useState(() => lerEstiloSalvo().destaque)
+  const { corFundo, setCorFundo, corDestaque, setCorDestaque } = useEstiloCard()
   // Chaves (chaveDaPalavra) das palavras da frase que o cliente tocou pra destacar.
   const [destaques, setDestaques] = useState<string[]>([])
+  // true = as palavras marcadas agora vieram da sugestão da IA (o cliente ainda não mexeu).
+  const [destaqueDaIA, setDestaqueDaIA] = useState(false)
   const [corDaFoto, setCorDaFoto] = useState<string | null>(null)
   const [avisoCorFoto, setAvisoCorFoto] = useState('')
-
-  useEffect(() => {
-    try { localStorage.setItem(CHAVE_ESTILO, JSON.stringify({ fundo: corFundo, destaque: corDestaque })) } catch { /* sem storage */ }
-  }, [corFundo, corDestaque])
 
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -183,7 +152,7 @@ function CardMagico() {
       setLegenda('')
       setGancho('')
       setHeadline('')
-      setDestaques([])
+      setDestaques([]); setDestaqueDaIA(false)
       setCorDaFoto(null)
       setAvisoCorFoto('')
       setErro('')
@@ -245,10 +214,19 @@ function CardMagico() {
         throw new Error('A IA não retornou uma legenda. Tente de novo.')
       }
       setLegenda(data.legenda)
-      setDestaques([])
       setGancho(typeof data.gancho === 'string' ? data.gancho : '')
       // O endpoint sempre manda headline, mas se um dia falhar a 1ª linha da legenda salva o card.
-      setHeadline(typeof data.headline === 'string' && data.headline ? data.headline : data.legenda.split('\n')[0])
+      const novaHeadline = typeof data.headline === 'string' && data.headline ? data.headline : data.legenda.split('\n')[0]
+      setHeadline(novaHeadline)
+      // Palavras-chave sugeridas pela IA já vêm marcadas — mas só as que existem MESMO na
+      // frase (a IA não manda no card: o que não está na headline é ignorado). O cliente
+      // desmarca/marca à vontade.
+      const naFrase = new Set(palavrasDaFrase(novaHeadline).map(chaveDaPalavra))
+      const sugeridas = Array.isArray(data.destaques)
+        ? [...new Set((data.destaques as unknown[]).filter((d): d is string => typeof d === 'string').map(chaveDaPalavra))].filter((c) => c && naFrase.has(c)).slice(0, 3)
+        : []
+      setDestaques(sugeridas)
+      setDestaqueDaIA(sugeridas.length > 0)
     } catch (err) {
       setRateNotice('')
       // Nada foi entregue: devolve a geração debitada antes da chamada à IA.
@@ -422,10 +400,9 @@ function CardMagico() {
     img.src = imagemDataUrl
   }, [imagemDataUrl, headline, gancho, corFundo, corDestaque, destaques])
 
-  function alternarDestaque(palavra: string) {
-    const chave = chaveDaPalavra(palavra)
-    if (!chave) return
-    setDestaques((atual) => (atual.includes(chave) ? atual.filter((c) => c !== chave) : [...atual, chave]))
+  function alternarDestaque(chave: string) {
+    setDestaques((atual) => alternarChave(atual, chave))
+    setDestaqueDaIA(false)
   }
 
   // Conta-gotas: a cor mais marcante da foto do produto vira uma opção da paleta.
@@ -543,7 +520,7 @@ function CardMagico() {
                   <img src={imagemDataUrl} alt="Produto enviado" className="w-full max-h-72 object-contain bg-black" />
                   <button
                     type="button"
-                    onClick={() => { setImagemDataUrl(null); setLegenda(''); setGancho(''); setHeadline(''); setDestaques([]); setCorDaFoto(null); setAvisoCorFoto(''); if (fileInputRef.current) fileInputRef.current.value = '' }}
+                    onClick={() => { setImagemDataUrl(null); setLegenda(''); setGancho(''); setHeadline(''); setDestaques([]); setDestaqueDaIA(false); setCorDaFoto(null); setAvisoCorFoto(''); if (fileInputRef.current) fileInputRef.current.value = '' }}
                     className="absolute top-2 right-2 bg-black/70 hover:bg-black text-white rounded-full p-1.5"
                     aria-label="Remover imagem"
                   >
@@ -734,23 +711,8 @@ function CardMagico() {
                 <div className="bg-[#111111] border border-gray-800 rounded-xl px-4 py-4 space-y-4" data-testid="cores-do-card">
                   <p className="text-sm font-medium text-gray-300">🎨 Cores e destaque do card</p>
 
-                  <div>
-                    <p className="text-xs text-gray-400 mb-2">Fundo do card</p>
-                    <div className="flex flex-wrap items-center gap-2.5" role="group" aria-label="Fundo do card">
-                      {[{ nome: 'Preto (padrão)', hex: COR_FUNDO_PADRAO }, ...PALETA, ...(corDaFoto ? [{ nome: 'Cor da foto', hex: corDaFoto }] : [])].map((c) => (
-                        <Bolinha key={c.nome} cor={c} ativa={corFundo === c.hex} onClick={() => setCorFundo(c.hex)} />
-                      ))}
-                    </div>
-                  </div>
-
-                  <div>
-                    <p className="text-xs text-gray-400 mb-2">Cor do destaque</p>
-                    <div className="flex flex-wrap items-center gap-2.5" role="group" aria-label="Cor do destaque">
-                      {[...PALETA, ...(corDaFoto ? [{ nome: 'Cor da foto', hex: corDaFoto }] : [])].map((c) => (
-                        <Bolinha key={c.nome} cor={c} ativa={corDestaque === c.hex} onClick={() => setCorDestaque(c.hex)} />
-                      ))}
-                    </div>
-                  </div>
+                  <PaletaCores titulo="Fundo do card" valor={corFundo} onChange={setCorFundo} comPadrao extra={corDaFoto ? { nome: 'Cor da foto', hex: corDaFoto } : null} />
+                  <PaletaCores titulo="Cor do destaque" valor={corDestaque} onChange={setCorDestaque} extra={corDaFoto ? { nome: 'Cor da foto', hex: corDaFoto } : null} />
 
                   <div>
                     <button
@@ -765,27 +727,10 @@ function CardMagico() {
 
                   <div>
                     <p className="text-xs text-gray-400 mb-2">Toque nas palavras que quer destacar (ficam maiores e na cor do destaque)</p>
-                    <div className="flex flex-wrap gap-2" role="group" aria-label="Palavras em destaque">
-                      {palavrasDaFrase(headline).map((palavra, i) => {
-                        const chave = chaveDaPalavra(palavra)
-                        if (!chave) return null
-                        const ativa = destaques.includes(chave)
-                        return (
-                          <button
-                            key={`${i}-${palavra}`}
-                            type="button"
-                            onClick={() => alternarDestaque(palavra)}
-                            aria-pressed={ativa}
-                            className={`text-sm rounded-full border px-3 py-1 font-semibold transition-colors ${
-                              ativa ? 'border-transparent' : 'border-gray-700 bg-[#0A0A0A] text-gray-300 hover:border-gray-500'
-                            }`}
-                            style={ativa ? { backgroundColor: corDestaque, color: corDoTexto(corDestaque) } : undefined}
-                          >
-                            {palavra}
-                          </button>
-                        )
-                      })}
-                    </div>
+                    {destaqueDaIA && (
+                      <p className="text-xs text-[#A78BFA] mb-2" data-testid="aviso-destaque-ia">✨ A IA já marcou as palavras que mais vendem. Toque pra trocar.</p>
+                    )}
+                    <PalavrasDestaque frase={headline} destaques={destaques} corDestaque={corDestaque} onAlternar={alternarDestaque} />
                     {palavrasDaFrase(headline).some((p) => destaques.includes(chaveDaPalavra(p))) && contraste(corDestaque, corFundo) < CONTRASTE_MINIMO_DESTAQUE && (
                       <p className="text-xs text-amber-400 mt-2">O destaque quase some nesse fundo. Escolha outra cor de destaque ou de fundo.</p>
                     )}

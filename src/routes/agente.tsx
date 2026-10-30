@@ -28,6 +28,8 @@ import { realcarVoz, aplicarTrilha, carregarTrilhaDialogo } from '../lib/estudio
 import { useTrilhaFundo, TrilhaFundoPanel } from '../components/TrilhaFundo'
 import { ModoDialogo } from '../components/ModoDialogo'
 import { montarTranscricao, falantesParaApi, type Dialogo } from '../lib/dialogo'
+import { useEstiloCard } from '../lib/useEstiloCard'
+import { PainelCoresCarrossel, DestacarNoPost, TextoComDestaque, alternarChave } from '../components/EstiloCardUI'
 
 // Data de hoje em yyyy-mm-dd, pro input type="date" (padrão: "Dia 1" = hoje).
 function todayIso(): string {
@@ -98,6 +100,9 @@ function Agente() {
   // Estúdio: trilha de fundo única do kit (aplicada em todas as locuções).
   const estudio = useTrilhaFundo()
   const exportRefs = useRef<Record<string, HTMLDivElement | null>>({})
+  // Cores dos cards (mesma paleta e memória do Card Mágico) + destaque por post (chave = índice).
+  const { corFundo, setCorFundo, corDestaque, setCorDestaque } = useEstiloCard()
+  const [destaquesPorPost, setDestaquesPorPost] = useState<Record<number, string[]>>({})
   const [generatingAudioFor, setGeneratingAudioFor] = useState<number | null>(null)
   const [convertingIndex, setConvertingIndex] = useState<number | null>(null)
   // Card cujo "Ouvir" está preparando o áudio (baixando/decodificando a cama e mixando).
@@ -141,6 +146,7 @@ function Agente() {
     setIsGenerating(true)
     setError('')
     setPosts(null)
+    setDestaquesPorPost({})
     setDropNestaSessao(false)
     setAudioBlobs({})
     setAudioErrors({})
@@ -427,7 +433,7 @@ function Agente() {
   // que sobe pro post na NewPost-IA. O Agente não tem upload de imagem por card
   // (isso é do Super Agente), então são sempre 3 slides: hook, roteiro e legenda.
   async function prepararMidiaNewPost(index: number): Promise<{ imagens: Blob[]; audio: Blob | null }> {
-    const imagens = await renderSlidesToBlobs(exportRefs.current, index, ['hook', 'roteiro', 'legenda'])
+    const imagens = await renderSlidesToBlobs(exportRefs.current, index, ['hook', 'roteiro', 'legenda'], corFundo)
 
     let audio: Blob | null = null
     const bruto = audioBlobs[index]
@@ -668,6 +674,16 @@ function Agente() {
         )}
 
         {posts && <TrilhaFundoPanel estudio={estudio} />}
+        {posts && (
+          <PainelCoresCarrossel
+            corFundo={corFundo}
+            setCorFundo={setCorFundo}
+            corDestaque={corDestaque}
+            setCorDestaque={setCorDestaque}
+            previaTexto={posts[0]?.hook ?? ''}
+            previaDestaques={destaquesPorPost[0] ?? []}
+          />
+        )}
 
         {posts && (
           <Fragment>
@@ -696,6 +712,12 @@ function Agente() {
                   </div>
                   <HumanizarButton texto={post.hook} campo="hook" onHumanizado={(v) => updatePostField(index, 'hook', v)} />
                 </div>
+                <DestacarNoPost
+                  frase={post.hook}
+                  destaques={destaquesPorPost[index] ?? []}
+                  corDestaque={corDestaque}
+                  onAlternar={(chave) => setDestaquesPorPost((d) => ({ ...d, [index]: alternarChave(d[index] ?? [], chave) }))}
+                />
                 <div className="flex items-start gap-1">
                   <div className="flex-1 min-w-0">
                     <EditableText
@@ -857,10 +879,11 @@ function Agente() {
                   key={slide}
                   innerRef={(el) => { exportRefs.current[slideRefKey(index, slide)] = el }}
                   brandLogo={null}
+                  fundo={corFundo}
                 >
                   {slide === 'hook' && (
                     <p style={{ margin: 0, fontWeight: 700, lineHeight: 1.25, fontSize: hookFontSize(post.hook) }}>
-                      {post.hook}
+                      <TextoComDestaque texto={post.hook} destaques={destaquesPorPost[index] ?? []} cor={corDestaque} />
                     </p>
                   )}
                   {slide === 'roteiro' && (

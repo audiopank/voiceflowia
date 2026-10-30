@@ -31,7 +31,7 @@ Analise a imagem em anexo (é a foto de um PRODUTO ou serviço que a empresa ven
 
 Tom de voz obrigatório: ${tom}.${extra}
 
-O pacote tem 3 partes:
+O pacote tem 4 partes:
 
 1. "gancho" — frase curta de abertura que vai IMPRESSA no card, acima da headline. Cria curiosidade ou toca na dor (ex: "O melhor conselho que posso te dar..."). Máximo 60 caracteres. Sem hashtag, sem emoji.
 2. "headline" — a frase de impacto do card, que complementa o gancho e fecha a ideia. Máximo 80 caracteres. Sem hashtag. É a frase que a pessoa lê em 1 segundo no feed.
@@ -42,13 +42,14 @@ O pacote tem 3 partes:
 - Feche com 4 a 6 hashtags relevantes ao produto, na última linha.
 - Tamanho ${regraTamanho}.
 - Pode usar 1 ou 2 emojis se combinar com o tom, sem exagero.
+4. "destaques" — lista com 1 a 3 palavras da HEADLINE que mais vendem (o benefício, o desejo, o preço ou o diferencial), que vão aparecer maiores e coloridas no card. Copie cada palavra EXATAMENTE como ela está escrita na headline. Nunca artigo, preposição ou conjunção ("a", "do", "com", "e").
 
 Gancho e headline NÃO podem repetir literalmente a primeira linha da legenda — são peças diferentes do mesmo post.
 
 REGRA DE PRODUTO (nunca quebre): esta ferramenta entrega TEXTO/legenda e imagem (card). Ela NÃO grava, NÃO edita e NÃO gera vídeo. Nunca escreva nada dando a entender que um vídeo foi produzido.
 
 Responda APENAS com um JSON válido, sem markdown e sem texto fora dele, neste formato exato:
-{"gancho": "...", "headline": "...", "legenda": "..."}`
+{"gancho": "...", "headline": "...", "legenda": "...", "destaques": ["...", "..."]}`
 }
 
 export default async function handler(request: Request): Promise<Response> {
@@ -118,12 +119,18 @@ export default async function handler(request: Request): Promise<Response> {
     let gancho = ''
     let headline = ''
     let legenda = ''
+    let destaques: string[] = []
     try {
       const cleaned = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '')
       const parsed = JSON.parse(cleaned)
       gancho = typeof parsed.gancho === 'string' ? parsed.gancho.trim() : ''
       headline = typeof parsed.headline === 'string' ? parsed.headline.trim() : ''
       legenda = typeof parsed.legenda === 'string' ? parsed.legenda.trim() : ''
+      // Sugestão de palavras em destaque (30/10). Só vai adiante o que é string curta; a
+      // tela ainda confere se cada palavra existe MESMO na headline antes de marcar.
+      destaques = Array.isArray(parsed.destaques)
+        ? parsed.destaques.filter((d: unknown): d is string => typeof d === 'string' && d.trim().length > 0 && d.length <= 40).map((d: string) => d.trim()).slice(0, 3)
+        : []
     } catch {
       legenda = raw
     }
@@ -135,7 +142,7 @@ export default async function handler(request: Request): Promise<Response> {
       headline = legenda.split('\n')[0].slice(0, 90)
     }
 
-    return new Response(JSON.stringify({ legenda, headline, gancho }), {
+    return new Response(JSON.stringify({ legenda, headline, gancho, destaques }), {
       headers: { 'Content-Type': 'application/json' }
     })
   } catch (error) {

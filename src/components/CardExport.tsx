@@ -1,4 +1,5 @@
 import { toPng } from 'html-to-image'
+import { COR_FUNDO_PADRAO, corDoTexto } from '../lib/estiloCard'
 
 // Máquina de exportar os cards do carrossel (1080x1350 cada), compartilhada pelo
 // Agente de Conteúdo IA e pelo Super Agente.
@@ -35,17 +36,28 @@ export const EXPORT_H = 675
 
 export const slideRefKey = (index: number, slide: SlideKey) => `${index}:${slide}`
 
+// Cores do slide (30/10/2026): o cliente escolhe o fundo na mesma paleta do Card Mágico.
+// "Preto (padrão)" continua sendo o #111111 + letra branca de sempre — slide idêntico ao
+// de antes; qualquer outra cor ganha letra clara ou escura automática (a que der para ler).
+const FUNDO_SLIDE_PADRAO = '#111111'
+export function coresDoSlide(fundo?: string): { fundo: string; texto: string } {
+  if (!fundo || fundo === COR_FUNDO_PADRAO) return { fundo: FUNDO_SLIDE_PADRAO, texto: '#FFFFFF' }
+  return { fundo, texto: corDoTexto(fundo) }
+}
+
 // Um slide do carrossel: só o CONTEÚDO + a logo da marca no canto. NADA de chrome de
 // produção (Dia, rótulo do bloco, contador 1/4, rodapé de horário) — isso serve pra
 // organização interna e vazava no PNG que o cliente publica.
 // Fica oculto (height:0/overflow:hidden na wrapper) até ser exportado.
 export function ExportSlide({
-  innerRef, brandLogo, children,
+  innerRef, brandLogo, children, fundo,
 }: {
   innerRef: (el: HTMLDivElement | null) => void
   brandLogo: string | null
   children: React.ReactNode
+  fundo?: string
 }) {
+  const cores = coresDoSlide(fundo)
   return (
     <div style={{ height: 0, overflow: 'hidden' }}>
       <div
@@ -53,8 +65,8 @@ export function ExportSlide({
         style={{
           width: EXPORT_W,
           height: EXPORT_H,
-          background: '#111111',
-          color: '#FFFFFF',
+          background: cores.fundo,
+          color: cores.texto,
           boxSizing: 'border-box',
           padding: 36,
           display: 'flex',
@@ -85,6 +97,7 @@ export async function renderSlidesToBlobs(
   refs: Record<string, HTMLDivElement | null>,
   index: number,
   slides: SlideKey[],
+  fundo?: string,
 ): Promise<Blob[]> {
   const imagens: Blob[] = []
   for (const slide of slides) {
@@ -94,7 +107,7 @@ export async function renderSlidesToBlobs(
       pixelRatio: 2,
       width: EXPORT_W,
       height: EXPORT_H,
-      backgroundColor: '#111111',
+      backgroundColor: coresDoSlide(fundo).fundo,
     })
     imagens.push(await (await fetch(dataUrl)).blob())
   }
