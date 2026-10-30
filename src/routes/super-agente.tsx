@@ -39,6 +39,8 @@ import { HumanizarButton } from '../components/HumanizarButton'
 import { useEstiloCard } from '../lib/useEstiloCard'
 import { PainelCoresCarrossel, DestacarNoPost, TextoComDestaque, alternarChave } from '../components/EstiloCardUI'
 import { coresDoSlide } from '../components/CardExport'
+import { conferirPostDaMarca } from '../lib/conferirCatalogo'
+import { AvisoConferencia } from '../components/AvisoConferencia'
 
 // Espaça as gerações de voz para não estourar o limite/minuto do free tier.
 const VOICE_THROTTLE_MS = 3500
@@ -298,6 +300,10 @@ function SuperAgente() {
   // vira briefing. Encurta o caminho até a primeira geração — a tela em branco de 10
   // campos é onde o trial costuma morrer, não a qualidade do roteiro.
   const [briefingBruto, setBriefingBruto] = useState('')
+  // Tudo o que o cliente FALOU sobre a marca — é contra isto que cada post é conferido
+  // (preço, porcentagem, promessa). Campos atuais: se ele acrescentar um preço depois, o
+  // aviso some sem precisar gerar de novo.
+  const fatosDoBriefing = [briefingBruto, nicho, servicos, diferenciais, cta, tomMarca, instagram, campanha].join('\n')
   const [extraindo, setExtraindo] = useState(false)
   const [extrairErro, setExtrairErro] = useState('')
   // Resultado da última extração: o que foi preenchido e o que o texto não sustentava.
@@ -1668,6 +1674,14 @@ function SuperAgente() {
                     updatePostField(index, 'roteiro', corrigirAcentos(post.roteiro))
                     updatePostField(index, 'legenda', corrigirAcentos(post.legenda))
                   }}
+                />
+                {/* Conferência de preço, porcentagem e promessa contra o que o cliente falou no
+                    briefing (30/10) — mesma régua do Catálogo → Posts, em modo aviso. */}
+                <AvisoConferencia
+                  avisos={conferirPostDaMarca(
+                    { gancho: post.hook, legenda: post.legenda, locucao: post.roteiro },
+                    fatosDoBriefing,
+                  ).avisos}
                 />
                 <div className="no-export">
                   <FeedPreview texto={post.legenda} />

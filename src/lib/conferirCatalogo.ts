@@ -182,6 +182,73 @@ export function conferirPost(post: PostCatalogo, item: ItemCatalogo, indice: num
   return { aprovado: falhas.length === 0, checagens, falhas }
 }
 
+// SUPER AGENTE (30/10/2026): a mesma régua, conferindo cada post contra o que o cliente
+// FALOU no briefing (campos + texto do "Comece rápido"/voz). Diferente do Catálogo, aqui
+// não confere todo número solto — post de conteúdo tem "3 dicas", "em 20 segundos", e o
+// aviso em tudo vira ruído que ninguém lê. Confere o que vende/engana: preço em R$,
+// porcentagem e promessa sem lastro. É AVISO (o cliente decide), não trava.
+export interface ConferenciaMarca {
+  avisos: string[]
+}
+
+const RE_PORCENTO = /(\d+(?:[.,]\d+)?)\s*%/g
+
+// Promessas vigiadas no Super Agente: a lista do Catálogo é estrita demais pra post de
+// conteúdo ("A melhor parte do seu dia" virava fama, "vamos entregar" virava entrega,
+// "descontraído" virava desconto — achados do guardião em 30/10). Aqui cada regra pede a
+// PROMESSA de fato. Roda sobre texto normalizado (sem acento, minúsculo).
+const PROMESSAS_MARCA: { rotulo: string; re: RegExp }[] = [
+  { rotulo: 'frete grátis', re: /frete\s+(gratis|gratuito)/ },
+  { rotulo: 'entrega (grátis, rápida, no mesmo dia…)', re: /entrega\s+(gratis|gratuita|rapida|expressa|no mesmo dia|em \d)|entregamos\s+em/ },
+  { rotulo: 'desconto', re: /\bdescontos?\b|\b\d+\s*% off\b/ },
+  { rotulo: 'promoção / oferta', re: /\bpromocao\b|\bpromocoes\b|\bpromo\b|\bofertas?\b/ },
+  { rotulo: 'parcelamento', re: /\bparcel(a|as|ado|ados|amento)\b|sem juros/ },
+  { rotulo: 'garantia', re: /\bgarantia\b|\bgarantimos\b|satisfacao garantida/ },
+  { rotulo: 'estoque / últimas unidades', re: /\bestoque\b|ultimas unidades|pronta entrega/ },
+  { rotulo: 'urgência (só hoje, último dia…)', re: /so hoje|ultimo dia|ultimos dias|tempo limitado|corre que acaba|enquanto durar/ },
+  { rotulo: 'brinde / grátis', re: /\bbrindes?\b|(?<!frete )\bgratis\b/ },
+  { rotulo: 'fama / superlativo (mais pedido, o melhor da cidade, famoso…)', re: /mais (pedid|vendid|procurad|famos)|\b(o|a) melhor\b[^.!?\n]{0,30}\b(da|do|de) (cidade|regiao|bairro|brasil|mundo|estado|zona)\b|melhor da cidade|\bfamos[oa]s?\b|numero 1\b|\bcampea|\blider\b|sucesso de vendas/ },
+]
+
+function porcentagens(texto: string): string[] {
+  return [...texto.matchAll(RE_PORCENTO)].map((m) => {
+    const c = centavos(m[1])
+    return c == null ? m[1] : String(c / 100)
+  })
+}
+
+export function conferirPostDaMarca(post: PostCatalogo, fatos: string): ConferenciaMarca {
+  const textoPost = [post.gancho, post.legenda, post.locucao].join('\n')
+  const avisos: string[] = []
+
+  // Preço: vale se o valor está nos fatos com R$/"reais" OU como número solto ("Corte 35"
+  // no campo de serviços conta como R$ 35 — o cliente falou esse número).
+  const precosFonte = new Set<number>(valoresEmReais(fatos))
+  for (const n of numerosSoltos(fatos)) {
+    const c = centavos(n.replace('.', ','))
+    if (c != null) precosFonte.add(c)
+  }
+  const precosFora = [...new Set(valoresEmReais(textoPost))].filter((p) => !precosFonte.has(p))
+  if (precosFora.length > 0) {
+    avisos.push(`Preço que você não informou no briefing: ${precosFora.map(formatarReais).join(', ')}`)
+  }
+
+  const pctFonte = new Set(porcentagens(fatos))
+  const pctFora = [...new Set(porcentagens(textoPost))].filter((p) => !pctFonte.has(p))
+  if (pctFora.length > 0) {
+    avisos.push(`Porcentagem que você não informou: ${pctFora.map((p) => p.replace('.', ',') + '%').join(', ')}`)
+  }
+
+  const fatosNorm = normalizar(fatos)
+  const postNorm = normalizar(textoPost)
+  const semLastro = PROMESSAS_MARCA.filter((p) => p.re.test(postNorm) && !p.re.test(fatosNorm)).map((p) => p.rotulo)
+  if (semLastro.length > 0) {
+    avisos.push(`Promessa que não está no briefing: ${semLastro.join(', ')}`)
+  }
+
+  return { avisos }
+}
+
 // "Bolo de pote — R$ 12,00 — 4 sabores" → item. Aceita tab, ;, |, " - ", " — ", " – ".
 // A parte que parece preço vira `preco`; o resto (depois do nome) vira `detalhes`.
 //
