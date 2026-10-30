@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import {
-  Lock, Loader2, ImagePlus, Sparkles, Download, Copy, Check, X, AlertCircle, Wand2,
+  Lock, Loader2, ImagePlus, Sparkles, Download, Copy, Check, X, AlertCircle, Wand2, Pipette,
 } from 'lucide-react'
 import { useSubscription, devolverGeracaoTrial } from '../lib/useSubscription'
 import { supabase } from '../lib/supabase'
@@ -12,6 +12,11 @@ import { TONS, TOM_PADRAO } from '../lib/tons'
 import { CtaObjetivo } from '../components/CtaObjetivo'
 import { FeedPreview } from '../components/FeedPreview'
 import { HumanizarButton } from '../components/HumanizarButton'
+import {
+  PALETA, COR_FUNDO_PADRAO, COR_DESTAQUE_PADRAO, COR_TEXTO_CLARA, ESCALA_DESTAQUE, CONTRASTE_MINIMO_DESTAQUE,
+  corDoTexto, contraste, chaveDaPalavra, palavrasDaFrase, quebrarComDestaque, larguraDaLinha, corDominante,
+  type CorPaleta,
+} from '../lib/estiloCard'
 
 export const Route = createFileRoute('/card-magico')({
   component: CardMagico,
@@ -102,6 +107,35 @@ function wrapText(ctx: CanvasRenderingContext2D, texto: string, maxWidth: number
   return linhas
 }
 
+// As cores escolhidas ficam lembradas NESTE navegador (conveniência, não dado da conta).
+const CHAVE_ESTILO = 'vfia:card-estilo'
+function lerEstiloSalvo(): { fundo: string; destaque: string } {
+  try {
+    const salvo = JSON.parse(localStorage.getItem(CHAVE_ESTILO) || 'null')
+    const hex = (v: unknown) => typeof v === 'string' && /^#[0-9A-F]{6}$/i.test(v)
+    if (salvo && hex(salvo.fundo) && hex(salvo.destaque)) return salvo
+  } catch { /* navegador sem storage: usa o padrão */ }
+  return { fundo: COR_FUNDO_PADRAO, destaque: COR_DESTAQUE_PADRAO }
+}
+
+function Bolinha({ cor, ativa, onClick }: { cor: CorPaleta; ativa: boolean; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={ativa}
+      aria-label={cor.nome}
+      title={cor.nome}
+      className={`w-8 h-8 rounded-full flex items-center justify-center border transition-transform ${
+        ativa ? 'ring-2 ring-white ring-offset-2 ring-offset-[#111111] scale-110' : 'border-white/15 hover:scale-110'
+      }`}
+      style={{ backgroundColor: cor.hex }}
+    >
+      {ativa && <Check className="w-4 h-4" style={{ color: corDoTexto(cor.hex) }} />}
+    </button>
+  )
+}
+
 function CardMagico() {
   const navigate = useNavigate()
   const { hasContentAgentFeature, trial, loading: subLoading, refresh } = useSubscription()
@@ -118,6 +152,16 @@ function CardMagico() {
   const [uploadErro, setUploadErro] = useState('')
   const [rateNotice, setRateNotice] = useState('')
   const [copiado, setCopiado] = useState(false)
+  const [corFundo, setCorFundo] = useState(() => lerEstiloSalvo().fundo)
+  const [corDestaque, setCorDestaque] = useState(() => lerEstiloSalvo().destaque)
+  // Chaves (chaveDaPalavra) das palavras da frase que o cliente tocou pra destacar.
+  const [destaques, setDestaques] = useState<string[]>([])
+  const [corDaFoto, setCorDaFoto] = useState<string | null>(null)
+  const [avisoCorFoto, setAvisoCorFoto] = useState('')
+
+  useEffect(() => {
+    try { localStorage.setItem(CHAVE_ESTILO, JSON.stringify({ fundo: corFundo, destaque: corDestaque })) } catch { /* sem storage */ }
+  }, [corFundo, corDestaque])
 
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -139,6 +183,9 @@ function CardMagico() {
       setLegenda('')
       setGancho('')
       setHeadline('')
+      setDestaques([])
+      setCorDaFoto(null)
+      setAvisoCorFoto('')
       setErro('')
     } catch (err) {
       setUploadErro(err instanceof Error ? err.message : 'Não consegui processar essa imagem.')
@@ -198,6 +245,7 @@ function CardMagico() {
         throw new Error('A IA não retornou uma legenda. Tente de novo.')
       }
       setLegenda(data.legenda)
+      setDestaques([])
       setGancho(typeof data.gancho === 'string' ? data.gancho : '')
       // O endpoint sempre manda headline, mas se um dia falhar a 1ª linha da legenda salva o card.
       setHeadline(typeof data.headline === 'string' && data.headline ? data.headline : data.legenda.split('\n')[0])
@@ -228,8 +276,11 @@ function CardMagico() {
       canvas.width = CARD_W
       canvas.height = CARD_H
 
-      // Fundo preto premium.
-      ctx.fillStyle = '#0B0B0D'
+      // Fundo: preto premium por padrão, ou a cor que o cliente escolheu na paleta.
+      // A letra acompanha sozinha (clara ou escura, a que der mais contraste).
+      const corTexto = corDoTexto(corFundo)
+      const textoClaro = corTexto === COR_TEXTO_CLARA
+      ctx.fillStyle = corFundo
       ctx.fillRect(0, 0, CARD_W, CARD_H)
 
       // MOLDURA DA FOTO: a LARGURA manda — a foto ocupa sempre a mesma largura do
@@ -257,7 +308,7 @@ function CardMagico() {
       // Contorno sutil, pra separar a foto do fundo quando ela tem bordas escuras.
       roundRectPath(ctx, frameX, frameY, frameW, frameH, raio)
       ctx.lineWidth = 2
-      ctx.strokeStyle = 'rgba(255,255,255,0.08)'
+      ctx.strokeStyle = textoClaro ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.10)'
       ctx.stroke()
 
       // TEXTO DO CARD: gancho pequeno (curiosidade) + headline grande (impacto) —
@@ -281,47 +332,124 @@ function CardMagico() {
       const ganchoH = ganchoLinhas.length * ganchoLineH
       const gapGancho = ganchoLinhas.length ? 28 : 0
 
+      // PALAVRAS EM DESTAQUE: só entra no caminho novo se alguma palavra marcada está na
+      // frase. Sem destaque, o caminho é o de sempre (mesma quebra de linha, card idêntico).
+      const marcadas = new Set(destaques)
+      const temDestaque = palavrasDaFrase(headline).some((p) => marcadas.has(chaveDaPalavra(p)))
+      const fonteNormal = (fs: number) => `800 ${fs}px ${fontStack}`
+      const fonteDestaque = (fs: number) => `900 ${Math.round(fs * ESCALA_DESTAQUE)}px ${fontStack}`
+
       // Headline: começa grande e desce até o bloco inteiro caber.
       let fontSize = 64
       let linhas: string[] = []
       let lineHeight = 0
+      let linhasDestaque: ReturnType<typeof quebrarComDestaque> = []
+      let alturasDestaque: number[] = []
+      let espaco = 0
       while (fontSize >= 30) {
-        ctx.font = `800 ${fontSize}px ${fontStack}`
-        lineHeight = Math.round(fontSize * 1.22)
-        linhas = wrapText(ctx, headline, maxWidth)
-        if (ganchoH + gapGancho + linhas.length * lineHeight <= capBottom - capTop) break
+        if (temDestaque) {
+          const fs = fontSize
+          ctx.font = fonteNormal(fs)
+          espaco = ctx.measureText(' ').width
+          linhasDestaque = quebrarComDestaque(headline, marcadas, (palavra, d) => {
+            ctx.font = d ? fonteDestaque(fs) : fonteNormal(fs)
+            return ctx.measureText(palavra).width
+          }, espaco, maxWidth)
+          // Linha com palavra destacada fica mais alta (a palavra é maior).
+          alturasDestaque = linhasDestaque.map((l) => Math.round(fs * (l.some((p) => p.destaque) ? ESCALA_DESTAQUE : 1) * 1.22))
+          if (ganchoH + gapGancho + alturasDestaque.reduce((a, b) => a + b, 0) <= capBottom - capTop) break
+        } else {
+          ctx.font = fonteNormal(fontSize)
+          lineHeight = Math.round(fontSize * 1.22)
+          linhas = wrapText(ctx, headline, maxWidth)
+          if (ganchoH + gapGancho + linhas.length * lineHeight <= capBottom - capTop) break
+        }
         fontSize -= 2
       }
+      // Frase que não cabe nem no mínimo: as linhas com destaque foram medidas em 30px,
+      // então desenha em 30px (o caminho antigo fica como sempre foi).
+      if (temDestaque && fontSize < 30) fontSize = 30
 
       ctx.textAlign = 'center'
       ctx.textBaseline = 'top'
-      const totalTextH = ganchoH + gapGancho + linhas.length * lineHeight
+      const headlineH = temDestaque ? alturasDestaque.reduce((a, b) => a + b, 0) : linhas.length * lineHeight
+      const totalTextH = ganchoH + gapGancho + headlineH
       let y = capTop + Math.max(0, (capBottom - capTop - totalTextH) / 2)
 
       ctx.font = `500 ${ganchoFont}px ${fontStack}`
-      ctx.fillStyle = 'rgba(243,243,243,0.72)'
+      ctx.fillStyle = textoClaro ? 'rgba(243,243,243,0.72)' : 'rgba(20,20,20,0.72)'
       for (const linha of ganchoLinhas) {
         ctx.fillText(linha, CARD_W / 2, y)
         y += ganchoLineH
       }
       y += gapGancho
 
-      ctx.font = `800 ${fontSize}px ${fontStack}`
-      ctx.fillStyle = '#F3F3F3'
-      for (const linha of linhas) {
-        ctx.fillText(linha, CARD_W / 2, y)
-        y += lineHeight
+      if (temDestaque) {
+        // Palavra por palavra, todas na MESMA linha de base (senão a maior "sobe").
+        ctx.textAlign = 'left'
+        ctx.textBaseline = 'alphabetic'
+        linhasDestaque.forEach((linha, i) => {
+          const temNaLinha = linha.some((p) => p.destaque)
+          const tamanhoMaior = Math.round(fontSize * (temNaLinha ? ESCALA_DESTAQUE : 1))
+          const base = y + Math.round(tamanhoMaior * 0.95)
+          let x = (CARD_W - larguraDaLinha(linha, espaco)) / 2
+          for (const p of linha) {
+            ctx.font = p.destaque ? fonteDestaque(fontSize) : fonteNormal(fontSize)
+            ctx.fillStyle = p.destaque ? corDestaque : corTexto
+            ctx.fillText(p.texto, x, base)
+            x += p.largura + espaco
+          }
+          y += alturasDestaque[i]
+        })
+        ctx.textAlign = 'center'
+      } else {
+        ctx.font = fonteNormal(fontSize)
+        ctx.fillStyle = corTexto
+        for (const linha of linhas) {
+          ctx.fillText(linha, CARD_W / 2, y)
+          y += lineHeight
+        }
       }
 
-      // Assinatura discreta, centralizada no rodapé.
+      // Assinatura discreta, centralizada no rodapé (roxo da marca no fundo padrão; na
+      // cor da letra quando o fundo é outro — roxo some num fundo roxo).
       ctx.font = '600 24px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif'
-      ctx.fillStyle = 'rgba(139,92,246,0.9)'
+      ctx.fillStyle = corFundo === COR_FUNDO_PADRAO ? 'rgba(139,92,246,0.9)' : textoClaro ? 'rgba(243,243,243,0.75)' : 'rgba(20,20,20,0.75)'
       ctx.textBaseline = 'alphabetic'
       ctx.fillText('VoiceFlow IA', CARD_W / 2, CARD_H - 52)
       ctx.textAlign = 'left' // reset pro próximo desenho
     }
     img.src = imagemDataUrl
-  }, [imagemDataUrl, headline, gancho])
+  }, [imagemDataUrl, headline, gancho, corFundo, corDestaque, destaques])
+
+  function alternarDestaque(palavra: string) {
+    const chave = chaveDaPalavra(palavra)
+    if (!chave) return
+    setDestaques((atual) => (atual.includes(chave) ? atual.filter((c) => c !== chave) : [...atual, chave]))
+  }
+
+  // Conta-gotas: a cor mais marcante da foto do produto vira uma opção da paleta.
+  function pegarCorDaFoto() {
+    if (!imagemDataUrl) return
+    setAvisoCorFoto('')
+    const img = new Image()
+    img.onload = () => {
+      const c = document.createElement('canvas')
+      c.width = 48
+      c.height = 48
+      const cx = c.getContext('2d')
+      if (!cx) return
+      cx.drawImage(img, 0, 0, 48, 48)
+      const cor = corDominante(cx.getImageData(0, 0, 48, 48).data)
+      if (!cor) {
+        setCorDaFoto(null)
+        setAvisoCorFoto('Essa foto não tem uma cor marcante (ex.: produto preto ou branco). Escolha uma cor da paleta.')
+        return
+      }
+      setCorDaFoto(cor)
+    }
+    img.src = imagemDataUrl
+  }
 
   function handleDownload() {
     const canvas = canvasRef.current
@@ -415,7 +543,7 @@ function CardMagico() {
                   <img src={imagemDataUrl} alt="Produto enviado" className="w-full max-h-72 object-contain bg-black" />
                   <button
                     type="button"
-                    onClick={() => { setImagemDataUrl(null); setLegenda(''); setGancho(''); setHeadline(''); if (fileInputRef.current) fileInputRef.current.value = '' }}
+                    onClick={() => { setImagemDataUrl(null); setLegenda(''); setGancho(''); setHeadline(''); setDestaques([]); setCorDaFoto(null); setAvisoCorFoto(''); if (fileInputRef.current) fileInputRef.current.value = '' }}
                     className="absolute top-2 right-2 bg-black/70 hover:bg-black text-white rounded-full p-1.5"
                     aria-label="Remover imagem"
                   >
@@ -599,6 +727,70 @@ function CardMagico() {
 
                 <FeedPreview texto={legenda} />
                 <CtaObjetivo legenda={legenda} tom={tom} onAplicar={setLegenda} />
+
+                {/* CORES E DESTAQUE (30/10): paleta pronta pro fundo e pro destaque + tocar nas
+                    palavras da frase. Vale pro texto DESENHADO no card — a legenda do post é
+                    texto puro (o Instagram não aceita cor nem tamanho de letra). */}
+                <div className="bg-[#111111] border border-gray-800 rounded-xl px-4 py-4 space-y-4" data-testid="cores-do-card">
+                  <p className="text-sm font-medium text-gray-300">🎨 Cores e destaque do card</p>
+
+                  <div>
+                    <p className="text-xs text-gray-400 mb-2">Fundo do card</p>
+                    <div className="flex flex-wrap items-center gap-2.5" role="group" aria-label="Fundo do card">
+                      {[{ nome: 'Preto (padrão)', hex: COR_FUNDO_PADRAO }, ...PALETA, ...(corDaFoto ? [{ nome: 'Cor da foto', hex: corDaFoto }] : [])].map((c) => (
+                        <Bolinha key={c.nome} cor={c} ativa={corFundo === c.hex} onClick={() => setCorFundo(c.hex)} />
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <p className="text-xs text-gray-400 mb-2">Cor do destaque</p>
+                    <div className="flex flex-wrap items-center gap-2.5" role="group" aria-label="Cor do destaque">
+                      {[...PALETA, ...(corDaFoto ? [{ nome: 'Cor da foto', hex: corDaFoto }] : [])].map((c) => (
+                        <Bolinha key={c.nome} cor={c} ativa={corDestaque === c.hex} onClick={() => setCorDestaque(c.hex)} />
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <button
+                      type="button"
+                      onClick={pegarCorDaFoto}
+                      className="text-xs flex items-center gap-1.5 rounded-full border border-gray-700 px-3 py-1.5 text-gray-300 hover:border-gray-500 hover:text-white"
+                    >
+                      <Pipette className="w-3.5 h-3.5" /> Pegar a cor da foto
+                    </button>
+                    {avisoCorFoto && <p className="text-xs text-amber-400 mt-2">{avisoCorFoto}</p>}
+                  </div>
+
+                  <div>
+                    <p className="text-xs text-gray-400 mb-2">Toque nas palavras que quer destacar (ficam maiores e na cor do destaque)</p>
+                    <div className="flex flex-wrap gap-2" role="group" aria-label="Palavras em destaque">
+                      {palavrasDaFrase(headline).map((palavra, i) => {
+                        const chave = chaveDaPalavra(palavra)
+                        if (!chave) return null
+                        const ativa = destaques.includes(chave)
+                        return (
+                          <button
+                            key={`${i}-${palavra}`}
+                            type="button"
+                            onClick={() => alternarDestaque(palavra)}
+                            aria-pressed={ativa}
+                            className={`text-sm rounded-full border px-3 py-1 font-semibold transition-colors ${
+                              ativa ? 'border-transparent' : 'border-gray-700 bg-[#0A0A0A] text-gray-300 hover:border-gray-500'
+                            }`}
+                            style={ativa ? { backgroundColor: corDestaque, color: corDoTexto(corDestaque) } : undefined}
+                          >
+                            {palavra}
+                          </button>
+                        )
+                      })}
+                    </div>
+                    {palavrasDaFrase(headline).some((p) => destaques.includes(chaveDaPalavra(p))) && contraste(corDestaque, corFundo) < CONTRASTE_MINIMO_DESTAQUE && (
+                      <p className="text-xs text-amber-400 mt-2">O destaque quase some nesse fundo. Escolha outra cor de destaque ou de fundo.</p>
+                    )}
+                  </div>
+                </div>
 
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-2">Card pronto (1080×1350)</label>
