@@ -216,6 +216,9 @@ const PROMESSAS_MARCA: { rotulo: string; re: RegExp }[] = [
   // Promessa de RESULTADO (03/11): o prompt do Super Agente proíbe, mas a IA às vezes escorrega
   // (teste real: "seu negócio rodar sem esforço") — a régua avisa o que passar.
   { rotulo: 'promessa de resultado (sem esforço, vende mais, converte mais…)', re: /sem esforco|\bvend(e|a|er|as) (muito )?mais\b|\bconvert(e|a|er) (muito )?mais\b|\bdobr(a|ar|e) (as |os |suas |seus )?(vendas|clientes|faturamento|lucro)|resultado garantido|lucro garantido/ },
+  // Exagero (03/11, teste ao vivo do Mestre): "o Super Agente resolve tudo", "elevar o nível
+  // instantaneamente", "dezenas de publicações agora mesmo" (o Catálogo faz até 6 por vez).
+  { rotulo: 'exagero (resolve tudo, instantaneamente, dezenas/centenas de…)', re: /resolve(m)? tudo|\binstantaneament|\bem segundos\b|\b(dezenas|centenas|milhares) de (clientes|pessoas|vendas|publicacoes|posts|empresas|familias|seguidores|pedidos|negocios|marcas|usuarios|alunos|pacientes|anos)\b/ },
 ]
 
 function porcentagens(texto: string): string[] {
