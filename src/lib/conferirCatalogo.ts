@@ -115,10 +115,13 @@ function numerosSoltos(texto: string): string[] {
 const PROMESSAS: { rotulo: string; re: RegExp }[] = [
   { rotulo: 'frete grátis', re: /frete\s+gratis/ },
   { rotulo: 'entrega', re: /\bentreg/ },
-  { rotulo: 'desconto', re: /\bdescont/ },
-  { rotulo: 'promoção / oferta', re: /\bpromo|\boferta/ },
+  // 03/11: as 3 regras abaixo pegavam palavra comum e TRAVAVAM o post (+ gastavam reescrita da
+  // IA): "descontraído" virava desconto, "promover" virava promoção e "garantir o seu" (chamada
+  // comum de post de produto) virava garantia. Agora só a promessa de fato (com plural/aumentativo).
+  { rotulo: 'desconto', re: /\bdescont(o|os|ao|oes|inho|inhos)\b|\bdescontad[oa]s?\b|\b\d+\s*%\s*off\b/ },
+  { rotulo: 'promoção / oferta', re: /\bpromocao\b|\bpromocoes\b|\bpromocion(al|ais)\b|\bpromos?\b|\bofert(a|as|ao|oes|inha|inhas)\b/ },
   { rotulo: 'parcelamento', re: /\bparcel|sem juros/ },
-  { rotulo: 'garantia', re: /\bgaranti/ },
+  { rotulo: 'garantia', re: /\bgarantias?\b|\bgarantid[oa]s?\b|\bgarantimos\b/ },
   { rotulo: 'estoque / últimas unidades', re: /\bestoque|ultimas unidades|pronta entrega/ },
   { rotulo: 'urgência (só hoje, último dia…)', re: /so hoje|ultimo dia|ultimos dias|tempo limitado|corre que acaba|enquanto durar/ },
   { rotulo: 'brinde / grátis', re: /\bbrinde|(?<!frete )\bgratis/ },
