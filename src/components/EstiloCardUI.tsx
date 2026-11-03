@@ -113,8 +113,8 @@ export function PainelCoresCarrossel({
     <div className="bg-[#111111] border border-gray-800 rounded-2xl p-5" data-testid="cores-do-carrossel">
       <p className="text-sm font-medium text-gray-300 mb-1">🎨 Cores dos cards do carrossel</p>
       <p className="text-xs text-gray-500 mb-4">
-        Valem pra todos os cards que você baixa ou publica. As palavras em destaque você escolhe em cada post
-        (em "Destacar palavras no card"). A legenda que você cola no Instagram continua texto puro.
+        Valem pra todos os cards que você baixa ou publica. A IA já marca 1 a 3 palavras-chave no gancho de
+        cada post — troque em "Destacar palavras no card". A legenda que você cola no Instagram continua texto puro.
       </p>
       <div className="flex flex-col sm:flex-row gap-5">
         <div className="flex-1 space-y-4 min-w-0">

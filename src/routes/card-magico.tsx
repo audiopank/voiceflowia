@@ -223,7 +223,7 @@ function CardMagico() {
       // desmarca/marca à vontade.
       const naFrase = new Set(palavrasDaFrase(novaHeadline).map(chaveDaPalavra))
       const sugeridas = Array.isArray(data.destaques)
-        ? [...new Set((data.destaques as unknown[]).filter((d): d is string => typeof d === 'string').map(chaveDaPalavra))].filter((c) => c && naFrase.has(c)).slice(0, 3)
+        ? [...new Set((data.destaques as unknown[]).filter((d): d is string => typeof d === 'string').flatMap((d) => palavrasDaFrase(d)).map(chaveDaPalavra))].filter((c) => c && naFrase.has(c)).slice(0, 4)
         : []
       setDestaques(sugeridas)
       setDestaqueDaIA(sugeridas.length > 0)

@@ -63,9 +63,12 @@ function buildResponseSchema(vozes: string[]) {
           hook: { type: 'STRING' },
           roteiro: { type: 'STRING' },
           legenda: { type: 'STRING' },
-          vozSugerida: { type: 'STRING', enum: vozes } // V1.6: dinâmico
+          vozSugerida: { type: 'STRING', enum: vozes }, // V1.6: dinâmico
+          // 03/11: palavras do hook que saem maiores e coloridas no card do carrossel
+          // (o padrão do Card Mágico que o cliente adora). A tela só marca as que existem no hook.
+          destaques: { type: 'ARRAY', items: { type: 'STRING' } }
         },
-        required: ['dia', 'periodo', 'horario', 'hook', 'roteiro', 'legenda', 'vozSugerida']
+        required: ['dia', 'periodo', 'horario', 'hook', 'roteiro', 'legenda', 'vozSugerida', 'destaques']
       }
     }
   },
@@ -228,6 +231,7 @@ outro para Tarde (${qtdDias * 2} roteiros no total), cada um com:
 - roteiro: narração de cerca de 20 segundos, pronta para ser lida em voz alta
 - legenda: legenda da postagem, com o CTA certo pro período (ver regras abaixo)
 - vozSugerida: "Zephyr" ou "Puck", a que combinar melhor com o roteiro
+- destaques: lista com 1 a 3 palavras do HOOK que mais chamam atenção (o benefício, a dor, a data/campanha ou o nome do serviço), que vão aparecer maiores e coloridas no card. Copie cada palavra EXATAMENTE como ela está escrita no hook. Nunca artigo, preposição ou conjunção ("a", "do", "com", "e").
 
 REGRAS OBRIGATÓRIAS para os posts:
 - Cada roteiro deve citar pelo menos 1 serviço da lista: ${servicosLinha}
@@ -349,6 +353,12 @@ async function handler(request: Request): Promise<Response> {
             // V1.6: à prova de bala — se o usuário forçou uma voz, crava em todos os posts.
             if (vozForcada) {
               for (const post of parsed.posts) post.vozSugerida = vozForcada
+            }
+            // Destaques: só strings curtas, no máximo 3 (a tela ainda confere se existem no hook).
+            for (const post of parsed.posts) {
+              post.destaques = Array.isArray(post.destaques)
+                ? post.destaques.filter((d: unknown): d is string => typeof d === 'string' && d.trim().length > 0 && d.length <= 40).map((d: string) => d.trim()).slice(0, 3)
+                : []
             }
             if (i > 0) console.warn(`generate-strategy: gerado pelo RESERVA ${id}`)
             return new Response(JSON.stringify({ ...parsed, modelo: id, reserva: i > 0 }), {
