@@ -84,6 +84,8 @@ interface Marca {
   tomMarca: string
   cta: string
   diferenciais: string
+  /** Texto livre do "Comece rápido" (o cliente descrevendo a marca) — fonte da verdade. */
+  descricao: string
 }
 
 // qtdDias = quantidade de DIAS de conteúdo; cada dia gera 2 posts (Manhã + Tarde) — pedido de
@@ -128,6 +130,14 @@ function buildPromptBase(nicho: string, tom: string, qtdDias: number, marca: Mar
   const diferenciaisContexto = marca.diferenciais
     ? `\n- Diferenciais e informações importantes (destaque isto no conteúdo, SEM inventar nada além do que está escrito aqui): ${marca.diferenciais}`
     : ''
+  // DESCRIÇÃO DA MARCA (30/10/2026 → 03/11): o texto que o cliente colou/falou no "Comece
+  // rápido". Sem isto a IA só recebe o NOME de cada serviço e inventa como ele funciona (teste
+  // ao vivo do Mestre: "Catálogo a Posts" virou "transforme as FOTOS dos seus produtos" — o
+  // Catálogo usa lista em texto). É a fonte da verdade sobre O QUE cada serviço faz.
+  const descricaoContexto = marca.descricao
+    ? `\n- Descrição da marca escrita pelo próprio cliente (FONTE DA VERDADE sobre o que cada serviço faz e como funciona — use só o que está aqui): """${marca.descricao}"""`
+    : ''
+
   const diferenciaisRegra = marca.diferenciais
     ? '\n- Quando fizer sentido, destaque os diferenciais informados nos roteiros e legendas, fiel ao que foi dito (não invente benefícios nem regras), mas com palavras diferentes a cada vez — não repita a mesma frase.'
     : ''
@@ -171,7 +181,7 @@ CONTEXTO DA MARCA (use como REFERÊNCIA para deixar o conteúdo na cara dessa ma
 - Instagram de referência: ${instaLinha}
 - Serviços que devem aparecer nos posts: ${servicosLinha}
 - Tom de voz obrigatório (estilo/personalidade, não um texto pra repetir): ${tomObrigatorio}
-- CTA de venda (${marca.objetivo ? 'onde ele entra está nas regras abaixo' : 'só entra nos posts de Tarde — ver regras abaixo'}): ${ctaObrigatorio}${diferenciaisContexto}${objetivoContexto}
+- CTA de venda (${marca.objetivo ? 'onde ele entra está nas regras abaixo' : 'só entra nos posts de Tarde — ver regras abaixo'}): ${ctaObrigatorio}${diferenciaisContexto}${descricaoContexto}${objetivoContexto}
 
 REGRA DE PRODUTO (vale para a estratégia E para os posts — nunca a quebre):
 - Esta ferramenta entrega ROTEIRO + LEGENDA + LOCUÇÃO (áudio de IA), além de cards em imagem
@@ -185,6 +195,19 @@ REGRA DE PRODUTO (vale para a estratégia E para os posts — nunca a quebre):
 - ATENÇÃO à exceção: se o próprio nicho "${nicho}" for um negócio que de fato produz vídeo
   (produtora, videomaker, editor), fale dos serviços DELE normalmente — a proibição acima é só
   sobre o que esta ferramenta faz, não sobre o que o cliente vende.
+
+REGRA DA VERDADE SOBRE OS SERVIÇOS DO CLIENTE (nunca a quebre):
+- Você só sabe sobre cada serviço o que está escrito no CONTEXTO DA MARCA acima. Os nomes da
+  lista de serviços são só NOMES: não deduza pelo nome como o serviço funciona.
+- NUNCA invente o funcionamento de um serviço: o que o cliente envia (foto, áudio, lista,
+  planilha, link…), o que acontece por dentro ("analisa", "monitora", "automatiza", "integra"),
+  disponibilidade ("24 horas", "em tempo real"), quantidades, prazos ou resultados — a não ser
+  que isso esteja escrito no contexto.
+- NUNCA prometa resultado para o público ("vende mais", "converte muito mais", "dobra",
+  "sem esforço", "garantido", "explode"). Fale de praticidade e do que o serviço entrega.
+- Se o contexto não explica como um serviço funciona, cite-o pelo NOME e por um benefício
+  simples e sempre verdadeiro (ex.: "não começar do zero", "ter o texto pronto", "ganhar tempo"),
+  sem detalhar o mecanismo.
 
 Retorne um objeto JSON com dois campos: "estrategia" e "posts".
 
@@ -237,7 +260,7 @@ async function handler(request: Request): Promise<Response> {
       )
     }
 
-    const { nicho, tom, qtdPosts, instagram, servicos, tomMarca, cta, diferenciais, voz, hooksAnteriores, campanha, objetivo } = await request.json()
+    const { nicho, tom, qtdPosts, instagram, servicos, tomMarca, cta, diferenciais, voz, hooksAnteriores, campanha, objetivo, descricaoMarca } = await request.json()
 
     if (!nicho || typeof nicho !== 'string') {
       return new Response(
@@ -258,6 +281,8 @@ async function handler(request: Request): Promise<Response> {
       tomMarca: s(tomMarca),
       cta: s(cta),
       diferenciais: s(diferenciais),
+      // Teto pra não inchar o prompt (a chamada morre em ~54s e o Gemini anda instável).
+      descricao: s(descricaoMarca).slice(0, 2500),
     }
 
     // Ganchos sazonais: data/campanha opcional, limitada pra não inchar o prompt.

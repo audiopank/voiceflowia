@@ -210,6 +210,9 @@ const PROMESSAS_MARCA: { rotulo: string; re: RegExp }[] = [
   { rotulo: 'urgência (só hoje, último dia…)', re: /so hoje|ultimo dia|ultimos dias|tempo limitado|corre que acaba|enquanto durar/ },
   { rotulo: 'brinde / grátis', re: /\bbrindes?\b|(?<!frete )\bgratis\b/ },
   { rotulo: 'fama / superlativo (mais pedido, o melhor da cidade, famoso…)', re: /mais (pedid|vendid|procurad|famos)|\b(o|a) melhor\b[^.!?\n]{0,30}\b(da|do|de) (cidade|regiao|bairro|brasil|mundo|estado|zona)\b|melhor da cidade|\bfamos[oa]s?\b|numero 1\b|\bcampea|\blider\b|sucesso de vendas/ },
+  // Promessa de RESULTADO (03/11): o prompt do Super Agente proíbe, mas a IA às vezes escorrega
+  // (teste real: "seu negócio rodar sem esforço") — a régua avisa o que passar.
+  { rotulo: 'promessa de resultado (sem esforço, vende mais, converte mais…)', re: /sem esforco|\bvend(e|a|er|as) (muito )?mais\b|\bconvert(e|a|er) (muito )?mais\b|\bdobr(a|ar|e) (as |os |suas |seus )?(vendas|clientes|faturamento|lucro)|resultado garantido|lucro garantido/ },
 ]
 
 function porcentagens(texto: string): string[] {
