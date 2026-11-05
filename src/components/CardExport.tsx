@@ -33,6 +33,9 @@ export type SlideKey = 'hook' | 'roteiro' | 'legenda' | 'imagem'
 // sem cortar/recomprimir no feed.
 export const EXPORT_W = 540
 export const EXPORT_H = 675
+const PADDING_SLIDE = 36
+// Largura útil do texto dentro do slide (sem o padding) — limite das palavras destacadas.
+export const LARGURA_TEXTO_SLIDE = EXPORT_W - 2 * PADDING_SLIDE
 
 export const slideRefKey = (index: number, slide: SlideKey) => `${index}:${slide}`
 
@@ -68,7 +71,7 @@ export function ExportSlide({
           background: cores.fundo,
           color: cores.texto,
           boxSizing: 'border-box',
-          padding: 36,
+          padding: PADDING_SLIDE,
           display: 'flex',
           flexDirection: 'column',
         }}

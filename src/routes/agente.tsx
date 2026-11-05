@@ -12,7 +12,7 @@ import { TravaAcento } from '../components/TravaAcento'
 import { corrigirAcentos } from '../lib/conferirAcentos'
 import { serieDoCalendario } from '../lib/newpost'
 import {
-  ExportSlide, hookFontSize, bodyFontSize, slideRefKey, renderSlidesToBlobs,
+  ExportSlide, hookFontSize, bodyFontSize, slideRefKey, renderSlidesToBlobs, LARGURA_TEXTO_SLIDE,
 } from '../components/CardExport'
 import { convertVoiceToMp3 } from '../lib/audioConvert'
 import { BackButton } from '../components/BackButton'
@@ -893,7 +893,7 @@ function Agente() {
                 >
                   {slide === 'hook' && (
                     <p style={{ margin: 0, fontWeight: 700, lineHeight: 1.25, fontSize: hookFontSize(post.hook) }}>
-                      <TextoComDestaque texto={post.hook} destaques={destaquesPorPost[index] ?? []} cor={corDestaque} />
+                      <TextoComDestaque texto={post.hook} destaques={destaquesPorPost[index] ?? []} cor={corDestaque} tamanhoBase={hookFontSize(post.hook)} larguraMax={LARGURA_TEXTO_SLIDE} />
                     </p>
                   )}
                   {slide === 'roteiro' && (

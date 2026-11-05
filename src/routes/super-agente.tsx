@@ -25,7 +25,7 @@ import { corrigirAcentos } from '../lib/conferirAcentos'
 import { serieDoCalendario } from '../lib/newpost'
 import {
   ExportSlide, hookFontSize, bodyFontSize, slideRefKey, renderSlidesToBlobs,
-  EXPORT_W, EXPORT_H, type SlideKey,
+  EXPORT_W, EXPORT_H, LARGURA_TEXTO_SLIDE, type SlideKey,
 } from '../components/CardExport'
 import { SOCIAL_NETWORKS, socialKey, loadSocialLinks, saveSocialLinks, type SocialLinks } from '../lib/socialLinks'
 import { TONS, TOM_PADRAO, TONS_VALIDOS } from '../lib/tons'
@@ -1846,7 +1846,7 @@ function SuperAgente() {
                 >
                   {slide === 'hook' && (
                     <p style={{ margin: 0, fontWeight: 700, lineHeight: 1.25, fontSize: hookFontSize(post.hook) }}>
-                      <TextoComDestaque texto={post.hook} destaques={destaquesPorPost[index] ?? []} cor={corDestaque} />
+                      <TextoComDestaque texto={post.hook} destaques={destaquesPorPost[index] ?? []} cor={corDestaque} tamanhoBase={hookFontSize(post.hook)} larguraMax={LARGURA_TEXTO_SLIDE} />
                     </p>
                   )}
                   {slide === 'roteiro' && (

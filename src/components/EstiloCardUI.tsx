@@ -1,6 +1,6 @@
 import { Check } from 'lucide-react'
 import {
-  PALETA, COR_FUNDO_PADRAO, ESCALA_DESTAQUE, CONTRASTE_MINIMO_DESTAQUE,
+  PALETA, COR_FUNDO_PADRAO, CONTRASTE_MINIMO_DESTAQUE, ESCALA_DESTAQUE, escalaDestaqueCarrossel,
   corDoTexto, contraste, chaveDaPalavra, palavrasDaFrase, type CorPaleta,
 } from '../lib/estiloCard'
 import { coresDoSlide, hookFontSize } from './CardExport'
@@ -79,16 +79,42 @@ export function alternarChave(lista: string[], chave: string): string[] {
   return lista.includes(chave) ? lista.filter((c) => c !== chave) : [...lista, chave]
 }
 
+// Mede a largura de uma palavra (peso 900) na fonte da página — pra palavra destacada
+// comprida não passar da borda do card.
+let canvasDeMedida: HTMLCanvasElement | null = null
+function larguraDaPalavra(palavra: string, px: number): number {
+  if (typeof document === 'undefined') return 0
+  canvasDeMedida ??= document.createElement('canvas')
+  const ctx = canvasDeMedida.getContext('2d')
+  if (!ctx) return 0
+  ctx.font = `900 ${px}px ${getComputedStyle(document.body).fontFamily}`
+  return ctx.measureText(palavra).width
+}
+
 // Texto em HTML (slides do carrossel) com as palavras marcadas maiores e coloridas. Sem
 // nenhuma palavra marcada devolve o texto puro — o slide sai igual ao de antes.
-export function TextoComDestaque({ texto, destaques, cor }: { texto: string; destaques: string[]; cor: string }) {
+// tamanhoBase/larguraMax (px): a palavra destacada encolhe só o necessário pra caber na
+// largura do card (nunca fica menor que o resto da frase).
+export function TextoComDestaque({ texto, destaques, cor, tamanhoBase, larguraMax }: {
+  texto: string; destaques: string[]; cor: string; tamanhoBase?: number; larguraMax?: number
+}) {
   const marcadas = new Set(destaques)
   if (!palavrasDaFrase(texto).some((p) => marcadas.has(chaveDaPalavra(p)))) return <>{texto}</>
+  // Mais de 3 palavras destacadas (o cliente marcou à mão além das da IA): volta aos 20% de
+  // antes — com 50% o gancho médio passa da altura do card e o PNG sai cortado embaixo.
+  const ocorrencias = texto.split(/\s+/).filter((p) => chaveDaPalavra(p) && marcadas.has(chaveDaPalavra(p))).length
+  const escala = ocorrencias > 3 ? ESCALA_DESTAQUE : escalaDestaqueCarrossel(texto)
+  const escalaDe = (palavra: string) => {
+    if (!tamanhoBase || !larguraMax) return escala
+    const largura = larguraDaPalavra(palavra, tamanhoBase * escala)
+    const limite = larguraMax * 0.97
+    return largura > limite ? Math.max(1, (escala * limite) / largura) : escala
+  }
   return (
     <>
       {texto.split(/(\s+)/).map((pedaco, i) =>
         marcadas.has(chaveDaPalavra(pedaco)) && chaveDaPalavra(pedaco)
-          ? <span key={i} style={{ color: cor, fontWeight: 900, fontSize: `${ESCALA_DESTAQUE}em` }}>{pedaco}</span>
+          ? <span key={i} style={{ color: cor, fontWeight: 900, fontSize: `${escalaDe(pedaco).toFixed(3)}em` }}>{pedaco}</span>
           : pedaco,
       )}
     </>
@@ -109,6 +135,7 @@ export function PainelCoresCarrossel({
 }) {
   const cores = coresDoSlide(corFundo)
   const temDestaque = palavrasDaFrase(previaTexto).some((p) => previaDestaques.includes(chaveDaPalavra(p)))
+  const tamanhoPrevia = Math.max(9, Math.round(hookFontSize(previaTexto) * 160 / 540))
   return (
     <div className="bg-[#111111] border border-gray-800 rounded-2xl p-5" data-testid="cores-do-carrossel">
       <p className="text-sm font-medium text-gray-300 mb-1">🎨 Cores dos cards do carrossel</p>
@@ -131,8 +158,8 @@ export function PainelCoresCarrossel({
             className="rounded-lg border border-gray-700 overflow-hidden flex items-center p-3"
             style={{ width: 160, height: 200, background: cores.fundo, color: cores.texto }}
           >
-            <p style={{ margin: 0, fontWeight: 700, lineHeight: 1.25, fontSize: Math.max(9, Math.round(hookFontSize(previaTexto) * 160 / 540)) }}>
-              <TextoComDestaque texto={previaTexto} destaques={previaDestaques} cor={corDestaque} />
+            <p style={{ margin: 0, fontWeight: 700, lineHeight: 1.25, fontSize: tamanhoPrevia }}>
+              <TextoComDestaque texto={previaTexto} destaques={previaDestaques} cor={corDestaque} tamanhoBase={tamanhoPrevia} larguraMax={160 - 24} />
             </p>
           </div>
         </div>

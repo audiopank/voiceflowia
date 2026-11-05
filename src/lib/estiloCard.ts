@@ -33,8 +33,16 @@ export const PALETA: CorPaleta[] = [
   { nome: 'Rosa', hex: '#D63AD6' },
 ]
 
-// Destaque = 20% maior que o resto da frase (e mais pesado).
+// Destaque = 20% maior que o resto da frase (e mais pesado). Vale pro Card Mágico (canvas).
 export const ESCALA_DESTAQUE = 1.2
+
+// Carrossel do Super Agente/Agente (05/11/2026): 20% não aparecia ("as fontes não aumentam") —
+// passa a 50%. Gancho longo (mais de 90 letras) fica em 30%, pra não estourar a altura do card.
+export const ESCALA_DESTAQUE_CARROSSEL = 1.5
+export const ESCALA_DESTAQUE_CARROSSEL_LONGO = 1.3
+export function escalaDestaqueCarrossel(texto: string): number {
+  return texto.length > 90 ? ESCALA_DESTAQUE_CARROSSEL_LONGO : ESCALA_DESTAQUE_CARROSSEL
+}
 
 export function hexParaRgb(hex: string): [number, number, number] {
   const h = hex.replace('#', '')
