@@ -216,6 +216,9 @@ const PROMESSAS_MARCA: { rotulo: string; re: RegExp }[] = [
   // Promessa de RESULTADO (03/11): o prompt do Super Agente proíbe, mas a IA às vezes escorrega
   // (teste real: "seu negócio rodar sem esforço") — a régua avisa o que passar.
   { rotulo: 'promessa de resultado (sem esforço, vende mais, converte mais…)', re: /sem esforco|\bvend(e|a|er|as) (muito )?mais\b|\bconvert(e|a|er) (muito )?mais\b|\bdobr(a|ar|e) (as |os |suas |seus )?(vendas|clientes|faturamento|lucro)|resultado garantido|lucro garantido/ },
+  // Funcionamento não informado (05/11): a IA atribui ao serviço um mecanismo que o cliente não
+  // disse ("a IA analisa seu portfólio", "atendimento 24 horas", "monitora em tempo real").
+  { rotulo: 'funcionamento não informado (automatiza, 24 horas, tempo real…)', re: /\bautomatiz(a|am|ar|ado|ada|ados|adas|acao|e)\b|\b24 ?(horas|h)\b|\b24\/7\b|tempo real|\bsozinh[oa] (responde|atende|posta|publica|vende)\b|\bpiloto automatico\b|\banalisa (o |a |seu |sua |os |as |seus |suas )/ },
   // Exagero (03/11, teste ao vivo do Mestre): "o Super Agente resolve tudo", "elevar o nível
   // instantaneamente", "dezenas de publicações agora mesmo" (o Catálogo faz até 6 por vez).
   { rotulo: 'exagero (resolve tudo, instantaneamente, dezenas/centenas de…)', re: /resolve(m)? tudo|\binstantaneament|\bem segundos\b|\b(dezenas|centenas|milhares) de (clientes|pessoas|vendas|publicacoes|posts|empresas|familias|seguidores|pedidos|negocios|marcas|usuarios|alunos|pacientes|anos)\b/ },

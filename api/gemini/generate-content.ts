@@ -29,9 +29,11 @@ const RESPONSE_SCHEMA = {
       hook: { type: 'STRING' },
       roteiro: { type: 'STRING' },
       legenda: { type: 'STRING' },
-      vozSugerida: { type: 'STRING', enum: ['Zephyr', 'Puck', 'Kore'] }
+      vozSugerida: { type: 'STRING', enum: ['Zephyr', 'Puck', 'Kore'] },
+      // 05/11: palavras do hook que saem maiores e coloridas no card (igual ao Super Agente).
+      destaques: { type: 'ARRAY', items: { type: 'STRING' } }
     },
-    required: ['dia', 'periodo', 'horario', 'hook', 'roteiro', 'legenda', 'vozSugerida']
+    required: ['dia', 'periodo', 'horario', 'hook', 'roteiro', 'legenda', 'vozSugerida', 'destaques']
   }
 }
 
@@ -68,6 +70,7 @@ Para cada roteiro, retorne um objeto com:
 - roteiro: roteiro de narração de cerca de 20 segundos, pronto para ser lido em voz alta
 - legenda: legenda para a postagem, com o CTA certo pro período (ver regras abaixo)
 - vozSugerida: "Zephyr", "Puck" ou "Kore", a que combinar melhor com o tom do roteiro
+- destaques: lista com 1 a 3 palavras do HOOK que mais chamam atenção (o benefício, a dor, a data/campanha ou o nome do serviço), que vão aparecer maiores e coloridas no card. Copie cada palavra EXATAMENTE como ela está escrita no hook. Nunca artigo, preposição ou conjunção ("a", "do", "com", "e").
 
 REGRAS:
 - O post da Manhã e o da Tarde do mesmo dia devem ser sobre ângulos diferentes (não repita o mesmo gancho/roteiro só mudando palavras).
@@ -161,6 +164,12 @@ async function handler(request: Request): Promise<Response> {
           const textPart = data.candidates?.[0]?.content?.parts?.find((p: any) => typeof p.text === 'string')
           const posts = textPart ? JSON.parse(textPart.text) : null
           if (Array.isArray(posts) && posts.length > 0) {
+            // Destaques: só strings curtas, no máximo 3 (a tela ainda confere se existem no hook).
+            for (const post of posts) {
+              post.destaques = Array.isArray(post?.destaques)
+                ? post.destaques.filter((d: unknown): d is string => typeof d === 'string' && d.trim().length > 0 && d.length <= 40).map((d: string) => d.trim()).slice(0, 3)
+                : []
+            }
             if (i > 0) console.warn(`generate-content: gerado pelo RESERVA ${id}`)
             return new Response(JSON.stringify({ posts, modelo: id, reserva: i > 0 }), {
               headers: { 'Content-Type': 'application/json' }

@@ -30,6 +30,7 @@ import { ModoDialogo } from '../components/ModoDialogo'
 import { montarTranscricao, falantesParaApi, type Dialogo } from '../lib/dialogo'
 import { useEstiloCard } from '../lib/useEstiloCard'
 import { PainelCoresCarrossel, DestacarNoPost, TextoComDestaque, alternarChave } from '../components/EstiloCardUI'
+import { chaveDaPalavra, palavrasDaFrase } from '../lib/estiloCard'
 
 // Data de hoje em yyyy-mm-dd, pro input type="date" (padrão: "Dia 1" = hoje).
 function todayIso(): string {
@@ -49,6 +50,8 @@ interface Post {
   roteiro: string
   legenda: string
   vozSugerida: string
+  /** Palavras do hook que a IA sugere destacar no card (05/11). */
+  destaques?: string[]
 }
 
 function Agente() {
@@ -179,6 +182,13 @@ function Agente() {
 
       const data = await safeJson(response)
       setPosts(data.posts)
+      // Destaques sugeridos pela IA já chegam marcados no card do gancho — só as palavras que
+      // existem MESMO no hook ("Black Friday" num item só é separado). Chave = índice do post.
+      setDestaquesPorPost(Object.fromEntries((data.posts as Post[]).map((p, i) => {
+        const noHook = new Set(palavrasDaFrase(p.hook || '').map(chaveDaPalavra))
+        const sugeridas = [...new Set((p.destaques ?? []).flatMap((d) => palavrasDaFrase(d)).map(chaveDaPalavra))].filter((c) => c && noHook.has(c)).slice(0, 4)
+        return [i, sugeridas]
+      })))
 
       // Drop sazonal entregue: só marca DEPOIS do sucesso — se falhar, o banner
       // continua oferecendo (marcar antes deixaria o aviso mentindo).
