@@ -1246,7 +1246,7 @@ function SuperAgente() {
                     {' '}Neste kit ela evita repetir os ângulos que você já usou — <b className="text-white">quanto mais meses, mais afiada</b>.
                   </p>
                   <p className="text-gray-500 text-xs mt-1.5">
-                    Esse aprendizado é da sua conta. Se cancelar, a IA esquece a sua marca e volta à estaca zero.
+                    Esse aprendizado fica guardado na sua conta: se um dia você voltar, a IA continua de onde parou.
                   </p>
                 </div>
               </div>
