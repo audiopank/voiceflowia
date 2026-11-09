@@ -306,7 +306,9 @@ function SuperAgente() {
   // Tudo o que o cliente FALOU sobre a marca — é contra isto que cada post é conferido
   // (preço, porcentagem, promessa). Campos atuais: se ele acrescentar um preço depois, o
   // aviso some sem precisar gerar de novo.
-  const fatosDoBriefing = [briefingBruto, nicho, servicos, diferenciais, cta, tomMarca, instagram, campanha].join('\n')
+  // Linha em branco entre os campos: uma seção "O QUE NÃO FAZEMOS:" no fim do texto colado
+  // termina ali e não engole o campo seguinte (ver fatosSemProibicoes).
+  const fatosDoBriefing = [briefingBruto, nicho, servicos, diferenciais, cta, tomMarca, instagram, campanha].join('\n\n')
   const [extraindo, setExtraindo] = useState(false)
   const [extrairErro, setExtrairErro] = useState('')
   // Resultado da última extração: o que foi preenchido e o que o texto não sustentava.

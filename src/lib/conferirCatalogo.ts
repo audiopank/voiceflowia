@@ -205,7 +205,7 @@ const PROMESSAS_MARCA: { rotulo: string; re: RegExp }[] = [
   { rotulo: 'entrega (grátis, rápida, no mesmo dia…)', re: /entrega\s+(gratis|gratuita|rapida|expressa|no mesmo dia|em \d)|entregamos\s+em/ },
   { rotulo: 'desconto', re: /\bdescontos?\b|\b\d+\s*% off\b/ },
   { rotulo: 'promoção / oferta', re: /\bpromocao\b|\bpromocoes\b|\bpromo\b|\bofertas?\b/ },
-  { rotulo: 'parcelamento', re: /\bparcel(a|as|ado|ados|amento)\b|sem juros/ },
+  { rotulo: 'parcelamento', re: /\bparcel(a|as|ado|ados|amento|amos)\b|sem juros/ },
   { rotulo: 'garantia', re: /\bgarantia\b|\bgarantimos\b|satisfacao garantida/ },
   // "estoque" sozinho NÃO é promessa ("transforme seu estoque em posts" — teste ao vivo do
   // Mestre 30/10): só a escassez/disponibilidade anunciada.
@@ -222,7 +222,41 @@ const PROMESSAS_MARCA: { rotulo: string; re: RegExp }[] = [
   // Exagero (03/11, teste ao vivo do Mestre): "o Super Agente resolve tudo", "elevar o nível
   // instantaneamente", "dezenas de publicações agora mesmo" (o Catálogo faz até 6 por vez).
   { rotulo: 'exagero (resolve tudo, instantaneamente, dezenas/centenas de…)', re: /resolve(m)? tudo|\binstantaneament|\bem segundos\b|\b(dezenas|centenas|milhares) de (clientes|pessoas|vendas|publicacoes|posts|empresas|familias|seguidores|pedidos|negocios|marcas|usuarios|alunos|pacientes|anos)\b/ },
+  // Certeza que ninguém prova (09/11, post real dos Achadinhos): "pra garantir que você economize
+  // de verdade", "pagar o preço justo", "a gente não deixa isso acontecer". "Garanta já o seu"
+  // (chamada) e "garantir o seu horário" NÃO entram — só "garantir QUE" / "a gente garante".
+  // Separadas em 4 de propósito (guardião 09/11): numa regra só, o briefing que dizia "preço
+  // justo" dava lastro também a "sem risco" e "a gente garante".
+  { rotulo: 'certeza (garantir que, a gente garante…)', re: /\bgarant(ir|e|em|indo) que\b|\b(a gente|nos|eu) garant(e|o)\b/ },
+  { rotulo: 'preço (preço justo, menor/melhor preço…)', re: /\bprecos? justos?\b|\b(os? )?(menor|melhor|menores|melhores) precos?\b/ },
+  { rotulo: 'risco (sem risco, risco zero, 100% seguro…)', re: /\bsem (nenhum )?riscos?\b|\brisco zero\b|\b100 ?% (seguro|garantido|confiavel)\b/ },
+  { rotulo: 'certeza de resultado (não deixamos acontecer, economize de verdade…)', re: /\bnao deixa(mos)? (isso|isto) acontecer\b|\beconomiz(e|ar|a|ara) de verdade\b/ },
 ]
+
+// O briefing pode listar o que NÃO prometer ("Nunca dizer garantimos, preço justo"; seção
+// "O QUE NÃO FAZEMOS: frete grátis"). Essas linhas não são lastro: se contassem como fonte, a
+// própria lista de proibidas liberaria a promessa. Saem antes da comparação.
+const LINHA_DE_PROIBICAO = /\b(proibid|nunca (dizer|diga|prometer|prometa|usar|use|falar|fale|escrever)|nao (fazemos|prometemos|oferecemos|damos|temos|conferimos|entregamos|garantimos|trabalhamos|dizer|prometer|usar|falar))/
+// Cabeçalho só conta com ":" ("O QUE NÃO FAZEMOS:") — um campo que começa com "Não temos taxa
+// de entrega" é FATO, não seção (guardião 09/11: sem o ":" apagava o resto do briefing).
+const CABECALHO_DE_PROIBICAO = /^\W*(o que )?(nao (fazemos|prometemos|oferecemos|temos)|palavras proibidas|proibido|nunca dizer)\b[^:.!?]{0,40}:/
+const CABECALHO_QUALQUER = /^\W*[a-z][a-z ]{2,40}:\s*$/
+export function fatosSemProibicoes(fatosNorm: string): string {
+  const fica: string[] = []
+  let dentroDaSecao = false
+  for (const linha of fatosNorm.split(/\r?\n/)) {
+    if (!linha.trim()) { dentroDaSecao = false; continue }
+    // "O QUE NÃO FAZEMOS:" sozinho abre seção; com itens na mesma linha, só ela sai.
+    if (CABECALHO_DE_PROIBICAO.test(linha)) { dentroDaSecao = /:\s*$/.test(linha); continue }
+    if (dentroDaSecao && CABECALHO_QUALQUER.test(linha)) dentroDaSecao = false
+    if (dentroDaSecao) continue
+    // Sai só a FRASE de proibição: "Não trabalhamos domingo. Frete grátis acima de R$ 99"
+    // mantém o frete grátis como lastro.
+    const frases = linha.split(/(?<=[.!?;])\s+/).filter((f) => !LINHA_DE_PROIBICAO.test(f))
+    if (frases.length > 0) fica.push(frases.join(' '))
+  }
+  return fica.join('\n')
+}
 
 function porcentagens(texto: string): string[] {
   return [...texto.matchAll(RE_PORCENTO)].map((m) => {
@@ -253,7 +287,7 @@ export function conferirPostDaMarca(post: PostCatalogo, fatos: string): Conferen
     avisos.push(`Porcentagem que você não informou: ${pctFora.map((p) => p.replace('.', ',') + '%').join(', ')}`)
   }
 
-  const fatosNorm = normalizar(fatos)
+  const fatosNorm = fatosSemProibicoes(normalizar(fatos))
   const postNorm = normalizar(textoPost)
   const semLastro = PROMESSAS_MARCA.filter((p) => p.re.test(postNorm) && !p.re.test(fatosNorm)).map((p) => p.rotulo)
   if (semLastro.length > 0) {
