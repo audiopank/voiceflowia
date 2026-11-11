@@ -141,7 +141,7 @@ export function TrilhaFundoPanel({ estudio }: { estudio: ReturnType<typeof useTr
             />
             <p className="text-xs text-gray-600 mt-1">
               Ela entra como cama embaixo de todas as locuções e desce suave quando a voz termina —
-              vale pro Ouvir, pro download e pro ZIP do kit.
+              vale pro Ouvir, pros downloads e pro que você publicar na NewPost-IA.
             </p>
           </div>
         </div>

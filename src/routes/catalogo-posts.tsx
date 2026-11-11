@@ -12,7 +12,9 @@ import { BackButton } from '../components/BackButton'
 import { TONS, TOM_PADRAO } from '../lib/tons'
 import { GEMINI_VOICES_TEXTO_LONGO } from '../lib/voices'
 import { convertVoiceToMp3 } from '../lib/audioConvert'
-import { realcarVoz } from '../lib/estudioCards'
+import { realcarVoz, aplicarTrilha } from '../lib/estudioCards'
+import { useTrilhaFundo, TrilhaFundoPanel } from '../components/TrilhaFundo'
+import { PublicarNewPost } from '../components/PublicarNewPost'
 import { listarKits } from '../lib/kitsWhatsapp'
 import {
   conferirPost, lerCatalogoDetalhado, MAX_ITENS_CATALOGO, type ItemCatalogo, type PostCatalogo,
@@ -79,7 +81,44 @@ function CatalogoPosts() {
   const [audioUrls, setAudioUrls] = useState<Record<number, string>>({})
   const audioBlobsRef = useRef<Record<number, Blob>>({})
   const [gerandoAudio, setGerandoAudio] = useState<number | null>(null)
+  // Muda quando a locução em voo fica velha (editou o texto falado / criou posts de novo):
+  // a resposta que chegar depois é descartada em vez de grudar no post errado (e ser publicada).
+  const pedidoAudioRef = useRef(0)
   const [audioErros, setAudioErros] = useState<Record<number, string>>({})
+
+  // Estúdio (11/11/2026): a mesma trilha de fundo do Agente/Super Agente — UMA por catálogo,
+  // por baixo de todas as locuções. O player toca a mixagem (o que ouve = o que baixa/publica).
+  const estudio = useTrilhaFundo()
+  // `de` = a URL da voz que foi mixada: o player só usa a mixagem se ela é da voz ATUAL
+  // (logo após regerar, a mixagem velha é de outro texto — aí toca a voz pura até a nova sair).
+  const [ouvirUrls, setOuvirUrls] = useState<Record<number, { de: string; url: string }>>({})
+  const ouvirUrlsRef = useRef(ouvirUrls)
+  ouvirUrlsRef.current = ouvirUrls
+  useEffect(() => {
+    const { buffer, volume } = estudio.trilha
+    let cancelado = false
+    ;(async () => {
+      const novo: Record<number, { de: string; url: string }> = {}
+      if (buffer) {
+        for (const [k, de] of Object.entries(audioUrls)) {
+          if (cancelado) break // trilha/volume mudou de novo: não gasta CPU mixando o resto
+          const voz = audioBlobsRef.current[Number(k)]
+          if (voz) novo[Number(k)] = { de, url: URL.createObjectURL(await aplicarTrilha(voz, buffer, volume)) }
+        }
+      }
+      if (cancelado) { Object.values(novo).forEach((o) => URL.revokeObjectURL(o.url)); return }
+      // Solta as mixagens velhas só depois que as novas existem — o player nunca fica sem fonte.
+      setOuvirUrls((prev) => { Object.values(prev).forEach((o) => URL.revokeObjectURL(o.url)); return novo })
+    })()
+    return () => { cancelado = true }
+  }, [audioUrls, estudio.trilha])
+
+  // Voz + trilha (sem trilha = só a voz), em MP3 mono — mesmo formato do Agente na NewPost-IA.
+  async function locucaoFinalMp3(idx: number): Promise<{ blob: Blob; ext: string } | null> {
+    const voz = audioBlobsRef.current[idx]
+    if (!voz) return null
+    return convertVoiceToMp3(await aplicarTrilha(voz, estudio.trilha.buffer, estudio.trilha.volume))
+  }
 
   // Leitura esperta (21/10/2026): junta nome + preço em linhas separadas, ignora linha sem
   // produto e mostra o que ignorou. Lista MISTA (uns com preço, outros sem): os com preço vêm
@@ -121,7 +160,13 @@ function CatalogoPosts() {
   }, [hasContentAgentFeature])
 
   // Libera os áudios ao sair.
-  useEffect(() => () => { Object.values(audioUrls).forEach((u) => URL.revokeObjectURL(u)) }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  // Refs: o cleanup de [] enxerga só o 1º render (audioUrls = {}) — sem elas não revogava nada.
+  const audioUrlsRef = useRef(audioUrls)
+  audioUrlsRef.current = audioUrls
+  useEffect(() => () => {
+    Object.values(audioUrlsRef.current).forEach((u) => URL.revokeObjectURL(u))
+    Object.values(ouvirUrlsRef.current).forEach((o) => URL.revokeObjectURL(o.url))
+  }, [])
 
   function atualizar(idx: number, patch: Partial<Resultado>) {
     setResultados((prev) => prev.map((r, i) => (i === idx ? { ...r, ...patch } : r)))
@@ -200,6 +245,7 @@ function CatalogoPosts() {
     }
 
     Object.keys(audioBlobsRef.current).forEach((k) => descartarAudio(Number(k)))
+    pedidoAudioRef.current++
     setGerando(true)
     setResultados(itensUsados.map((item) => ({ item, post: null, status: 'esperando', tentativas: 0, erro: '', aprovado: false, salvo: false })))
 
@@ -236,12 +282,16 @@ function CatalogoPosts() {
   // Editou → a aprovação cai (o dono aprova o que está vendo) e a locução antiga sai.
   function editar(idx: number, campo: keyof PostCatalogo, valor: string) {
     setResultados((prev) => prev.map((r, i) => (i === idx && r.post ? { ...r, post: { ...r.post, [campo]: valor }, aprovado: false, salvo: false } : r)))
-    if (campo === 'locucao') descartarAudio(idx)
+    if (campo === 'locucao') {
+      descartarAudio(idx)
+      if (gerandoAudio === idx) pedidoAudioRef.current++
+    }
   }
 
   async function gerarLocucao(idx: number) {
     const texto = resultados[idx]?.post?.locucao?.trim()
     if (!texto || gerandoAudio !== null) return
+    const pedido = pedidoAudioRef.current
     setGerandoAudio(idx)
     setAudioErros((prev) => ({ ...prev, [idx]: '' }))
     try {
@@ -255,6 +305,10 @@ function CatalogoPosts() {
         throw new Error(friendlyApiError(response.status, data?.error))
       }
       const blob = await realcarVoz(await response.blob())
+      if (pedido !== pedidoAudioRef.current) { // texto mudou enquanto gerava: áudio velho
+        setAudioErros((prev) => ({ ...prev, [idx]: '' }))
+        return
+      }
       descartarAudio(idx)
       audioBlobsRef.current[idx] = blob
       setAudioUrls((prev) => ({ ...prev, [idx]: URL.createObjectURL(blob) }))
@@ -267,9 +321,9 @@ function CatalogoPosts() {
   }
 
   async function baixarLocucao(idx: number) {
-    const blob = audioBlobsRef.current[idx]
-    if (!blob) return
-    const { blob: arquivo, ext } = await convertVoiceToMp3(blob)
+    const final = await locucaoFinalMp3(idx)
+    if (!final) return
+    const { blob: arquivo, ext } = final
     const a = document.createElement('a')
     a.href = URL.createObjectURL(arquivo)
     a.download = `${String(idx + 1).padStart(2, '0')}-${nomeArquivo(resultados[idx].item.nome)}.${ext}`
@@ -459,6 +513,8 @@ function CatalogoPosts() {
           {erroGeral && <p className="text-sm text-red-400 flex items-center gap-2"><AlertCircle className="w-4 h-4" /> {erroGeral}</p>}
         </section>
 
+        {resultados.length > 0 && <TrilhaFundoPanel estudio={estudio} />}
+
         {/* 3. Os posts, conferidos */}
         {resultados.length > 0 && (
           <section className="space-y-4 mb-6">
@@ -558,8 +614,23 @@ function CatalogoPosts() {
                           </Button>
                         )}
                       </div>
-                      {audioUrls[i] && <audio controls src={audioUrls[i]} className="w-full" />}
+                      {audioUrls[i] && <audio controls src={ouvirUrls[i]?.de === audioUrls[i] ? ouvirUrls[i].url : audioUrls[i]} className="w-full" />}
                       {audioErros[i] && <p className="text-sm text-amber-400">{audioErros[i]}</p>}
+                      {/* Publicar (11/11/2026): só o que passou na conferência E foi aprovado pelo
+                          dono. Catálogo não tem cards: vai texto + locução (com a trilha). */}
+                      {/* conf refeita aqui: mexer nos fatos DEPOIS de aprovar não derruba r.aprovado
+                          (mesma checagem dupla do salvarAprovados). */}
+                      {r.aprovado && conf.aprovado ? (
+                        <PublicarNewPost
+                          texto={`${r.post.gancho}\n\n${r.post.legenda}`}
+                          marca={nicho.trim() || 'Minha marca'}
+                          chaveUnica={`voiceflow-catalogo-${i}-${nomeArquivo(r.item.nome)}`}
+                          prepararMidia={async () => ({ imagens: [], audio: (await locucaoFinalMp3(i))?.blob ?? null })}
+                          roteiro={r.post.locucao}
+                        />
+                      ) : (
+                        <p className="text-xs text-gray-500">Aprove o post para liberar o "Publicar na NewPost-IA".</p>
+                      )}
                     </>
                   )}
                 </div>
