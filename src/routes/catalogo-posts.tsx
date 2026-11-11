@@ -627,6 +627,8 @@ function CatalogoPosts() {
                           chaveUnica={`voiceflow-catalogo-${i}-${nomeArquivo(r.item.nome)}`}
                           prepararMidia={async () => ({ imagens: [], audio: (await locucaoFinalMp3(i))?.blob ?? null })}
                           roteiro={r.post.locucao}
+                          temCards={false}
+                          temLocucao={Boolean(audioUrls[i])}
                         />
                       ) : (
                         <p className="text-xs text-gray-500">Aprove o post para liberar o "Publicar na NewPost-IA".</p>

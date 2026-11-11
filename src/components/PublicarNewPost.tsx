@@ -37,7 +37,13 @@ export function PublicarNewPost({
   serie,
   disabled,
   roteiro,
+  temCards = true,
+  temLocucao = true,
 }: {
+  /** Catálogo: false enquanto a locução não foi gerada (publica só o texto). */
+  temLocucao?: boolean
+  /** false no Catálogo → Posts (sem carrossel): o texto da tela não pode prometer cards. */
+  temCards?: boolean
   texto: string
   /** O que a locução FALA (hook + roteiro, ou as falas do diálogo). Vai pra rede como
    *  transcrição do post (fonte 'roteiro') — de graça, sem Gemini. Só usado se há áudio. */
@@ -86,6 +92,9 @@ export function PublicarNewPost({
     return () => { vivo = false }
   }, [])
   const nomeCasa = perfis?.find((p) => p.id === perfilCasa)?.nome
+  // Texto da tela segue o que acontece de verdade (critério "só vendemos a verdade").
+  const ondeSai = nomeCasa ? `no perfil ${nomeCasa}` : 'no seu perfil'
+  const oQueVai = temCards ? 'os cards e a locução' : temLocucao ? 'o texto e a locução' : 'só o texto (sem locução — gere antes, se quiser o áudio)'
 
   async function salvarCadastro() {
     if (!cadastro) return
@@ -394,7 +403,7 @@ export function PublicarNewPost({
           void publicar()
         }}
         disabled={disabled || ocupado}
-        title="Publica este conteúdo no feed da NewPost-IA, no seu nome — com os cards e a locução"
+        title={`Publica este conteúdo no feed da NewPost-IA, ${ondeSai} — com ${oQueVai}`}
         className="w-full bg-gradient-to-r from-[#0EA5A4] to-[#22C55E] hover:opacity-90 disabled:opacity-50 flex items-center justify-center gap-2"
       >
         {ocupado ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
@@ -408,9 +417,8 @@ export function PublicarNewPost({
           tem pouca gente) nem "1 clique" (na 1ª vez há a confirmação do perfil). */}
       {!erro && estado === 'parado' && (
         <p className="text-[11px] leading-snug text-gray-500">
-          Mostre este post na NewPost-IA, a rede brasileira de criadores. Ele sai no seu perfil, com os
-          cards e a locução. Na primeira vez, você confirma o nome do perfil (a bio a gente sugere, e é
-          opcional) e, se já tiver conta na rede, digita a senha dela.
+          Mostre este post na NewPost-IA, a rede brasileira de criadores. Ele sai {ondeSai}, com {oQueVai}.
+          {!nomeCasa && ' Na primeira vez, você confirma o nome do perfil (a bio a gente sugere, e é opcional) e, se já tiver conta na rede, digita a senha dela.'}
         </p>
       )}
     </div>
