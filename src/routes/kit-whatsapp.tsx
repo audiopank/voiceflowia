@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { createFileRoute, useNavigate, useSearch } from '@tanstack/react-router'
+import { createFileRoute, Link, useNavigate, useSearch } from '@tanstack/react-router'
 import {
   Lock, Loader2, Sparkles, Download, Copy, Check, X, AlertCircle, MessageCircle, Play, Square, Plus,
   Smartphone, Share2, FolderOpen,
@@ -17,6 +17,8 @@ import { brandWhatsappKey, loadBrandWhatsapp, saveBrandWhatsapp, whatsappIncompl
 import JSZip from 'jszip'
 import { salvarKit, atualizarKit, carregarKit } from '../lib/kitsWhatsapp'
 import { FALANTE_CLIENTE, FALANTE_DONO, VOZES_PADRAO, montarTranscricao, falantesParaApi } from '../lib/dialogo'
+import { conferirPostDaMarca } from '../lib/conferirCatalogo'
+import { AvisoConferencia } from '../components/AvisoConferencia'
 
 export const Route = createFileRoute('/kit-whatsapp')({
   // ?kit=<id> reabre um kit salvo (Meus Kits). Normaliza pra texto: a query pode
@@ -1514,6 +1516,14 @@ function KitWhatsapp() {
                       ? 'Um por vez, com pausa — a IA de voz não aceita rajada. Pode levar uns 2 a 3 minutos; pode continuar navegando nesta tela.'
                       : `${prontos} de ${respostas.length} áudios prontos. Gera um por vez, com pausa; se a IA travar no meio, o que já saiu fica guardado e você continua de onde parou.`)}
                   </p>
+                  {/* Onde cada coisa fica (10/11/2026): o próprio Mestre não achou a biblioteca. */}
+                  {kitId && (
+                    <p className="text-xs text-gray-400" data-testid="aviso-onde-fica">
+                      💾 O texto deste kit, com as suas edições, fica salvo em{' '}
+                      <Link to="/meus-kits" className="text-[#22C55E] underline hover:text-white">Meus Kits</Link>.
+                      {' '}Os áudios não ficam guardados aqui: mande pro seu WhatsApp e guarde na conversa “Você” — ou gere de novo quando reabrir o kit.
+                    </p>
+                  )}
                 </div>
 
                 {respostas.map((r, idx) => {
@@ -1531,6 +1541,20 @@ function KitWhatsapp() {
                         rows={3}
                         className="w-full bg-[#0A0A0A] border border-gray-800 rounded-lg px-3 py-2 text-white focus:border-[#8B5CF6] focus:outline-none resize-none text-sm"
                       />
+                      {/* Régua (10/11/2026), a mesma do Super Agente, contra os Fatos da marca SÓ.
+                          A pergunta NÃO entra como lastro (guardião): "Tem garantia?" liberava
+                          "garantia de 30 dias" inventada com selo verde. Resposta honesta que cita
+                          o tema ("a garantia é da loja") pede "confira" — o conserto é escrever o
+                          fato nos Fatos da marca, e aí a IA também passa a saber. */}
+                      {r.resposta.trim() && (
+                        <AvisoConferencia
+                          onde="kit"
+                          avisos={conferirPostDaMarca(
+                            { gancho: '', legenda: r.resposta, locucao: '' },
+                            [nicho, fatos, diferenciais, cta].join('\n\n'),
+                          ).avisos}
+                        />
+                      )}
                       <div className="flex flex-wrap items-center gap-2">
                         <button
                           type="button"

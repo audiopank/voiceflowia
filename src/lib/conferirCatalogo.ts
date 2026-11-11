@@ -212,7 +212,7 @@ const PROMESSAS_MARCA: { rotulo: string; re: RegExp }[] = [
   { rotulo: 'estoque / últimas unidades', re: /\bem estoque\b|estoque limitado|estoque acabando|acabando o estoque|ultimas unidades|poucas unidades|pronta entrega|restam (so|apenas) \d/ },
   { rotulo: 'urgência (só hoje, último dia…)', re: /so hoje|ultimo dia|ultimos dias|tempo limitado|corre que acaba|enquanto durar/ },
   { rotulo: 'brinde / grátis', re: /\bbrindes?\b|(?<!frete )\bgratis\b/ },
-  { rotulo: 'fama / superlativo (mais pedido, o melhor da cidade, famoso…)', re: /mais (pedid|vendid|procurad|famos)|\b(o|a) melhor\b[^.!?\n]{0,30}\b(da|do|de) (cidade|regiao|bairro|brasil|mundo|estado|zona)\b|melhor da cidade|\bfamos[oa]s?\b|numero 1\b|\bcampea|\blider\b|sucesso de vendas/ },
+  { rotulo: 'fama / superlativo (mais pedido, o melhor da cidade, famoso…)', re: /mais (pedid|vendid|procurad|famos)|\b(o|a) melhor\b[^.!?\n]{0,30}\b(da|do|de) (cidade|regiao|bairro|brasil|mundo|estado|zona)\b|melhor da cidade|\bfamos[oa]s?\b|numero 1\b|\bcampea|\blider\b|sucesso de vendas|\b(as|os|a|o) melhor(es)? (oferta|ofertas|produto|produtos|promocao|promocoes|desconto|descontos|achado|achados)\b/ },
   // Promessa de RESULTADO (03/11): o prompt do Super Agente proíbe, mas a IA às vezes escorrega
   // (teste real: "seu negócio rodar sem esforço") — a régua avisa o que passar.
   { rotulo: 'promessa de resultado (sem esforço, vende mais, converte mais…)', re: /sem esforco|\bvend(e|a|er|as) (muito )?mais\b|\bconvert(e|a|er) (muito )?mais\b|\bdobr(a|ar|e) (as |os |suas |seus )?(vendas|clientes|faturamento|lucro)|resultado garantido|lucro garantido/ },
@@ -229,7 +229,7 @@ const PROMESSAS_MARCA: { rotulo: string; re: RegExp }[] = [
   // justo" dava lastro também a "sem risco" e "a gente garante".
   { rotulo: 'certeza (garantir que, a gente garante…)', re: /\bgarant(ir|e|em|indo) que\b|\b(a gente|nos|eu) garant(e|o)\b/ },
   { rotulo: 'preço (preço justo, menor/melhor preço…)', re: /\bprecos? justos?\b|\b(os? )?(menor|melhor|menores|melhores) precos?\b/ },
-  { rotulo: 'risco (sem risco, risco zero, 100% seguro…)', re: /\bsem (nenhum )?riscos?\b|\brisco zero\b|\b100 ?% (seguro|garantido|confiavel)\b/ },
+  { rotulo: 'risco (sem risco, risco zero, 100% seguro…)', re: /\bsem (nenhum )?riscos?\b|\brisco zero\b|\b100 ?% (segur[oa]s?|garantid[oa]s?|confiave(l|is))\b/ },
   { rotulo: 'certeza de resultado (não deixamos acontecer, economize de verdade…)', re: /\bnao deixa(mos)? (isso|isto) acontecer\b|\beconomiz(e|ar|a|ara) de verdade\b/ },
 ]
 
@@ -282,7 +282,9 @@ export function conferirPostDaMarca(post: PostCatalogo, fatos: string): Conferen
   }
 
   const pctFonte = new Set(porcentagens(fatos))
-  const pctFora = [...new Set(porcentagens(textoPost))].filter((p) => !pctFonte.has(p))
+  // "100%" é jeito de falar ("100% online"), não desconto — "100% garantido/seguro" já é
+  // pego pela regra de risco (10/11/2026).
+  const pctFora = [...new Set(porcentagens(textoPost))].filter((p) => !pctFonte.has(p) && p !== '100')
   if (pctFora.length > 0) {
     avisos.push(`Porcentagem que você não informou: ${pctFora.map((p) => p.replace('.', ',') + '%').join(', ')}`)
   }
