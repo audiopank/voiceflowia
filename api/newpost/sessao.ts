@@ -148,6 +148,78 @@ async function garantirPerfil(url: string, anon: string, token: string, userId: 
   }
 }
 
+// Perfis da casa (tabela newpost_contas_casa — MIGRATION_NEWPOST_CONTAS_CASA.sql). A SENHA
+// só é usada para entrar (cadastro ou sessão vencida) e nunca é gravada; o que fica é o
+// refresh_token, que a rede troca a cada uso — por isso ele é regravado sempre.
+async function perfisDaCasa(
+  admin: ReturnType<typeof createClient>, donoId: string, acao: string, perfilId: string,
+  body: any, url: string, anon: string,
+): Promise<Response> {
+  const tabela = () => admin.from('newpost_contas_casa')
+
+  if (acao === 'listarCasa') {
+    const { data, error } = await tabela().select('id, nome, newpost_email').eq('dono_user_id', donoId).order('nome')
+    // Tabela ainda não criada (SQL não rodado): o seletor só não aparece — publicar continua.
+    if (error) console.error('[newpost/sessao] listar perfis da casa:', error.message)
+    return json({ perfis: (data || []).map((p: any) => ({ id: p.id, nome: p.nome, email: p.newpost_email })) })
+  }
+
+  if (acao === 'cadastrarCasa') {
+    const nome = (body?.nome || '').toString().trim().slice(0, 60)
+    const email = (body?.email || '').toString().trim().toLowerCase()
+    const senha = (body?.senha || '').toString()
+    if (!nome || !email || !senha) return json({ error: 'Preencha nome, e-mail e senha do perfil.' }, 400)
+    const r = await postAuth(url, anon, 'token?grant_type=password', { email, password: senha })
+    const sessao = r.ok ? sessaoDe(r.data) : null
+    if (!sessao) return json({ error: 'E-mail ou senha da NewPost-IA não conferem.' }, 401)
+    const { data, error } = await tabela().upsert({
+      dono_user_id: donoId, nome, newpost_email: email, newpost_user_id: sessao.userId,
+      refresh_token: sessao.refreshToken, updated_at: new Date().toISOString(),
+    } as any, { onConflict: 'dono_user_id,newpost_email' }).select('id, nome, newpost_email').single()
+    if (error || !data) return json({ error: `Entrei no perfil, mas não consegui guardar (${error?.message || 'sem retorno'}). O SQL da tabela newpost_contas_casa já foi rodado?` }, 500)
+    const p: any = data
+    return json({ perfil: { id: p.id, nome: p.nome, email: p.newpost_email } })
+  }
+
+  if (acao) return json({ error: 'Ação desconhecida.' }, 400)
+
+  // Publicar como um perfil da casa: só um perfil que ESTE admin cadastrou.
+  const { data: linha, error: erroLinha } = await tabela()
+    .select('id, nome, newpost_email, refresh_token').eq('id', perfilId).eq('dono_user_id', donoId).maybeSingle()
+  const perfil: any = linha
+  if (erroLinha || !perfil) return json({ error: 'Perfil da casa não encontrado. Cadastre de novo.' }, 404)
+
+  let sessao: SessaoNewPost | null = null
+  const senha = (body?.senhaCasa || '').toString()
+  if (senha) {
+    const r = await postAuth(url, anon, 'token?grant_type=password', { email: perfil.newpost_email, password: senha })
+    sessao = r.ok ? sessaoDe(r.data) : null
+    if (!sessao) return json({ error: 'E-mail ou senha da NewPost-IA não conferem.', precisaSenha: true, email: perfil.newpost_email }, 401)
+  } else if (perfil.refresh_token) {
+    const r = await postAuth(url, anon, 'token?grant_type=refresh_token', { refresh_token: perfil.refresh_token })
+    sessao = r.ok ? sessaoDe(r.data) : null
+  }
+  if (!sessao) {
+    return json({ error: `A sessão do perfil ${perfil.nome} venceu. Informe a senha dele uma vez.`, precisaSenha: true, email: perfil.newpost_email }, 409)
+  }
+
+  const { error: erroSalvar } = await tabela()
+    .update({ refresh_token: sessao.refreshToken, newpost_user_id: sessao.userId, updated_at: new Date().toISOString() } as any)
+    .eq('id', perfil.id)
+  // Igual ao vínculo do cliente: falhar aqui não impede publicar agora, só pede a senha na próxima.
+  if (erroSalvar) console.error('[newpost/sessao] não regravou o token do perfil da casa:', erroSalvar.message)
+
+  return json({
+    accessToken: sessao.accessToken,
+    newpostUserId: sessao.userId,
+    supabaseUrl: url,
+    anonKey: anon,
+    contaCriadaAgora: false,
+    senhaGerada: null,
+    email: perfil.newpost_email,
+  })
+}
+
 async function handler(request: Request): Promise<Response> {
   if (request.method !== 'POST') return json({ error: 'Método não permitido' }, 405)
 
@@ -192,6 +264,16 @@ async function handler(request: Request): Promise<Response> {
     // sobra metade do par substituto e o perfil público exibe "�". Joga a metade fora.
     .replace(/[\uD800-\uDBFF]$/, '')
   const senhaInformada: string = (body?.senhaNewpost || '').toString()
+
+  // --- perfis da CASA (11/11/2026): seletor "Publicar como", SÓ do admin ---
+  // A trava é AQUI no servidor (e-mail da sessão do VoiceFlow), nunca só na tela.
+  const acao = (body?.acao || '').toString()
+  const perfilCasa = (body?.perfilCasa || '').toString()
+  if (acao || perfilCasa) {
+    const ADMIN = (process.env.VITE_ADMIN_EMAIL || 'novaaudiopank@gmail.com').toLowerCase()
+    if (usuario.email.toLowerCase() !== ADMIN) return json({ error: 'Só o administrador publica como perfil da casa.' }, 403)
+    return perfisDaCasa(admin, usuario.id, acao, perfilCasa, body, NEWPOST_URL, NEWPOST_ANON)
+  }
 
   // --- já existe vínculo? --------------------------------------------------
   const { data: vinculo } = await admin

@@ -83,18 +83,53 @@ export async function sugerirBioNewPost(marca: string, nicho: string): Promise<s
   }
 }
 
-export async function obterSessaoNewPost(
-  marca: string,
-  opcoes: { nomePerfil?: string; senhaNewpost?: string; bio?: string } = {},
-): Promise<SessaoNewPost> {
+async function chamarSessao(corpo: Record<string, unknown>): Promise<Response> {
   const { data: { session } } = await supabase.auth.getSession()
   const token = session?.access_token
   if (!token) throw new Error('Faça login no VoiceFlow para publicar.')
-
-  const res = await fetch('/api/newpost/sessao', {
+  return fetch('/api/newpost/sessao', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-    body: JSON.stringify({ marca, nomePerfil: opcoes.nomePerfil, senhaNewpost: opcoes.senhaNewpost, bio: opcoes.bio }),
+    body: JSON.stringify(corpo),
+  })
+}
+
+// Perfis da CASA (11/11/2026): o admin publica também como Achadinhos NewPost-IA etc.
+// A rota recusa (403) quem não é admin — a tela só esconde o seletor.
+export interface PerfilCasa { id: string; nome: string; email: string }
+
+// Uma busca por página: o botão aparece em cada card (30 num calendário) e todos usam esta.
+let perfisEmCache: Promise<PerfilCasa[]> | null = null
+export function listarPerfisCasa(): Promise<PerfilCasa[]> {
+  perfisEmCache ??= buscarPerfisCasa()
+  return perfisEmCache
+}
+
+async function buscarPerfisCasa(): Promise<PerfilCasa[]> {
+  try {
+    const res = await chamarSessao({ acao: 'listarCasa' })
+    const dados = await res.json().catch(() => null)
+    return res.ok && Array.isArray(dados?.perfis) ? dados.perfis : []
+  } catch {
+    return []
+  }
+}
+
+export async function cadastrarPerfilCasa(nome: string, email: string, senha: string): Promise<PerfilCasa> {
+  const res = await chamarSessao({ acao: 'cadastrarCasa', nome, email, senha })
+  const dados = await res.json().catch(() => null)
+  if (!res.ok || !dados?.perfil) throw new Error(dados?.error || `Não consegui cadastrar o perfil (HTTP ${res.status}).`)
+  perfisEmCache = null // o próximo card que abrir já vê o perfil novo
+  return dados.perfil
+}
+
+export async function obterSessaoNewPost(
+  marca: string,
+  opcoes: { nomePerfil?: string; senhaNewpost?: string; bio?: string; perfilCasa?: string; senhaCasa?: string } = {},
+): Promise<SessaoNewPost> {
+  const res = await chamarSessao({
+    marca, nomePerfil: opcoes.nomePerfil, senhaNewpost: opcoes.senhaNewpost, bio: opcoes.bio,
+    perfilCasa: opcoes.perfilCasa, senhaCasa: opcoes.senhaCasa,
   })
 
   // Resposta pode não ser JSON (502/504 da Vercel devolvem HTML) — ler como texto

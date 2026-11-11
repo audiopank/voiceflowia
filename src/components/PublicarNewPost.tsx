@@ -1,8 +1,13 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Send, Loader2, CheckCircle2, ExternalLink, KeyRound, AtSign, RefreshCw } from 'lucide-react'
 import { Button } from './ui/button'
+import { supabase } from '../lib/supabase'
+import { ADMIN_EMAIL } from '../lib/plans'
 import {
   obterSessaoNewPost,
+  listarPerfisCasa,
+  cadastrarPerfilCasa,
+  type PerfilCasa,
   publicarNaNewPost,
   sugerirBioNewPost,
   limitarBio,
@@ -62,6 +67,42 @@ export function PublicarNewPost({
   const [senha, setSenha] = useState('')
   const [resultado, setResultado] = useState<ResultadoPublicacao | null>(null)
 
+  // Perfis da CASA (11/11/2026): só o admin vê o seletor "Publicar como". null = não é
+  // admin (nada muda pro cliente). A trava de verdade está na rota, não aqui.
+  const [perfis, setPerfis] = useState<PerfilCasa[] | null>(null)
+  const [perfilCasa, setPerfilCasa] = useState('')
+  const [cadastro, setCadastro] = useState<{ nome: string; email: string; senha: string } | null>(null)
+  const [erroCadastro, setErroCadastro] = useState('')
+  const [salvandoCadastro, setSalvandoCadastro] = useState(false)
+  useEffect(() => {
+    let vivo = true
+    // getSession (local, sem rede): o componente monta 1x POR POST do calendário e isto roda
+    // pra todo cliente; só esconde/mostra o seletor — quem decide é a rota.
+    supabase.auth.getSession().then(({ data }) => {
+      if (vivo && data.session?.user?.email?.toLowerCase() === ADMIN_EMAIL.toLowerCase()) {
+        listarPerfisCasa().then((p) => { if (vivo) setPerfis(p) })
+      }
+    })
+    return () => { vivo = false }
+  }, [])
+  const nomeCasa = perfis?.find((p) => p.id === perfilCasa)?.nome
+
+  async function salvarCadastro() {
+    if (!cadastro) return
+    setErroCadastro('')
+    setSalvandoCadastro(true)
+    try {
+      const novo = await cadastrarPerfilCasa(cadastro.nome.trim(), cadastro.email.trim(), cadastro.senha)
+      setPerfis((p) => [...(p ?? []).filter((x) => x.id !== novo.id), novo].sort((a, b) => a.nome.localeCompare(b.nome)))
+      setPerfilCasa(novo.id)
+      setCadastro(null)
+    } catch (e) {
+      setErroCadastro(e instanceof Error ? e.message : 'Não consegui cadastrar o perfil.')
+    } finally {
+      setSalvandoCadastro(false)
+    }
+  }
+
   // Escreve a bio a partir do nicho que o cliente JÁ digitou, pra ele não encarar um
   // campo em branco no momento mais frágil do fluxo (a primeira publicação). Nunca
   // trava: se a IA falhar, o campo fica vazio e o perfil nasce sem bio.
@@ -92,11 +133,15 @@ export function PublicarNewPost({
       // `nomePerfil` do estado sobrevive entre as duas perguntas: se ele escolher o nome e
       // logo depois a conta pedir senha, não perguntamos o nome de novo. A bio viaja junto
       // e só é usada quando o perfil está sendo criado agora.
-      const sessao = await obterSessaoNewPost(marca, {
-        nomePerfil: opcoes.nomePerfil ?? (nomePerfil.trim() || undefined),
-        senhaNewpost: opcoes.senhaNewpost,
-        bio: bio.trim() || undefined,
-      })
+      // Perfil da casa: a senha digitada (sessão vencida) vai como senhaCasa, nunca como a
+      // senha da conta própria do admin.
+      const sessao = await obterSessaoNewPost(marca, perfilCasa
+        ? { perfilCasa, senhaCasa: opcoes.senhaNewpost }
+        : {
+            nomePerfil: opcoes.nomePerfil ?? (nomePerfil.trim() || undefined),
+            senhaNewpost: opcoes.senhaNewpost,
+            bio: bio.trim() || undefined,
+          })
       setPedindoNome(null)
       setPedindoSenha(null)
 
@@ -138,7 +183,7 @@ export function PublicarNewPost({
       <div className="no-export space-y-2 pt-1">
         <div className="flex items-center gap-2 text-[#22C55E] text-sm">
           <CheckCircle2 className="w-4 h-4 shrink-0" />
-          <span>Publicado na NewPost-IA</span>
+          <span>Publicado na NewPost-IA{nomeCasa ? ` como ${nomeCasa}` : ''}</span>
           <a
             href={resultado.serieId ? `${URL_NEWPOST}/serie/${resultado.serieId}` : URL_NEWPOST}
             target="_blank"
@@ -252,8 +297,17 @@ export function PublicarNewPost({
       <div className="no-export space-y-2 pt-1 rounded-lg border border-gray-700 bg-[#0A0A0A] p-3">
         <p className="text-xs text-gray-300 flex items-start gap-1.5">
           <KeyRound className="w-3.5 h-3.5 mt-0.5 shrink-0 text-[#8B5CF6]" />
-          Você já tem conta na NewPost-IA com <span className="text-white">{pedindoSenha.email}</span>.
-          Informe a senha uma vez — depois disso não perguntamos mais.
+          {nomeCasa ? (
+            <span>
+              A sessão do perfil <span className="text-white">{nomeCasa}</span> ({pedindoSenha.email}) venceu.
+              Informe a senha dele na NewPost-IA — ela não fica guardada.
+            </span>
+          ) : (
+            <span>
+              Você já tem conta na NewPost-IA com <span className="text-white">{pedindoSenha.email}</span>.
+              Informe a senha uma vez — depois disso não perguntamos mais.
+            </span>
+          )}
         </p>
         <div className="flex gap-2">
           <input
@@ -283,6 +337,49 @@ export function PublicarNewPost({
   const ocupado = estado !== 'parado'
   return (
     <div className="no-export space-y-1 pt-1">
+      {perfis && (
+        <div className="space-y-2 pb-1" data-testid="seletor-perfil-casa">
+          <div className="flex flex-wrap items-center gap-2">
+            <label htmlFor="publicar-como" className="text-xs text-gray-400">Publicar como</label>
+            <select
+              id="publicar-como"
+              value={perfilCasa}
+              onChange={(e) => setPerfilCasa(e.target.value)}
+              disabled={ocupado}
+              className="flex-1 min-w-0 p-1.5 bg-[#1A1A1A] border border-gray-700 rounded-lg text-white text-xs focus:outline-none focus:border-[#0EA5A4]"
+            >
+              <option value="">👤 Meu perfil</option>
+              {perfis.map((p) => <option key={p.id} value={p.id}>🏠 {p.nome}</option>)}
+            </select>
+            {!cadastro && (
+              <button type="button" onClick={() => { setCadastro({ nome: '', email: '', senha: '' }); setErroCadastro('') }} className="text-xs text-[#0EA5A4] hover:underline">
+                + Cadastrar perfil da casa
+              </button>
+            )}
+          </div>
+          {cadastro && (
+            <div className="rounded-lg border border-gray-700 bg-[#0A0A0A] p-3 space-y-2">
+              <p className="text-[11px] text-gray-400">
+                Entre uma vez com o e-mail e a senha do perfil na NewPost-IA. A senha não fica guardada — só a sessão.
+              </p>
+              <input type="text" value={cadastro.nome} onChange={(e) => setCadastro({ ...cadastro, nome: e.target.value })} placeholder="Nome no seletor (ex.: Achadinhos NewPost-IA)" maxLength={60}
+                className="w-full p-2 bg-[#1A1A1A] border border-gray-700 rounded-lg text-white placeholder-gray-600 text-xs focus:outline-none focus:border-[#0EA5A4]" />
+              <input type="email" value={cadastro.email} onChange={(e) => setCadastro({ ...cadastro, email: e.target.value })} placeholder="E-mail do perfil na NewPost-IA" autoComplete="off"
+                className="w-full p-2 bg-[#1A1A1A] border border-gray-700 rounded-lg text-white placeholder-gray-600 text-xs focus:outline-none focus:border-[#0EA5A4]" />
+              <input type="password" value={cadastro.senha} onChange={(e) => setCadastro({ ...cadastro, senha: e.target.value })} placeholder="Senha do perfil na NewPost-IA" autoComplete="new-password"
+                className="w-full p-2 bg-[#1A1A1A] border border-gray-700 rounded-lg text-white placeholder-gray-600 text-xs focus:outline-none focus:border-[#0EA5A4]" />
+              <div className="flex items-center gap-3">
+                <Button onClick={salvarCadastro} disabled={salvandoCadastro || !cadastro.nome.trim() || !cadastro.email.trim() || !cadastro.senha}
+                  className="bg-[#0EA5A4] hover:opacity-90 disabled:opacity-50 px-3 text-xs">
+                  {salvandoCadastro ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : 'Entrar e salvar'}
+                </Button>
+                <button type="button" onClick={() => { setCadastro(null); setErroCadastro('') }} className="text-xs text-gray-500 hover:text-gray-300">Cancelar</button>
+              </div>
+              {erroCadastro && <p className="text-yellow-500 text-xs">{erroCadastro}</p>}
+            </div>
+          )}
+        </div>
+      )}
       <Button
         onClick={() => {
           // Trava de acento (15/10): avisa ANTES de ir pro feed — não bloqueia, a decisão é do dono.
