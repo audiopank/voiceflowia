@@ -133,7 +133,8 @@ const PROMESSAS: { rotulo: string; re: RegExp }[] = [
 export function conferirPost(post: PostCatalogo, item: ItemCatalogo, indice: number, fatos: string): Conferencia {
   const textoPost = [post.gancho, post.legenda, post.locucao].join('\n')
   const fonte = [item.nome, item.preco, item.detalhes, fatos].join('\n')
-  const fonteNorm = normalizar(fonte)
+  // Promessas: "O QUE NÃO FAZEMOS: frete grátis" nos fatos (ex.: Minha marca) não vira lastro.
+  const fonteNorm = normalizar([item.nome, item.preco, item.detalhes].join('\n')) + '\n' + fatosSemProibicoes(normalizar(fatos))
   const postNorm = normalizar(textoPost)
   const checagens: Checagem[] = []
   const falhas: string[] = []

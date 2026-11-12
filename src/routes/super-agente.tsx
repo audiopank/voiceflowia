@@ -37,6 +37,7 @@ import { CtaObjetivo } from '../components/CtaObjetivo'
 import { FeedPreview } from '../components/FeedPreview'
 import { HumanizarButton } from '../components/HumanizarButton'
 import { useEstiloCard } from '../lib/useEstiloCard'
+import { carregarMinhaMarca } from '../lib/minhaMarca'
 import { PainelCoresCarrossel, DestacarNoPost, TextoComDestaque, alternarChave } from '../components/EstiloCardUI'
 import { chaveDaPalavra, palavrasDaFrase } from '../lib/estiloCard'
 import { coresDoSlide } from '../components/CardExport'
@@ -309,6 +310,20 @@ function SuperAgente() {
   // Linha em branco entre os campos: uma seção "O QUE NÃO FAZEMOS:" no fim do texto colado
   // termina ali e não engole o campo seguinte (ver fatosSemProibicoes).
   const fatosDoBriefing = [briefingBruto, nicho, servicos, diferenciais, cta, tomMarca, instagram, campanha].join('\n\n')
+  // Minha marca (12/11/2026): o "Comece rápido" abre com a descrição salva no Dashboard.
+  // Só preenche se o cliente ainda não escreveu nada aqui — o que ele digitou vence.
+  const [veioDaMinhaMarca, setVeioDaMinhaMarca] = useState(false)
+  const briefingAtual = useRef(briefingBruto)
+  briefingAtual.current = briefingBruto
+  useEffect(() => {
+    let vivo = true
+    carregarMinhaMarca().then((m) => {
+      if (!vivo || !m?.descricao || briefingAtual.current.trim()) return
+      setBriefingBruto(m.descricao)
+      setVeioDaMinhaMarca(true)
+    })
+    return () => { vivo = false }
+  }, [])
   const [extraindo, setExtraindo] = useState(false)
   const [extrairErro, setExtrairErro] = useState('')
   // Resultado da última extração: o que foi preenchido e o que o texto não sustentava.
@@ -1123,6 +1138,12 @@ function SuperAgente() {
               placeholder="Ex: Somos a OtoBel, trabalhamos com aparelhos auditivos há 12 anos em Belo Horizonte. Fazemos adaptação, manutenção e teste de audição. Todo cliente tem acompanhamento com fonoaudióloga e retorno gratuito..."
               className="w-full p-3 bg-[#1A1A1A] border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-[#8B5CF6] resize-none"
             />
+            {veioDaMinhaMarca && (
+              <p className="text-xs text-[#F59E0B] mt-1" data-testid="aviso-minha-marca">
+                ✨ Puxei a descrição de "Minha marca" (Dashboard). Clique em Preencher com IA para montar o briefing.
+                {' '}Fazendo o briefing de <b>outro cliente</b>? Apague este texto antes, senão a IA mistura as duas marcas.
+              </p>
+            )}
             <div className="flex flex-wrap items-center gap-3 mt-3">
               <Button
                 onClick={handleExtrairBriefing}

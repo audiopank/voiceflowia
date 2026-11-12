@@ -6,6 +6,7 @@ import { Lock, Volume2, Settings, Rocket, Radar as RadarIcon, ArrowRight, Wand2,
 import { proximasDatasSazonais, textoContagem } from '../lib/datasSazonais'
 import { BackButton } from '../components/BackButton'
 import { AtivarTrial } from '../components/AtivarTrial'
+import { MinhaMarcaCard } from '../components/MinhaMarcaCard'
 import { ADMIN_EMAIL } from '../lib/plans'
 import { TRIAL_GENERATIONS } from '../lib/trial'
 
@@ -206,6 +207,9 @@ function Dashboard() {
             <AtivarTrial onAtivar={subscription.startTrial} />
           </div>
         )}
+
+        {/* Minha marca (12/11/2026): escrita uma vez, usada por todas as ferramentas. */}
+        <MinhaMarcaCard />
 
         {/* Primeira geração: caminho único e explícito até o primeiro resultado. */}
         {primeiraGeracaoPendente && (

@@ -16,6 +16,7 @@ import { realcarVoz } from '../lib/estudioCards'
 import { brandWhatsappKey, loadBrandWhatsapp, saveBrandWhatsapp, whatsappIncompleto, buildWaLink } from '../lib/brandWhatsapp'
 import JSZip from 'jszip'
 import { salvarKit, atualizarKit, carregarKit } from '../lib/kitsWhatsapp'
+import { carregarMinhaMarca } from '../lib/minhaMarca'
 import { FALANTE_CLIENTE, FALANTE_DONO, VOZES_PADRAO, montarTranscricao, falantesParaApi } from '../lib/dialogo'
 import { conferirPostDaMarca } from '../lib/conferirCatalogo'
 import { AvisoConferencia } from '../components/AvisoConferencia'
@@ -231,6 +232,22 @@ function KitWhatsapp() {
     return () => { cancelado = true }
   }, [])
 
+  // Minha marca (12/11/2026): kit NOVO abre com os Fatos da descrição salva no Dashboard.
+  // Kit reaberto (?kit=) usa os fatos dele; o que o cliente já digitou vence.
+  const [fatosDaMinhaMarca, setFatosDaMinhaMarca] = useState(false)
+  const fatosAtuais = useRef(fatos)
+  fatosAtuais.current = fatos
+  useEffect(() => {
+    if (search.kit) return
+    let vivo = true
+    carregarMinhaMarca().then((m) => {
+      if (!vivo || !m?.descricao || fatosAtuais.current.trim() || kitCarregadoRef.current) return
+      setFatos(m.descricao)
+      setFatosDaMinhaMarca(true)
+    })
+    return () => { vivo = false }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
   // Reabrir kit salvo (?kit=<id>): preenche briefing + respostas. Áudios não são
   // guardados — regeram sob demanda. null = apagado ou de outro usuário (RLS).
   useEffect(() => {
@@ -248,6 +265,7 @@ function KitWhatsapp() {
       pararAudioAtivo()
       setNicho(kit.nicho)
       setFatos(kit.fatos)
+      setFatosDaMinhaMarca(false)
       setDiferenciais(kit.diferenciais)
       setCta(kit.cta)
       if (TONS.some((t) => t.value === kit.tom)) setTom(kit.tom)
@@ -846,6 +864,7 @@ function KitWhatsapp() {
     setEstadoKit(null)
     setNicho('')
     setFatos('')
+    setFatosDaMinhaMarca(false)
     setDiferenciais('')
     setCta('')
     setTom(TOM_PADRAO)
@@ -1068,6 +1087,11 @@ function KitWhatsapp() {
                 Preço, horário, endereço, entrega, pagamento… O que não estiver aqui a IA <strong>não inventa</strong>:
                 ela pede o dado ao cliente em vez de chutar.
               </p>
+              {fatosDaMinhaMarca && (
+                <p className="text-xs text-[#F59E0B] mt-1" data-testid="aviso-minha-marca">
+                  ✨ Puxei de "Minha marca" (Dashboard). Confira antes de gerar.
+                </p>
+              )}
             </div>
 
             <div>

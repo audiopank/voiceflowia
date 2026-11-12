@@ -16,6 +16,7 @@ import { realcarVoz, aplicarTrilha } from '../lib/estudioCards'
 import { useTrilhaFundo, TrilhaFundoPanel } from '../components/TrilhaFundo'
 import { PublicarNewPost } from '../components/PublicarNewPost'
 import { listarKits } from '../lib/kitsWhatsapp'
+import { carregarMinhaMarca } from '../lib/minhaMarca'
 import {
   conferirPost, lerCatalogoDetalhado, MAX_ITENS_CATALOGO, type ItemCatalogo, type PostCatalogo,
 } from '../lib/conferirCatalogo'
@@ -140,18 +141,23 @@ function CatalogoPosts() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user || cancelado) return
       try {
+        // "Minha marca" (Dashboard) é a fonte dos fatos; o último kit completa nome e chamada.
+        const marca = await carregarMinhaMarca()
+        if (cancelado) return
+        if (marca?.descricao) setFatos((v) => v || marca.descricao)
         const kits = await listarKits(user.id)
         const ultimo = kits[0]
-        if (!ultimo || cancelado) return
+        if (cancelado) return
         // Updaters: se o cliente já começou a digitar, o que ele digitou vence.
-        if (ultimo.nicho) setNicho((v) => v || ultimo.nicho)
-        if (ultimo.fatos) setFatos((v) => v || ultimo.fatos)
-        if (ultimo.cta) setCta((v) => v || ultimo.cta)
-        if (ultimo.tom && TONS.some((t) => t.value === ultimo.tom)) setTom(ultimo.tom)
-        if (ultimo.nicho || ultimo.fatos || ultimo.cta) {
-          const quando = new Date(ultimo.updated_at || ultimo.created_at).toLocaleDateString('pt-BR')
-          setAvisoMemoria(`Puxei nome, fatos e chamada do seu último Kit de WhatsApp (${quando}). Confira antes de criar.`)
-        }
+        if (ultimo?.nicho) setNicho((v) => v || ultimo.nicho)
+        if (ultimo?.fatos) setFatos((v) => v || ultimo.fatos)
+        if (ultimo?.cta) setCta((v) => v || ultimo.cta)
+        if (ultimo?.tom && TONS.some((t) => t.value === ultimo.tom)) setTom(ultimo.tom)
+        const doKit = ultimo && (ultimo.nicho || ultimo.fatos || ultimo.cta)
+          ? `${marca?.descricao ? 'nome e chamada' : 'nome, fatos e chamada'} do seu último Kit de WhatsApp (${new Date(ultimo.updated_at || ultimo.created_at).toLocaleDateString('pt-BR')})`
+          : ''
+        const daMarca = marca?.descricao ? 'os fatos de "Minha marca"' : ''
+        if (daMarca || doKit) setAvisoMemoria(`Puxei ${[daMarca, doKit].filter(Boolean).join(' e ')}. Confira antes de criar.`)
       } catch {
         // sem memória não é erro: o cliente preenche à mão
       }
