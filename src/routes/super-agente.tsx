@@ -1809,6 +1809,7 @@ function SuperAgente() {
                   marca={nicho.trim() || 'Minha marca'}
                   chaveUnica={`voiceflow-${dataInicio}-${diaTag(post.dia, post.periodo, post.horario)}-${index}`}
                   prepararMidia={() => prepararMidiaNewPost(index)}
+                  temLocucao={Boolean(audioBlobs[index])}
                   serie={serieDoCalendario(nicho, dataInicio)}
                   disabled={exportingIndex !== null}
                   // O MESMO texto que foi pra voz (hook + roteiro): vira a transcrição do post

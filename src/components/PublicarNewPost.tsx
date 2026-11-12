@@ -94,7 +94,7 @@ export function PublicarNewPost({
   const nomeCasa = perfis?.find((p) => p.id === perfilCasa)?.nome
   // Texto da tela segue o que acontece de verdade (critério "só vendemos a verdade").
   const ondeSai = nomeCasa ? `no perfil ${nomeCasa}` : 'no seu perfil'
-  const oQueVai = temCards ? 'os cards e a locução' : temLocucao ? 'o texto e a locução' : 'só o texto (sem locução — gere antes, se quiser o áudio)'
+  const oQueVai = `${temCards ? 'os cards' : 'o texto'}${temLocucao ? ' e a locução' : ' (sem locução — gere antes, se quiser o áudio)'}`
 
   async function salvarCadastro() {
     if (!cadastro) return
@@ -355,13 +355,13 @@ export function PublicarNewPost({
               value={perfilCasa}
               onChange={(e) => setPerfilCasa(e.target.value)}
               disabled={ocupado}
-              className="flex-1 min-w-0 p-1.5 bg-[#1A1A1A] border border-gray-700 rounded-lg text-white text-xs focus:outline-none focus:border-[#0EA5A4]"
+              className="flex-1 min-w-[9rem] p-1.5 bg-[#1A1A1A] border border-gray-700 rounded-lg text-white text-xs focus:outline-none focus:border-[#0EA5A4]"
             >
               <option value="">👤 Meu perfil</option>
               {perfis.map((p) => <option key={p.id} value={p.id}>🏠 {p.nome}</option>)}
             </select>
             {!cadastro && (
-              <button type="button" onClick={() => { setCadastro({ nome: '', email: '', senha: '' }); setErroCadastro('') }} className="text-xs text-[#0EA5A4] hover:underline">
+              <button type="button" onClick={() => { setCadastro({ nome: '', email: '', senha: '' }); setErroCadastro('') }} className="w-full text-left text-xs text-[#0EA5A4] hover:underline">
                 + Cadastrar perfil da casa
               </button>
             )}

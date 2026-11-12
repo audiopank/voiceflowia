@@ -237,7 +237,10 @@ const PROMESSAS_MARCA: { rotulo: string; re: RegExp }[] = [
 // O briefing pode listar o que NÃO prometer ("Nunca dizer garantimos, preço justo"; seção
 // "O QUE NÃO FAZEMOS: frete grátis"). Essas linhas não são lastro: se contassem como fonte, a
 // própria lista de proibidas liberaria a promessa. Saem antes da comparação.
-const LINHA_DE_PROIBICAO = /\b(proibid|nunca (dizer|diga|prometer|prometa|usar|use|falar|fale|escrever)|nao (fazemos|prometemos|oferecemos|damos|temos|conferimos|entregamos|garantimos|trabalhamos|dizer|prometer|usar|falar))/
+// 12/11: + ter/possuir e a 3ª pessoa ("Não possuem frete grátis" liberava "com frete grátis").
+// "Não cobramos taxa" fica DE FORA de propósito: é fato verdadeiro e vale como lastro.
+// \b só nos verbos curtos novos ("tem" ≠ "tempera"); os antigos seguem por prefixo ("nao prometeremos").
+const LINHA_DE_PROIBICAO = /\b(proibid|nunca (dizer|diga|prometer|prometa|usar|use|falar|fale|escrever)|nao (fazemos|prometemos|oferecemos|damos|temos|conferimos|entregamos|garantimos|trabalhamos|dizer|prometer|usar|falar|(faz|fazem|oferece|oferecem|tem|possui|possuem|possuimos|entrega|entregam|trabalha|trabalham)\b))/
 // Cabeçalho só conta com ":" ("O QUE NÃO FAZEMOS:") — um campo que começa com "Não temos taxa
 // de entrega" é FATO, não seção (guardião 09/11: sem o ":" apagava o resto do briefing).
 const CABECALHO_DE_PROIBICAO = /^\W*(o que )?(nao (fazemos|prometemos|oferecemos|temos)|palavras proibidas|proibido|nunca dizer)\b[^:.!?]{0,40}:/
