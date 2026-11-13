@@ -39,7 +39,10 @@ export function PublicarNewPost({
   roteiro,
   temCards = true,
   temLocucao = true,
+  avisosConferencia,
 }: {
+  /** Avisos da conferência de promessas (conferirPostDaMarca): se houver, pergunta antes de publicar. */
+  avisosConferencia?: string[]
   /** Catálogo: false enquanto a locução não foi gerada (publica só o texto). */
   temLocucao?: boolean
   /** false no Catálogo → Posts (sem carrossel): o texto da tela não pode prometer cards. */
@@ -398,6 +401,16 @@ export function PublicarNewPost({
             !window.confirm(
               `O texto tem palavras sem acento (${semAcento.slice(0, 6).join(', ')}). ` +
                 'Use "Corrigir acentos" no card antes de publicar.\n\nPublicar assim mesmo?'
+            )
+          ) return
+          // Conferência de promessas (13/11): o aviso amarelo do card dava pra ignorar com um clique —
+          // o Mestre publicou "garantimos… economizar" assim. Agora pergunta, como o acento.
+          const n = avisosConferencia?.length ?? 0
+          if (
+            n &&
+            !window.confirm(
+              `A conferência marcou ${n === 1 ? '1 aviso' : `${n} avisos`} neste post:\n\n• ${avisosConferencia!.join('\n• ')}\n\n` +
+                'Se for verdade, acrescente no briefing. Se não for, edite o post.\n\nPublicar assim mesmo?'
             )
           ) return
           void publicar()
