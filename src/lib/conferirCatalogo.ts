@@ -111,8 +111,14 @@ function numerosSoltos(texto: string): string[] {
   return out
 }
 
+// Promessa de RESULTADO — uma regra só, usada pelo Catálogo (trava) e pelo Super Agente/Kit (aviso).
+// 13/11: + faturar/lucrar/ganhar mais dinheiro/aumentar vendas (teste real: "Quer faturar mais na
+// Black Friday?" passou). "fatura" (substantivo, "a fatura mais barata") fica de fora de propósito.
+const PROMESSA_DE_RESULTADO = { rotulo: 'resultado garantido (vende mais, fatura mais, sem esforço…)', re: /sem esforco|\bvend(e|a|er|as) (muito )?mais\b|\bconvert(e|a|er) (muito )?mais\b|\bdobr(a|ar|e) (as |os |suas |seus )?(vendas|clientes|faturamento|lucro)|resultado garantido|lucro garantido|\bfatur(e|ar|am) (muito )?mais\b|\blucr(e|ar|a|am) (muito )?mais\b|\bganh(e|ar|a|am) (muito )?mais dinheiro\b|\baument(e|ar|a|am) (o |a |os |as |seu |sua |seus |suas )?(faturamento|lucro|vendas)\b/ }
+
 // Promessas que só podem aparecer com lastro. `re` roda sobre texto normalizado.
 const PROMESSAS: { rotulo: string; re: RegExp }[] = [
+  PROMESSA_DE_RESULTADO, // 13/11: o Catálogo não tinha — "venda mais" passava aprovado
   { rotulo: 'frete grátis', re: /frete\s+gratis/ },
   { rotulo: 'entrega', re: /\bentreg/ },
   // 03/11: as 3 regras abaixo pegavam palavra comum e TRAVAVAM o post (+ gastavam reescrita da
@@ -216,7 +222,7 @@ const PROMESSAS_MARCA: { rotulo: string; re: RegExp }[] = [
   { rotulo: 'fama / superlativo (mais pedido, o melhor da cidade, famoso…)', re: /mais (pedid|vendid|procurad|famos)|\b(o|a) melhor\b[^.!?\n]{0,30}\b(da|do|de) (cidade|regiao|bairro|brasil|mundo|estado|zona)\b|melhor da cidade|\bfamos[oa]s?\b|numero 1\b|\bcampea|\blider\b|sucesso de vendas|\b(as|os|a|o) melhor(es)? (oferta|ofertas|produto|produtos|promocao|promocoes|desconto|descontos|achado|achados)\b/ },
   // Promessa de RESULTADO (03/11): o prompt do Super Agente proíbe, mas a IA às vezes escorrega
   // (teste real: "seu negócio rodar sem esforço") — a régua avisa o que passar.
-  { rotulo: 'promessa de resultado (sem esforço, vende mais, converte mais…)', re: /sem esforco|\bvend(e|a|er|as) (muito )?mais\b|\bconvert(e|a|er) (muito )?mais\b|\bdobr(a|ar|e) (as |os |suas |seus )?(vendas|clientes|faturamento|lucro)|resultado garantido|lucro garantido/ },
+  PROMESSA_DE_RESULTADO,
   // Funcionamento não informado (05/11): a IA atribui ao serviço um mecanismo que o cliente não
   // disse ("a IA analisa seu portfólio", "atendimento 24 horas", "monitora em tempo real").
   { rotulo: 'funcionamento não informado (automatiza, 24 horas, tempo real…)', re: /\bautomatiz(a|am|ar|ado|ada|ados|adas|acao|e)\b|\b24 ?(horas|h)\b|\b24\/7\b|tempo real|\bsozinh[oa] (responde|atende|posta|publica|vende)\b|\bpiloto automatico\b|\banalisa (o |a |seu |sua |os |as |seus |suas )/ },
