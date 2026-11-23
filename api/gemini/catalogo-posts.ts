@@ -87,6 +87,8 @@ REGRAS OBRIGATÓRIAS (o post passa por uma conferência automática antes de o d
   "sucesso de vendas" só se estiver escrito no PRODUTO ou nos FATOS.
 - Nada de promessa de resultado: "vende mais", "venda mais", "fature mais", "lucre mais",
   "aumente suas vendas", "sem esforço" só se estiver escrito no PRODUTO ou nos FATOS.
+- Nada de garantia ou exagero: "garantem", "garante qualidade", "impecável", "tempo recorde",
+  "velocidade extrema", "nenhum cliente perdido" só se estiver escrito no PRODUTO ou nos FATOS.
 - GANCHO: até 12 palavras, sem preço, desperta curiosidade ou desejo.
 - LEGENDA: 300 a 600 caracteres, frases curtas, no máximo 3 emojis, termina com a chamada para
   ação e depois 3 a 5 hashtags relevantes (hashtag sem número).

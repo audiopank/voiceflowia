@@ -116,9 +116,17 @@ function numerosSoltos(texto: string): string[] {
 // Black Friday?" passou). "fatura" (substantivo, "a fatura mais barata") fica de fora de propósito.
 const PROMESSA_DE_RESULTADO = { rotulo: 'resultado garantido (vende mais, fatura mais, sem esforço…)', re: /sem esforco|\bvend(e|a|er|as) (muito )?mais\b|\bconvert(e|a|er) (muito )?mais\b|\bdobr(a|ar|e) (as |os |suas |seus )?(vendas|clientes|faturamento|lucro)|resultado garantido|lucro garantido|\bfatur(e|ar|am) (muito )?mais\b|\blucr(e|ar|a|am) (muito )?mais\b|\bganh(e|ar|a|am) (muito )?mais dinheiro\b|\baument(e|ar|a|am) (o |a |os |as |seu |sua |seus |suas )?(faturamento|lucro|vendas)\b/ }
 
+// 23/11 (teste real do Mestre, Locutores IA): "Os Locutores IA garantem velocidade extrema",
+// "áudios impecáveis em tempo recorde", "não deixa nenhum cliente fugir" passaram com ✅.
+// "Garante já o seu!" (convite comum de post) fica de fora de propósito: só a promessa trava.
+const GARANTIA_VERBO = { rotulo: 'garantia (garantem, garante qualidade…)', re: /\bgarantem\b|\bgarante (a |o |as |os )?(qualidade|velocidade|resultados?|entregas?|prazos?|seguranca|satisfacao|economia|sucesso|o melhor|a melhor)\b/ }
+const EXAGERO_DE_QUALIDADE = { rotulo: 'exagero (velocidade extrema, impecável, tempo recorde…)', re: /\bvelocidade extrema\b|\bimpecave(l|is)\b|\btempo recorde\b|\brecorde de tempo\b/ }
+const CERTEZA_SOBRE_CLIENTE = { rotulo: 'certeza de resultado (nenhum cliente perdido…)', re: /\bnenhum cliente (fug|perd|escap|sai\b|vai embora)|\bnunca mais (perde|perca|perder) (nenhum )?clientes?\b|\bnao perde mais (nenhum )?clientes?\b/ }
+
 // Promessas que só podem aparecer com lastro. `re` roda sobre texto normalizado.
 const PROMESSAS: { rotulo: string; re: RegExp }[] = [
   PROMESSA_DE_RESULTADO, // 13/11: o Catálogo não tinha — "venda mais" passava aprovado
+  GARANTIA_VERBO, EXAGERO_DE_QUALIDADE, CERTEZA_SOBRE_CLIENTE, // 23/11
   { rotulo: 'frete grátis', re: /frete\s+gratis/ },
   { rotulo: 'entrega', re: /\bentreg/ },
   // 03/11: as 3 regras abaixo pegavam palavra comum e TRAVAVAM o post (+ gastavam reescrita da
@@ -223,6 +231,7 @@ const PROMESSAS_MARCA: { rotulo: string; re: RegExp }[] = [
   // Promessa de RESULTADO (03/11): o prompt do Super Agente proíbe, mas a IA às vezes escorrega
   // (teste real: "seu negócio rodar sem esforço") — a régua avisa o que passar.
   PROMESSA_DE_RESULTADO,
+  GARANTIA_VERBO, EXAGERO_DE_QUALIDADE, CERTEZA_SOBRE_CLIENTE, // 23/11
   // Funcionamento não informado (05/11): a IA atribui ao serviço um mecanismo que o cliente não
   // disse ("a IA analisa seu portfólio", "atendimento 24 horas", "monitora em tempo real").
   { rotulo: 'funcionamento não informado (automatiza, 24 horas, tempo real…)', re: /\bautomatiz(a|am|ar|ado|ada|ados|adas|acao|e)\b|\b24 ?(horas|h)\b|\b24\/7\b|tempo real|\bsozinh[oa] (responde|atende|posta|publica|vende)\b|\bpiloto automatico\b|\banalisa (o |a |seu |sua |os |as |seus |suas )/ },
