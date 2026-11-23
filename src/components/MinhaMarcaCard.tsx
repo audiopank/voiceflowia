@@ -8,6 +8,7 @@ import { realcarVoz, aplicarTrilha, TRILHAS_PRONTAS } from '../lib/estudioCards'
 import { blobToAudioBuffer } from '../lib/audioMix'
 import { convertVoiceToMp3 } from '../lib/audioConvert'
 import { conferirPostDaMarca } from '../lib/conferirCatalogo'
+import { GEMINI_VOICES_TEXTO_LONGO } from '../lib/voices'
 
 // Card do Dashboard (12/11/2026): o cliente conta sobre a marca UMA vez e o texto fica na
 // conta. Super Agente (Comece rápido), Catálogo e Kit de WhatsApp (Fatos da marca) já abrem
@@ -31,6 +32,8 @@ function OuvirMarca({ descricao }: { descricao: string }) {
   const [roteiro, setRoteiro] = useState('')
   const [semTrilha, setSemTrilha] = useState(false)
   const [audioUrl, setAudioUrl] = useState('')
+  // Locutor (23/11, pedido do Mestre): só as vozes rápidas — as outras passam do teto de tempo.
+  const [voz, setVoz] = useState('Puck')
   const finalRef = useRef<Blob | null>(null)
   const urlRef = useRef('')
   const vivoRef = useRef(true)
@@ -55,13 +58,13 @@ function OuvirMarca({ descricao }: { descricao: string }) {
 
       setEtapa('gravando'); setAviso('')
       const r2 = await fetchWithRetry('/api/gemini/text-to-speech', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: texto, voiceName: 'Puck' }),
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: texto, voiceName: voz }),
       }, { onWait: (s) => setAviso(`⏳ Muita procura na voz agora — tentando de novo em ${s}s...`) })
       if (!r2.ok) {
         const d = await r2.json().catch(() => null)
         throw new Error(friendlyApiError(r2.status, d?.error))
       }
-      const voz = await realcarVoz(await r2.blob())
+      const gravada = await realcarVoz(await r2.blob())
 
       // Trilha: se não carregar, o spot sai só com a voz — e a tela diz isso (nunca calado).
       let trilha: AudioBuffer | null = null
@@ -70,7 +73,7 @@ function OuvirMarca({ descricao }: { descricao: string }) {
         const b = t.ok ? await t.blob() : null
         if (b && b.type.startsWith('audio')) trilha = await blobToAudioBuffer(b)
       } catch { /* segue sem trilha */ }
-      const final = await aplicarTrilha(voz, trilha, VOLUME_TRILHA_SPOT)
+      const final = await aplicarTrilha(gravada, trilha, VOLUME_TRILHA_SPOT)
       if (!vivoRef.current) return // saiu da tela no meio (ex.: Editar): não cria URL que ninguém revoga
 
       if (urlRef.current) URL.revokeObjectURL(urlRef.current)
@@ -104,6 +107,11 @@ function OuvirMarca({ descricao }: { descricao: string }) {
   return (
     <div className="border-t border-gray-800 pt-4 space-y-3" data-testid="ouvir-marca">
       <div className="flex flex-wrap items-center gap-3">
+        <label htmlFor="spot-voz" className="text-xs text-gray-400">Locutor</label>
+        <select id="spot-voz" value={voz} onChange={(e) => setVoz(e.target.value)} disabled={ocupado}
+          className="bg-[#1A1A1A] border border-gray-700 rounded-lg px-2 py-2 text-sm text-white focus:outline-none focus:border-[#8B5CF6] disabled:opacity-60">
+          {GEMINI_VOICES_TEXTO_LONGO.map((v) => <option key={v.voice_id} value={v.voice_id}>{v.name} — {v.vibe}</option>)}
+        </select>
         <Button onClick={gerar} disabled={ocupado} className="bg-[#8B5CF6] hover:bg-[#7C3AED] disabled:opacity-60 flex items-center gap-2">
           {ocupado ? <Loader2 className="w-4 h-4 animate-spin" /> : <Mic className="w-4 h-4" />}
           {etapa === 'escrevendo' ? 'Escrevendo o roteiro...' : etapa === 'gravando' ? 'Gravando a voz...' : audioUrl ? 'Gerar outro spot' : 'Ouvir o spot da minha marca'}

@@ -44,16 +44,25 @@ const FADE_OUT_SECONDS = 1.1
 // Renderiza voz + trilha num único AudioBuffer estéreo.
 // voiceGain/trackGain são multiplicadores lineares (1 = 100%). A trilha costuma entrar
 // bem abaixo (~0.25) pra não competir com a locução.
+// Abertura de rádio (23/11): com trilha e `introSeconds` > 0, a música toca sozinha no começo,
+// subindo de 0 em FADE_IN_SECONDS até o nível de abertura, e abaixa até a cama em DUCK_SECONDS
+// logo antes de a voz entrar. Sem trilha, nada de silêncio no começo.
+const FADE_IN_SECONDS = 0.4
+const DUCK_SECONDS = 0.4
+
 export async function renderMix(
   voice: AudioBuffer,
   track: AudioBuffer | null,
   voiceGain: number,
   trackGain: number,
+  introSeconds = 0,
 ): Promise<AudioBuffer> {
   const sampleRate = 44100
+  const intro = track ? Math.max(0, introSeconds) : 0
+  const voiceEnd = intro + voice.duration
   // Cauda = fade completo + folga. Sem trilha, uma cauda mínima já basta.
   const tail = track ? FADE_OUT_SECONDS + 0.1 : 0.3
-  const length = Math.ceil((voice.duration + tail) * sampleRate)
+  const length = Math.ceil((voiceEnd + tail) * sampleRate)
   const ctx = getOfflineCtx(2, length, sampleRate)
 
   const voiceSrc = ctx.createBufferSource()
@@ -61,7 +70,7 @@ export async function renderMix(
   const voiceGainNode = ctx.createGain()
   voiceGainNode.gain.value = voiceGain
   voiceSrc.connect(voiceGainNode).connect(ctx.destination)
-  voiceSrc.start(0)
+  voiceSrc.start(intro)
 
   if (track) {
     const trackSrc = ctx.createBufferSource()
@@ -73,15 +82,26 @@ export async function renderMix(
     // para no fim do buffer do master, então não há excesso pra cortar.
     // Só liga quando precisa: trilha que já cobre voz + fade toca de ponta a ponta, sem emenda
     // audível (segue aparada no fim do master, como sempre — o loop não muda a duração da saída).
-    trackSrc.loop = track.duration < voice.duration + FADE_OUT_SECONDS
+    trackSrc.loop = track.duration < voiceEnd + FADE_OUT_SECONDS
     const trackGainNode = ctx.createGain()
-    // Mantém o volume da trilha até a voz acabar; a partir daí, rampa linear até zero
-    // em FADE_OUT_SECONDS. (setValueAtTime "ancora" o valor antes da rampa começar.)
-    // Vale igual com loop ligado: o fade é do GANHO, não do arquivo, então a repetição
-    // desce junto e termina no silêncio no mesmo ponto de sempre.
-    trackGainNode.gain.setValueAtTime(trackGain, 0)
-    trackGainNode.gain.setValueAtTime(trackGain, voice.duration)
-    trackGainNode.gain.linearRampToValueAtTime(0, voice.duration + FADE_OUT_SECONDS)
+    const g = trackGainNode.gain
+    if (intro > 0) {
+      // Abertura mais alta que a cama (2,5x, teto 0,7) pra ser ouvida — e abaixa antes da voz.
+      // (o max por fora garante que a abertura nunca fica abaixo da cama, nem com cama > 0,7)
+      const abertura = Math.max(trackGain, Math.min(0.7, trackGain * 2.5))
+      const fadeIn = Math.min(FADE_IN_SECONDS, intro / 2)
+      const duck = Math.min(DUCK_SECONDS, intro / 2)
+      g.setValueAtTime(0, 0)
+      g.linearRampToValueAtTime(abertura, fadeIn)
+      g.setValueAtTime(abertura, intro - duck)
+      g.linearRampToValueAtTime(trackGain, intro)
+    } else {
+      g.setValueAtTime(trackGain, 0)
+    }
+    // Mantém a cama até a voz acabar; a partir daí, rampa linear até zero em FADE_OUT_SECONDS.
+    // (setValueAtTime "ancora" o valor antes da rampa.) Vale igual com loop: o fade é do GANHO.
+    g.setValueAtTime(trackGain, voiceEnd)
+    g.linearRampToValueAtTime(0, voiceEnd + FADE_OUT_SECONDS)
     trackSrc.connect(trackGainNode).connect(ctx.destination)
     trackSrc.start(0)
   }

@@ -119,7 +119,12 @@ export async function realcarVoz(blob: Blob): Promise<Blob> {
   }
 }
 
-// Soma a trilha (cama de fundo com fade-out quando a voz termina) e devolve WAV.
+// Abertura de rádio (23/11): a música toca sozinha 2 s antes da voz em tudo que usa a trilha
+// do Estúdio (Super Agente, Agente, Catálogo, publicar e o spot da marca). O Editor de Voz chama
+// renderMix direto e fica sem abertura — lá o ajuste é manual.
+export const ABERTURA_TRILHA_SEGUNDOS = 2
+
+// Soma a trilha (abertura + cama de fundo com fade-out quando a voz termina) e devolve WAV.
 // Sem trilha carregada, é passthrough. Falhou a mixagem? Devolve só a voz.
 export async function aplicarTrilha(
   voiceBlob: Blob,
@@ -129,7 +134,7 @@ export async function aplicarTrilha(
   if (!trilha) return voiceBlob
   try {
     const voice = await blobToAudioBuffer(voiceBlob)
-    const mixed = await renderMix(voice, trilha, 1, trilhaVolPct / 100)
+    const mixed = await renderMix(voice, trilha, 1, trilhaVolPct / 100, ABERTURA_TRILHA_SEGUNDOS)
     return audioBufferToWav(mixed)
   } catch (err) {
     console.error('Mixagem com trilha falhou, usando só a voz:', err)

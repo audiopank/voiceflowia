@@ -140,7 +140,7 @@ export function TrilhaFundoPanel({ estudio }: { estudio: ReturnType<typeof useTr
               className="w-full accent-[#8B5CF6]"
             />
             <p className="text-xs text-gray-600 mt-1">
-              Ela entra como cama embaixo de todas as locuções e desce suave quando a voz termina —
+              Ela abre o áudio sozinha por 2 segundos, como num spot de rádio, fica de cama embaixo da voz e desce suave quando a voz termina —
               vale pro Ouvir, pros downloads e pro que você publicar na NewPost-IA.
             </p>
           </div>
