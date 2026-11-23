@@ -209,7 +209,7 @@ function Dashboard() {
         )}
 
         {/* Minha marca (12/11/2026): escrita uma vez, usada por todas as ferramentas. */}
-        <MinhaMarcaCard />
+        <MinhaMarcaCard podeOuvir={hasContentAgentFeature} />
 
         {/* Primeira geração: caminho único e explícito até o primeiro resultado. */}
         {primeiraGeracaoPendente && (

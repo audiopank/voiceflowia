@@ -31,6 +31,7 @@ function apiDevBridge(): Plugin {
     '/api/og': './api/og.ts',
     '/api/gemini/gerar-newsletter': './api/gemini/gerar-newsletter.ts',
     '/api/gemini/catalogo-posts': './api/gemini/catalogo-posts.ts',
+    '/api/gemini/spot-da-marca': './api/gemini/spot-da-marca.ts',
   }
 
   return {
