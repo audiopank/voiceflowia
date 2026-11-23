@@ -234,7 +234,8 @@ function KitWhatsapp() {
 
   // Minha marca (12/11/2026): kit NOVO abre com os Fatos da descrição salva no Dashboard.
   // Kit reaberto (?kit=) usa os fatos dele; o que o cliente já digitou vence.
-  const [fatosDaMinhaMarca, setFatosDaMinhaMarca] = useState(false)
+  // Guarda o TEXTO que veio: o aviso some quando o cliente troca os fatos (23/11).
+  const [fatosDaMinhaMarca, setFatosDaMinhaMarca] = useState('')
   const fatosAtuais = useRef(fatos)
   fatosAtuais.current = fatos
   useEffect(() => {
@@ -243,7 +244,7 @@ function KitWhatsapp() {
     carregarMinhaMarca().then((m) => {
       if (!vivo || !m?.descricao || fatosAtuais.current.trim() || kitCarregadoRef.current) return
       setFatos(m.descricao)
-      setFatosDaMinhaMarca(true)
+      setFatosDaMinhaMarca(m.descricao)
     })
     return () => { vivo = false }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
@@ -265,7 +266,7 @@ function KitWhatsapp() {
       pararAudioAtivo()
       setNicho(kit.nicho)
       setFatos(kit.fatos)
-      setFatosDaMinhaMarca(false)
+      setFatosDaMinhaMarca('')
       setDiferenciais(kit.diferenciais)
       setCta(kit.cta)
       if (TONS.some((t) => t.value === kit.tom)) setTom(kit.tom)
@@ -864,7 +865,7 @@ function KitWhatsapp() {
     setEstadoKit(null)
     setNicho('')
     setFatos('')
-    setFatosDaMinhaMarca(false)
+    setFatosDaMinhaMarca('')
     setDiferenciais('')
     setCta('')
     setTom(TOM_PADRAO)
@@ -1087,7 +1088,7 @@ function KitWhatsapp() {
                 Preço, horário, endereço, entrega, pagamento… O que não estiver aqui a IA <strong>não inventa</strong>:
                 ela pede o dado ao cliente em vez de chutar.
               </p>
-              {fatosDaMinhaMarca && (
+              {fatosDaMinhaMarca && fatos.includes(fatosDaMinhaMarca) && (
                 <p className="text-xs text-[#F59E0B] mt-1" data-testid="aviso-minha-marca">
                   ✨ Puxei de "Minha marca" (Dashboard). Confira antes de gerar.
                 </p>

@@ -312,7 +312,8 @@ function SuperAgente() {
   const fatosDoBriefing = [briefingBruto, nicho, servicos, diferenciais, cta, tomMarca, instagram, campanha].join('\n\n')
   // Minha marca (12/11/2026): o "Comece rápido" abre com a descrição salva no Dashboard.
   // Só preenche se o cliente ainda não escreveu nada aqui — o que ele digitou vence.
-  const [veioDaMinhaMarca, setVeioDaMinhaMarca] = useState(false)
+  // O texto que veio (não só "veio"): o aviso some quando o cliente troca o texto (23/11).
+  const [textoDaMinhaMarca, setTextoDaMinhaMarca] = useState('')
   const briefingAtual = useRef(briefingBruto)
   briefingAtual.current = briefingBruto
   useEffect(() => {
@@ -320,7 +321,7 @@ function SuperAgente() {
     carregarMinhaMarca().then((m) => {
       if (!vivo || !m?.descricao || briefingAtual.current.trim()) return
       setBriefingBruto(m.descricao)
-      setVeioDaMinhaMarca(true)
+      setTextoDaMinhaMarca(m.descricao)
     })
     return () => { vivo = false }
   }, [])
@@ -1138,7 +1139,7 @@ function SuperAgente() {
               placeholder="Ex: Somos a OtoBel, trabalhamos com aparelhos auditivos há 12 anos em Belo Horizonte. Fazemos adaptação, manutenção e teste de audição. Todo cliente tem acompanhamento com fonoaudióloga e retorno gratuito..."
               className="w-full p-3 bg-[#1A1A1A] border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-[#8B5CF6] resize-none"
             />
-            {veioDaMinhaMarca && (
+            {textoDaMinhaMarca && briefingBruto.includes(textoDaMinhaMarca) && ( // includes: texto acrescentado (voz/colar no fim) ainda leva a marca junto
               <p className="text-xs text-[#F59E0B] mt-1" data-testid="aviso-minha-marca">
                 ✨ Puxei a descrição de "Minha marca" (Dashboard). Clique em Preencher com IA para montar o briefing.
                 {' '}Fazendo o briefing de <b>outro cliente</b>? Apague este texto antes, senão a IA mistura as duas marcas.
