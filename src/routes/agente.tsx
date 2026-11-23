@@ -12,8 +12,9 @@ import { TravaAcento } from '../components/TravaAcento'
 import { corrigirAcentos } from '../lib/conferirAcentos'
 import { serieDoCalendario } from '../lib/newpost'
 import {
-  ExportSlide, hookFontSize, bodyFontSize, slideRefKey, renderSlidesToBlobs, LARGURA_TEXTO_SLIDE,
+  ExportSlide, hookFontSize, bodyFontSize, slideRefKey, renderSlidesToBlobs, LARGURA_TEXTO_SLIDE, coresDoSlide,
 } from '../components/CardExport'
+import { BaixarVideoCards } from '../components/BaixarVideoCards'
 import { convertVoiceToMp3 } from '../lib/audioConvert'
 import { BackButton } from '../components/BackButton'
 import { AtivarTrial } from '../components/AtivarTrial'
@@ -861,6 +862,18 @@ function Agente() {
                     )}
                   </Button>
                 )}
+
+                {/* 🎬 Vídeo dos cards (23/11): os 3 cards + a mesma locução do Ouvir/Baixar
+                    (trilha do Estúdio ou cama de conversa do diálogo) num MP4 vertical. */}
+                <BaixarVideoCards
+                  temAudio={Boolean(audioBlobs[index])}
+                  nomeArquivo={`video-dia-${post.dia}-${post.periodo.toLowerCase()}`}
+                  fundo={coresDoSlide(corFundo).fundo}
+                  preparar={async () => ({
+                    cards: await renderSlidesToBlobs(exportRefs.current, index, ['hook', 'roteiro', 'legenda'], corFundo),
+                    audio: await aplicarTrilha(audioBlobs[index]!, await camaDoCard(index), estudio.trilha.volume),
+                  })}
+                />
 
                 {/* NewPost-IA é a rede do próprio Mestre: aqui a publicação é de verdade
                     (texto + cards + locução), não "copia e cola" como nas outras. É a

@@ -7,6 +7,7 @@ import {
   Users, Target, Hash, Clock, Megaphone, CheckCircle2, Copy, Check, ImagePlus, X, Pencil,
   ChevronDown, ChevronUp, CalendarDays, Share2, Sparkles, Brain, RefreshCw
 } from 'lucide-react'
+import { BaixarVideoCards } from '../components/BaixarVideoCards'
 import { useSubscription, devolverGeracaoTrial } from '../lib/useSubscription'
 import { supabase } from '../lib/supabase'
 import { fetchWithRetry, sleep, safeJson, friendlyApiError } from '../lib/apiRetry'
@@ -1801,6 +1802,18 @@ function SuperAgente() {
                     Baixar Cards ({slidesFor(index).length})
                   </Button>
                 </div>
+
+                {/* 🎬 Vídeo dos cards (23/11): os mesmos cards do "Baixar Cards" + a mesma locução
+                    com trilha (e abertura de rádio) num MP4 vertical. */}
+                <BaixarVideoCards
+                  temAudio={Boolean(audioBlobs[index])}
+                  nomeArquivo={`video-${diaTag(post.dia, post.periodo, post.horario)}`}
+                  fundo={coresDoSlide(corFundo).fundo}
+                  preparar={async () => ({
+                    cards: await renderSlidesToBlobs(exportRefs.current, index, slidesFor(index), corFundo),
+                    audio: await aplicarTrilha(audioBlobs[index]!, estudio.trilha.buffer, estudio.trilha.volume),
+                  })}
+                />
 
                 {/* NewPost-IA é a rede do próprio Mestre: aqui a publicação é de verdade
                     (texto + cards + locução), não "copia e cola" como nas outras. É a única
