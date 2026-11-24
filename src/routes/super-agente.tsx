@@ -8,7 +8,7 @@ import {
   ChevronDown, ChevronUp, CalendarDays, Share2, Sparkles, Brain, RefreshCw
 } from 'lucide-react'
 import { BaixarVideoCards } from '../components/BaixarVideoCards'
-import { chaveNicho, exemplosQueFuncionaram } from '../lib/postsQueFuncionaram'
+import { chaveNicho, exemplosQueFuncionaram, nichosJaUsados } from '../lib/postsQueFuncionaram'
 import { useSubscription, devolverGeracaoTrial } from '../lib/useSubscription'
 import { supabase } from '../lib/supabase'
 import { fetchWithRetry, sleep, safeJson, friendlyApiError } from '../lib/apiRetry'
@@ -307,21 +307,28 @@ function SuperAgente() {
   // Linha em branco entre os campos: uma seção "O QUE NÃO FAZEMOS:" no fim do texto colado
   // termina ali e não engole o campo seguinte (ver fatosSemProibicoes).
   const fatosDoBriefing = [briefingBruto, nicho, servicos, diferenciais, cta, tomMarca, instagram, campanha].join('\n\n')
-  // Minha marca (12/11/2026): o "Comece rápido" abre com a descrição salva no Dashboard.
-  // Só preenche se o cliente ainda não escreveu nada aqui — o que ele digitou vence.
+  // Minha marca (12/11/2026) → botão desde 24/11: o Super Agente é a ferramenta de VÁRIAS marcas
+  // (agência; o Mestre faz Achadinhos, Locutores IA…). Preencher sozinho punha a marca errada no
+  // briefing — e os fatos dela viravam lastro de promessa. Agora é um clique: "Usar Minha marca".
   // O texto que veio (não só "veio"): o aviso some quando o cliente troca o texto (23/11).
+  const [descricaoMinhaMarca, setDescricaoMinhaMarca] = useState('')
   const [textoDaMinhaMarca, setTextoDaMinhaMarca] = useState('')
-  const briefingAtual = useRef(briefingBruto)
-  briefingAtual.current = briefingBruto
   useEffect(() => {
     let vivo = true
-    carregarMinhaMarca().then((m) => {
-      if (!vivo || !m?.descricao || briefingAtual.current.trim()) return
-      setBriefingBruto(m.descricao)
-      setTextoDaMinhaMarca(m.descricao)
-    })
+    carregarMinhaMarca().then((m) => { if (vivo && m?.descricao) setDescricaoMinhaMarca(m.descricao) })
     return () => { vivo = false }
   }, [])
+  // Nichos já usados (24/11): o campo Nicho sugere a grafia exata que a memória e o 👍 conhecem.
+  const [nichosUsados, setNichosUsados] = useState<string[]>([])
+  useEffect(() => {
+    let vivo = true
+    nichosJaUsados().then((n) => { if (vivo) setNichosUsados(n) })
+    return () => { vivo = false }
+  }, [])
+  function usarMinhaMarca() {
+    setBriefingBruto((atual) => (atual.trim() ? `${atual.trim()}\n\n${descricaoMinhaMarca}` : descricaoMinhaMarca))
+    setTextoDaMinhaMarca(descricaoMinhaMarca)
+  }
   const [extraindo, setExtraindo] = useState(false)
   const [extrairErro, setExtrairErro] = useState('')
   // Resultado da última extração: o que foi preenchido e o que o texto não sustentava.
@@ -1130,6 +1137,16 @@ function SuperAgente() {
             <p className="text-xs text-gray-500 mb-3">
               Cole qualquer coisa sobre a marca — o site do cliente, a bio do Instagram, o que ele te mandou no WhatsApp — ou toque em <b className="text-gray-300">🎙️ Falar o briefing</b> e conte com a sua voz. A IA preenche o briefing abaixo pra você conferir.
             </p>
+            {descricaoMinhaMarca && !briefingBruto.includes(descricaoMinhaMarca) && (
+              <button
+                type="button"
+                onClick={usarMinhaMarca}
+                data-testid="usar-minha-marca"
+                className="mb-2 text-xs font-semibold text-[#F59E0B] border border-[#F59E0B]/40 rounded-full px-3 py-1 hover:bg-[#F59E0B]/10"
+              >
+                ✨ Usar "Minha marca" (Dashboard)
+              </button>
+            )}
             <textarea
               value={briefingBruto}
               onChange={(e) => setBriefingBruto(e.target.value)}
@@ -1139,7 +1156,7 @@ function SuperAgente() {
             />
             {textoDaMinhaMarca && briefingBruto.includes(textoDaMinhaMarca) && ( // includes: texto acrescentado (voz/colar no fim) ainda leva a marca junto
               <p className="text-xs text-[#F59E0B] mt-1" data-testid="aviso-minha-marca">
-                ✨ Puxei a descrição de "Minha marca" (Dashboard). Clique em Preencher com IA para montar o briefing.
+                ✨ Este texto é a descrição de "Minha marca" (Dashboard). Clique em Preencher com IA para montar o briefing.
                 {' '}Fazendo o briefing de <b>outro cliente</b>? Apague este texto antes, senão a IA mistura as duas marcas.
               </p>
             )}
@@ -1199,8 +1216,16 @@ function SuperAgente() {
                 value={nicho}
                 onChange={(e) => setNicho(e.target.value)}
                 placeholder="Ex: Barbearia"
+                list="nichos-usados"
+                data-testid="campo-nicho"
                 className="w-full p-3 bg-[#1A1A1A] border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-[#8B5CF6]"
               />
+              <datalist id="nichos-usados">
+                {nichosUsados.map((n) => <option key={n} value={n} />)}
+              </datalist>
+              {nichosUsados.length > 0 && (
+                <p className="mt-1 text-xs text-gray-500">Use o mesmo nome de antes pra IA lembrar dos seus posts e dos 👍.</p>
+              )}
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-2">Tom de Voz</label>

@@ -11,8 +11,8 @@ import { conferirPostDaMarca } from '../lib/conferirCatalogo'
 import { GEMINI_VOICES_TEXTO_LONGO } from '../lib/voices'
 
 // Card do Dashboard (12/11/2026): o cliente conta sobre a marca UMA vez e o texto fica na
-// conta. Super Agente (Comece rápido), Catálogo e Kit de WhatsApp (Fatos da marca) já abrem
-// com ele preenchido. O exemplo mostra só o que o VoiceFlow entrega de verdade, e tem a linha
+// conta. Catálogo e Kit de WhatsApp (Fatos da marca) já abrem com ele preenchido; no Super
+// Agente (Comece rápido) é um clique em "Usar Minha marca" (24/11 — ele atende vários clientes). O exemplo mostra só o que o VoiceFlow entrega de verdade, e tem a linha
 // "O que NÃO fazemos" — é ela que deixa a conferência de promessas funcionar.
 const EXEMPLO = `Padaria de bairro em Fortaleza que assa tudo de madrugada. Pão de fermentação natural e bolo de pote a R$ 12. Entregamos no Centro e na Aldeota; Pix e cartão.
 Sensação: acolhedora, cheiro de forno, conversa de vizinho.
@@ -186,7 +186,7 @@ export function MinhaMarcaCard({ podeOuvir = false }: { podeOuvir?: boolean }) {
           <p className="text-xs text-gray-400 truncate">{salva}</p>
           {acabouDeSalvar && (
             <p className="text-xs text-[#22C55E] mt-1">
-              Salvo na sua conta. O Super Agente, o Catálogo → Posts e o Kit de WhatsApp já abrem com este texto.
+              Salvo na sua conta. O Catálogo → Posts e o Kit de WhatsApp já abrem com este texto; no Super Agente, é só clicar em "Usar Minha marca".
             </p>
           )}
         </div>
@@ -205,7 +205,7 @@ export function MinhaMarcaCard({ podeOuvir = false }: { podeOuvir?: boolean }) {
       <h2 className="text-xl font-bold text-white mb-1">Em que você está trabalhando?</h2>
       <p className="text-gray-400 text-sm mb-3">
         Conte sobre a sua marca: o que você vende, como quer soar e o que é verdade sobre ela. Você escreve uma vez e o
-        Super Agente, o Catálogo → Posts e o Kit de WhatsApp já abrem com isso preenchido.
+        Catálogo → Posts e o Kit de WhatsApp já abrem com isso preenchido; no Super Agente, é um clique em "Usar Minha marca".
       </p>
       <label htmlFor="minha-marca-texto" className="sr-only">Descrição da sua marca</label>
       <textarea

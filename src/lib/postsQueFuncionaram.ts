@@ -3,9 +3,22 @@
 // posts_que_funcionaram — MIGRATION_POSTS_QUE_FUNCIONARAM.sql). É a opinião do dono, não métrica.
 // Nada aqui derruba tela: sem tabela, sem login ou sem rede = "nenhum marcado".
 import { supabase } from './supabase'
-import { chaveNicho, exemplosDoNicho, type ExemploQueFuncionou } from './exemplosDoNicho'
+import { chaveNicho, exemplosDoNicho, nichosUnicos, type ExemploQueFuncionou } from './exemplosDoNicho'
 
 export { chaveNicho }
+
+// Nichos que o usuário já usou (mais recentes primeiro) — sugestões do campo Nicho. Falhou = [].
+export async function nichosJaUsados(): Promise<string[]> {
+  try {
+    const u = await uid()
+    if (!u) return []
+    const { data, error } = await supabase.from('contents').select('nicho').eq('user_id', u).order('created_at', { ascending: false }).limit(200)
+    if (error || !Array.isArray(data)) return []
+    return nichosUnicos(data.map((l: any) => l?.nicho))
+  } catch {
+    return []
+  }
+}
 
 export const chaveDoPost = (contentId: string, index: number) => `${contentId}:${index}`
 

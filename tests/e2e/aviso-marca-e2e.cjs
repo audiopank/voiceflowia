@@ -3,6 +3,8 @@
 // (o Playwright não é dependência do projeto; vem do npx). Login, plano e IA são SIMULADOS — nada real é tocado.
 // Os testes de vídeo usam o Microsoft Edge (channel 'msedge'): o Chromium do Playwright não tem AAC.
 // E2E 23/11: aviso "Puxei de Minha marca" só enquanto o texto for o que veio da marca.
+// 24/11: Super Agente abre VAZIO (atende vários clientes) — a marca entra pelo botão "Usar Minha marca";
+// o campo Nicho sugere os nichos já usados. O Kit continua abrindo preenchido.
 const { chromium } = require('playwright')
 const BASE = process.env.BASE || 'http://localhost:5181'
 const REF = 'vymzqowpumdvfnsxjwoo'
@@ -21,6 +23,7 @@ const conferir = (c, m) => (c ? ok : falha).push(m)
     const req = r.request(); const u = req.url()
     if (u.includes('/auth/v1/user')) return r.fulfill({ json: user })
     if (u.includes('/rest/v1/profiles')) return r.fulfill({ json: { subscription_plan: 'crescimento', subscription_status: 'active', trial_started_at: null, trial_generations_used: 0, courtesy_expires_at: null, radar_expires_at: null } })
+    if (u.includes('/rest/v1/contents') && u.includes('select=nicho')) return r.fulfill({ json: [{ nicho: 'Produtora de áudio' }, { nicho: 'produtora de audio' }, { nicho: 'Barbearia' }] })
     if (u.includes('/rest/v1/marca_perfil')) return r.fulfill({ json: [{ descricao: DESC, cor_fundo: null, cor_destaque: null }] })
     return r.fulfill({ json: (req.headers()['accept'] || '').includes('object') ? {} : [] })
   })
@@ -30,9 +33,18 @@ const conferir = (c, m) => (c ? ok : falha).push(m)
   for (const [rota, nome] of [['/super-agente', 'Super Agente'], ['/kit-whatsapp', 'Kit de WhatsApp']]) {
     await page.goto(`${BASE}${rota}`)
     const aviso = page.getByTestId('aviso-minha-marca')
-    await aviso.waitFor({ timeout: 20000 })
     const caixa = page.locator('textarea').first()
-    conferir(await caixa.inputValue() === DESC, `${nome}: caixa abre com a Minha marca e o aviso aparece`)
+    if (rota === '/super-agente') {
+      const botao = page.getByTestId('usar-minha-marca')
+      await botao.waitFor({ timeout: 20000 })
+      conferir(await caixa.inputValue() === '', `${nome}: abre com a caixa VAZIA (não puxa a marca sozinho)`)
+      const opcoes = await page.locator('#nichos-usados option').evaluateAll((os) => os.map((o) => o.value))
+      conferir(JSON.stringify(opcoes) === JSON.stringify(['Produtora de áudio', 'Barbearia']), `${nome}: Nicho sugere os já usados sem repetir (${opcoes.join(', ')})`)
+      await botao.click()
+      conferir(await botao.count() === 0, `${nome}: depois do clique o botão some (o texto já está na caixa)`)
+    }
+    await aviso.waitFor({ timeout: 20000 })
+    conferir(await caixa.inputValue() === DESC, `${nome}: caixa com a Minha marca e o aviso aparece`)
     await caixa.fill('LOCUTORES IA - Áudio Pank Produtora: spots e locuções.')
     conferir(await aviso.count() === 0, `${nome}: trocou o texto → o aviso some`)
     await caixa.fill(DESC)

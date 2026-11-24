@@ -3,7 +3,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { limparExemplos, blocoExemplos } from '../api/_lib/exemplosQueFuncionaram.ts'
-import { chaveNicho, exemplosDoNicho } from '../src/lib/exemplosDoNicho.ts'
+import { chaveNicho, exemplosDoNicho, nichosUnicos } from '../src/lib/exemplosDoNicho.ts'
 
 test('sem exemplo marcado: o pedido à IA fica IDÊNTICO ao de antes', () => {
   assert.equal(blocoExemplos([]), '')
@@ -45,4 +45,12 @@ test('exemplos: só do mesmo nicho (ignora acento, caixa e espaço), mais recent
   assert.deepEqual(exemplosDoNicho(linhas, 'estética').map((e) => e.hook), ['h1', 'h2', 'h3'])
   assert.deepEqual(exemplosDoNicho(linhas, 'Barbearia'), [])
   assert.equal(chaveNicho('  Estética   Avançada '), 'estetica avancada')
+})
+
+test('nichos já usados: sem repetir (acento/maiúscula), grafia mais recente, ignora vazio, até 20', () => {
+  assert.deepEqual(
+    nichosUnicos(['Produtora de áudio', 'produtora de audio ', null, '', '  ', 'Barbearia', 42, 'PRODUTORA DE ÁUDIO']),
+    ['Produtora de áudio', 'Barbearia'],
+  )
+  assert.equal(nichosUnicos(Array.from({ length: 30 }, (_, i) => `Nicho ${i}`)).length, 20)
 })
