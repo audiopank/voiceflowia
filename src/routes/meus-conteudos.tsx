@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import {
-  Loader2, AlertCircle, Brain, History, ChevronDown, ChevronUp, Copy, Check, Sparkles, ArrowRight,
+  Loader2, AlertCircle, Brain, History, ChevronDown, ChevronUp, Copy, Check, Sparkles, ArrowRight, ThumbsUp,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
+import { listarMarcados, marcarFuncionou, desmarcarFuncionou, chaveDoPost } from '../lib/postsQueFuncionaram'
 import { BackButton } from '../components/BackButton'
 import { Button } from '../components/ui/button'
 
@@ -45,8 +46,14 @@ function textoDoPost(post: PostSalvo): string {
   return partes.join('\n\n')
 }
 
-function KitCard({ kit }: { kit: KitSalvo }) {
+function KitCard({ kit, marcados, alternar }: {
+  kit: KitSalvo
+  marcados: Set<string> | null // null = não deu pra ler os 👍 (botão some em vez de mentir)
+  alternar: (kit: KitSalvo, index: number, post: PostSalvo) => Promise<string>
+}) {
   const [open, setOpen] = useState(false)
+  const [salvando, setSalvando] = useState<number | null>(null)
+  const [erroMarca, setErroMarca] = useState<{ index: number; msg: string } | null>(null)
   // Chaveado pelo índice do post na lista, NUNCA por post.dia: a IA às vezes
   // repete/pula o número do dia, e dois posts passariam a dividir o mesmo botão.
   const [copiado, setCopiado] = useState<number | null>(null)
@@ -130,6 +137,34 @@ function KitCard({ kit }: { kit: KitSalvo }) {
                   </>
                 )}
               </Button>
+              {/* 👍 (24/11): o dono conta pra IA que este post deu certo — vira exemplo de estilo. */}
+              {marcados && (() => {
+                const marcado = marcados.has(chaveDoPost(kit.id, index))
+                return (
+                  <Button
+                    onClick={async () => {
+                      setSalvando(index)
+                      setErroMarca(null)
+                      try {
+                        const msg = await alternar(kit, index, post)
+                        if (msg) setErroMarca({ index, msg })
+                      } catch {
+                        setErroMarca({ index, msg: 'Não consegui salvar agora. Tente de novo.' })
+                      } finally {
+                        setSalvando(null) // nunca deixa o botão girando
+                      }
+                    }}
+                    disabled={salvando === index}
+                    aria-pressed={marcado}
+                    data-testid="funcionou"
+                    className={`w-full flex items-center justify-center gap-2 text-sm disabled:opacity-60 ${marcado ? 'bg-[#22C55E]/15 border border-[#22C55E] text-[#22C55E] hover:bg-[#22C55E]/25' : 'bg-[#1A1A1A] hover:bg-[#252525]'}`}
+                  >
+                    {salvando === index ? <Loader2 className="w-4 h-4 animate-spin" /> : <ThumbsUp className="w-4 h-4" />}
+                    {marcado ? 'Funcionou ✓ (toque pra desmarcar)' : 'Esse funcionou'}
+                  </Button>
+                )
+              })()}
+              {erroMarca?.index === index && <p className="text-xs text-amber-400">{erroMarca.msg}</p>}
             </div>
           ))}
         </div>
@@ -145,6 +180,21 @@ function MeusConteudos() {
   // Erro ≠ vazio: "você ainda não gerou nada" só pode aparecer quando a consulta
   // respondeu de verdade — num hiccup de rede seria uma afirmação falsa.
   const [erro, setErro] = useState(false)
+  const [marcados, setMarcados] = useState<Set<string> | null>(null)
+
+  // 👍 liga/desliga e só muda a tela depois que o banco confirmou (nunca mostra marcado o que não ficou).
+  async function alternar(kit: KitSalvo, index: number, post: PostSalvo): Promise<string> {
+    const chave = chaveDoPost(kit.id, index)
+    const jaMarcado = marcados?.has(chave)
+    const msg = jaMarcado ? await desmarcarFuncionou(kit.id, index) : await marcarFuncionou(kit.id, index, kit.nicho, post)
+    if (!msg) setMarcados((m) => {
+      const novo = new Set(m ?? [])
+      if (jaMarcado) novo.delete(chave)
+      else novo.add(chave)
+      return novo
+    })
+    return msg
+  }
 
   useEffect(() => {
     let cancelado = false
@@ -157,13 +207,17 @@ function MeusConteudos() {
       }
 
       // RLS de `contents` garante que só vêm as linhas do próprio usuário.
-      const { data, error } = await supabase
-        .from('contents')
-        .select('id, nicho, posts_json, created_at')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false })
+      const [{ data, error }, jaMarcados] = await Promise.all([
+        supabase
+          .from('contents')
+          .select('id, nicho, posts_json, created_at')
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: false }),
+        listarMarcados(),
+      ])
 
       if (cancelado) return
+      setMarcados(jaMarcados)
       if (error || !Array.isArray(data)) {
         setErro(true)
       } else {
@@ -215,6 +269,12 @@ function MeusConteudos() {
             <b className="text-white">Memória da Marca ativa:</b> a IA relê este histórico antes de
             cada nova geração pra nunca repetir um ângulo que você já usou. Quanto mais você gera,
             mais única fica a voz da sua marca.
+            {marcados && (
+              <>
+                {' '}<b className="text-white">👍 Esse funcionou:</b> marque os posts que deram certo pra você — o Super
+                Agente usa até 3 deles (do mesmo nicho) como exemplo do jeito da sua marca nas próximas gerações.
+              </>
+            )}
           </p>
         </div>
 
@@ -244,7 +304,7 @@ function MeusConteudos() {
         ) : (
           <div className="space-y-4">
             {kits.map((kit) => (
-              <KitCard key={kit.id} kit={kit} />
+              <KitCard key={kit.id} kit={kit} marcados={marcados} alternar={alternar} />
             ))}
           </div>
         )}

@@ -6,6 +6,8 @@
 // plano Hobby da Vercel).
 export const maxDuration = 60
 
+import { limparExemplos, blocoExemplos } from '../_lib/exemplosQueFuncionaram.js'
+
 // Cadeia de modelos (ordem = qualidade). Fila e cota são POR MODELO: quando o principal
 // está congestionado, os "lite" costumam responder. O orçamento corta antes dos 60s.
 const MODELOS: { id: string; tetoMs: number }[] = [
@@ -93,7 +95,7 @@ interface Marca {
 
 // qtdDias = quantidade de DIAS de conteúdo; cada dia gera 2 posts (Manhã + Tarde) — pedido de
 // cliente: fluxo de 2 posts/dia, não 1.
-function buildPrompt(nicho: string, tom: string, qtdDias: number, marca: Marca, hooksAnteriores: string[], campanha: string): string {
+function buildPrompt(nicho: string, tom: string, qtdDias: number, marca: Marca, hooksAnteriores: string[], campanha: string, exemplosBloco = ''): string {
   // MEMÓRIA DA MARCA: hooks já entregues a este cliente em gerações passadas.
   // Sem isto o mês 2 sai como releitura do mês 1 — o cliente percebe na hora e
   // conclui que a ferramenta não aprendeu nada sobre o negócio dele.
@@ -121,7 +123,8 @@ Este mês precisa parecer continuação do trabalho, não recomeço.`
       : `\n\nCAMPANHA SAZONAL EM DESTAQUE: "${campanha}". Exatamente ${postsDaCampanha} dos ${totalPosts} posts do calendário (nem menos, nem mais) são sobre esta data/campanha — ganchos, ofertas e CTAs conectados a ela, adaptados ao nicho "${nicho}". Os demais seguem o plano normal do mês. Mantenha TODAS as regras acima (produto sem vídeo, CTA por período, variação de redação, memória da marca).`
     : ''
 
-  return buildPromptBase(nicho, tom, qtdDias, marca, memoriaBloco + campanhaBloco)
+  // 👍 "Esse funcionou" (24/11): '' quando não há exemplo marcado — prompt idêntico ao de antes.
+  return buildPromptBase(nicho, tom, qtdDias, marca, memoriaBloco + campanhaBloco + exemplosBloco)
 }
 
 function buildPromptBase(nicho: string, tom: string, qtdDias: number, marca: Marca, memoriaBloco: string): string {
@@ -264,7 +267,7 @@ async function handler(request: Request): Promise<Response> {
       )
     }
 
-    const { nicho, tom, qtdPosts, instagram, servicos, tomMarca, cta, diferenciais, voz, hooksAnteriores, campanha, objetivo, descricaoMarca } = await request.json()
+    const { nicho, tom, qtdPosts, instagram, servicos, tomMarca, cta, diferenciais, voz, hooksAnteriores, campanha, objetivo, descricaoMarca, exemplosQueFuncionaram } = await request.json()
 
     if (!nicho || typeof nicho !== 'string') {
       return new Response(
@@ -307,7 +310,7 @@ async function handler(request: Request): Promise<Response> {
     const body = JSON.stringify({
       contents: [
         {
-          parts: [{ text: buildPrompt(nicho, tomFinal, qtdFinal, marca, memoria, campanhaFinal) }]
+          parts: [{ text: buildPrompt(nicho, tomFinal, qtdFinal, marca, memoria, campanhaFinal, blocoExemplos(limparExemplos(exemplosQueFuncionaram))) }]
         }
       ],
       generationConfig: {

@@ -8,6 +8,7 @@ import {
   ChevronDown, ChevronUp, CalendarDays, Share2, Sparkles, Brain, RefreshCw
 } from 'lucide-react'
 import { BaixarVideoCards } from '../components/BaixarVideoCards'
+import { chaveNicho, exemplosQueFuncionaram } from '../lib/postsQueFuncionaram'
 import { useSubscription, devolverGeracaoTrial } from '../lib/useSubscription'
 import { supabase } from '../lib/supabase'
 import { fetchWithRetry, sleep, safeJson, friendlyApiError } from '../lib/apiRetry'
@@ -145,15 +146,8 @@ const MAX_HOOKS_MEMORIA = 40
 // "Estética", "estetica" e "Estética " serem três nichos diferentes, e a memória
 // voltaria VAZIA sem ninguém perceber — a feature não tem sinal na UI, então o
 // sintoma seria só os ângulos repetindo de novo. Normaliza caixa, acento e
-// espaço em ambos os lados, na comparação, sem mudar o que é gravado.
-function chaveNicho(v: string): string {
-  return v
-    .normalize('NFD')
-    .replace(/\p{Diacritic}/gu, '')
-    .toLowerCase()
-    .replace(/\s+/g, ' ')
-    .trim()
-}
+// espaço em ambos os lados, na comparação, sem mudar o que é gravado (chaveNicho mora em
+// src/lib/postsQueFuncionaram.ts desde 24/11 — o 👍 usa a mesma comparação).
 
 async function buscarHooksAnteriores(nicho: string): Promise<string[]> {
   try {
@@ -206,7 +200,7 @@ function formatarDataMemoria(iso: string): string {
 // consulta FALHAR, devolve null e o painel some — importante NÃO devolver zeros aqui,
 // senão um cliente que TEM histórico veria "Primeira vez com..." (afirmação falsa) num
 // hiccup de rede. kits===0 só vale quando a consulta deu certo e não há histórico mesmo.
-async function carregarMemoriaMarca(nicho: string): Promise<{ kits: number; hooks: number; ultima: string | null } | null> {
+async function carregarMemoriaMarca(nicho: string): Promise<{ kits: number; hooks: number; ultima: string | null; exemplos: number } | null> {
   try {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return null
@@ -234,7 +228,9 @@ async function carregarMemoriaMarca(nicho: string): Promise<{ kits: number; hook
         if (typeof p?.hook === 'string' && p.hook.trim()) hooks++
       }
     }
-    return { kits, hooks, ultima }
+    // 👍 (24/11): quantos posts marcados entram como exemplo (no máximo 3 — o que a IA recebe).
+    const exemplos = kits > 0 ? (await exemplosQueFuncionaram(nicho)).length : 0
+    return { kits, hooks, ultima, exemplos }
   } catch {
     return null
   }
@@ -253,7 +249,7 @@ function SuperAgente() {
   // Memória da Marca (Fase 1) VISÍVEL: dado real de quantos kits a IA já gerou pra este
   // nicho e quantos ganchos memorizou. É o custo de troca de quem pensa em cancelar —
   // cancelou, some o histórico. null = ainda não carregado / nicho curto (painel oculto).
-  const [memoria, setMemoria] = useState<{ kits: number; hooks: number; ultima: string | null } | null>(null)
+  const [memoria, setMemoria] = useState<{ kits: number; hooks: number; ultima: string | null; exemplos: number } | null>(null)
 
   // Ganchos sazonais: data/campanha opcional que a IA destaca em parte do mês.
   // As datas chegando saem do calendário real (não recalcula a cada tecla).
@@ -518,14 +514,15 @@ function SuperAgente() {
       // MEMÓRIA DA MARCA: o que já foi gerado antes pra este mesmo nicho não pode
       // voltar reescrito. Sem isto, o mês 2 sai parecido com o mês 1 e o cliente
       // sente que a ferramenta não aprendeu nada sobre ele.
-      const hooksAnteriores = await buscarHooksAnteriores(nicho)
+      // 👍 (24/11): até 3 posts que o dono marcou como "funcionou" neste nicho = exemplo de estilo.
+      const [hooksAnteriores, exemplos] = await Promise.all([buscarHooksAnteriores(nicho), exemplosQueFuncionaram(nicho)])
 
       const response = await fetchWithRetry(
         '/api/gemini/generate-strategy',
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ nicho, tom, qtdPosts: dropCampanha ? 1 : qtdDias, instagram, servicos, tomMarca, cta, diferenciais, voz, hooksAnteriores, campanha: dropCampanha ?? campanha, objetivo, descricaoMarca: briefingBruto }) // V1.6: voz forçada ('' = automático); drop sazonal = 1 post da data
+          body: JSON.stringify({ nicho, tom, qtdPosts: dropCampanha ? 1 : qtdDias, instagram, servicos, tomMarca, cta, diferenciais, voz, hooksAnteriores, campanha: dropCampanha ?? campanha, objetivo, descricaoMarca: briefingBruto, exemplosQueFuncionaram: exemplos }) // V1.6: voz forçada ('' = automático); drop sazonal = 1 post da data
         },
         // retries 1 (13/10): o servidor já percorre 3 modelos (até ~54s) antes de devolver
         // 503 — repetir 3x aqui deixaria o cliente uns 4 min olhando "tentando de novo".
@@ -1269,6 +1266,12 @@ function SuperAgente() {
                     {memoria.hooks > 0 && <> · {memoria.hooks} ganchos memorizados</>}
                     {memoria.ultima && formatarDataMemoria(memoria.ultima) && <> · último em {formatarDataMemoria(memoria.ultima)}</>}.
                     {' '}Neste kit ela evita repetir os ângulos que você já usou — <b className="text-white">quanto mais meses, mais afiada</b>.
+                  </p>
+                  {/* 👍 (24/11): só afirma o que acontece — os marcados viram exemplo de estilo. */}
+                  <p className="text-gray-300 mt-1" data-testid="memoria-exemplos">
+                    {memoria.exemplos > 0
+                      ? <>👍 {memoria.exemplos === 1 ? '1 post que você marcou como "funcionou" entra' : `${memoria.exemplos} posts que você marcou como "funcionou" entram`} como exemplo do jeito da sua marca.</>
+                      : <>Dica: em <b className="text-white">Meus Conteúdos</b>, marque 👍 nos posts que deram certo — a IA passa a usar como exemplo do jeito da sua marca.</>}
                   </p>
                   <p className="text-gray-500 text-xs mt-1.5">
                     Esse aprendizado fica guardado na sua conta: se um dia você voltar, a IA continua de onde parou.
