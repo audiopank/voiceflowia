@@ -53,4 +53,9 @@ test('nichos já usados: sem repetir (acento/maiúscula), grafia mais recente, i
     ['Produtora de áudio', 'Barbearia'],
   )
   assert.equal(nichosUnicos(Array.from({ length: 30 }, (_, i) => `Nicho ${i}`)).length, 20)
+  // texto colado no campo fica fora; nome comprido de verdade (46 letras) fica
+  assert.deepEqual(
+    nichosUnicos(['SALVE O DIA 15 DE SETEMBRO,... DIA DO CLIENTE. PRESTE ATENÇÃO NA DATA E PREPARE', 'Achadinhos NewPost-IA - SHOPEE E MERCADO LIVRE']),
+    ['Achadinhos NewPost-IA - SHOPEE E MERCADO LIVRE'],
+  )
 })

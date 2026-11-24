@@ -10,12 +10,13 @@ export function chaveNicho(v: string): string {
 }
 
 // Nichos já usados (24/11): sugestões do campo Nicho, pra memória e 👍 baterem — "Produtora de
-// áudio" e "produtora de audio" viram um só; fica a grafia mais recente; até 20.
+// áudio" e "produtora de audio" viram um só; fica a grafia mais recente; até 20. Mais de 60
+// letras = texto colado no campo (briefing, legenda), não nome de nicho — fica fora da lista.
 export function nichosUnicos(nichos: unknown[]): string[] {
   const vistos = new Set<string>()
   const saida: string[] = []
   for (const n of nichos) {
-    if (typeof n !== 'string' || !n.trim()) continue
+    if (typeof n !== 'string' || !n.trim() || n.trim().length > 60) continue
     const chave = chaveNicho(n)
     if (vistos.has(chave)) continue
     vistos.add(chave)
