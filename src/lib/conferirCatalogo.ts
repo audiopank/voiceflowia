@@ -114,7 +114,9 @@ function numerosSoltos(texto: string): string[] {
 // Promessa de RESULTADO — uma regra só, usada pelo Catálogo (trava) e pelo Super Agente/Kit (aviso).
 // 13/11: + faturar/lucrar/ganhar mais dinheiro/aumentar vendas (teste real: "Quer faturar mais na
 // Black Friday?" passou). "fatura" (substantivo, "a fatura mais barata") fica de fora de propósito.
-const PROMESSA_DE_RESULTADO = { rotulo: 'resultado garantido (vende mais, fatura mais, sem esforço…)', re: /sem esforco|\bvend(e|a|er|as) (muito )?mais\b|\bconvert(e|a|er) (muito )?mais\b|\bdobr(a|ar|e) (as |os |suas |seus )?(vendas|clientes|faturamento|lucro)|resultado garantido|lucro garantido|\bfatur(e|ar|am) (muito )?mais\b|\blucr(e|ar|a|am) (muito )?mais\b|\bganh(e|ar|a|am) (muito )?mais dinheiro\b|\baument(e|ar|a|am) (o |a |os |as |seu |sua |seus |suas )?(faturamento|lucro|vendas)\b/ }
+// 26/11 (cards da campanha do VoiceFlow): + "vende/fature o dobro", "postou, vendeu", "resultados reais".
+// "mais resultados" ficou de fora: "confira mais resultados de antes e depois" (salão, estética) travaria o Catálogo.
+const PROMESSA_DE_RESULTADO = { rotulo: 'resultado garantido (vende mais, fatura mais, sem esforço…)', re: /\b(vend|fatur|lucr)(e|a|er|ar|as|am|em) o (dobro|triplo)\b|\bpostou,? vendeu\b|\bresultados? reais\b|sem esforco|\bvend(e|a|er|as) (muito )?mais\b|\bconvert(e|a|er) (muito )?mais\b|\bdobr(a|ar|e) (as |os |suas |seus )?(vendas|clientes|faturamento|lucro)|resultado garantido|lucro garantido|\bfatur(e|ar|am) (muito )?mais\b|\blucr(e|ar|a|am) (muito )?mais\b|\bganh(e|ar|a|am) (muito )?mais dinheiro\b|\baument(e|ar|a|am) (o |a |os |as |seu |sua |seus |suas )?(faturamento|lucro|vendas)\b/ }
 
 // 23/11 (teste real do Mestre, Locutores IA): "Os Locutores IA garantem velocidade extrema",
 // "áudios impecáveis em tempo recorde", "não deixa nenhum cliente fugir" passaram com ✅.

@@ -57,6 +57,17 @@ test('resultado garantido: faturar/lucrar/vender mais; "fatura" substantivo não
   assert.ok(!catalogo('Spot de 30s por R$ 50,00. Venda mais!'))
 })
 
+test('resultado: "vende o dobro", "Postou, vendeu", "resultados reais" (26/11, campanha do VoiceFlow)', () => {
+  assert.match(avisos('Com o VoiceFlow IA você vende o dobro!', 'VoiceFlow IA.'), /resultado garantido/)
+  assert.match(avisos('Postou, vendeu? Ó, a IA sacou.', 'VoiceFlow IA.'), /resultado garantido/)
+  assert.match(avisos('Conversas reais. Resultados reais.', 'VoiceFlow IA.'), /resultado garantido/)
+  // convite comum, conta de produto e "ver mais resultados" (antes e depois) não são promessa
+  assert.doesNotMatch(avisos('Postou o seu? Vendemos o kit com o dobro de cards.', 'VoiceFlow IA.'), /resultado garantido/)
+  assert.equal(catalogo('Confira mais resultados de antes e depois no nosso perfil!'), true)
+  // e no Catálogo trava
+  assert.equal(catalogo('Fature o dobro com este spot!'), false)
+})
+
 test('"O que NÃO fazemos" e "não possuem/tem" nunca viram lastro (09/11, 12/11)', () => {
   assert.match(avisos('Achadinhos com frete grátis!', 'Achadinhos; não possuem frete grátis.'), /frete/)
   assert.match(avisos('Achadinhos com frete grátis!', 'Ela não tem frete grátis.'), /frete/)
