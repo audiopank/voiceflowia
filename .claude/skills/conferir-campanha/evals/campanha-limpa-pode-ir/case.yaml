@@ -1,0 +1,4 @@
+schema_version: "1.1"
+name: campanha-limpa-pode-ir
+expected_outcome: |
+  Texto verdadeiro: o relatório diz que pode publicar, sem inventar problema.

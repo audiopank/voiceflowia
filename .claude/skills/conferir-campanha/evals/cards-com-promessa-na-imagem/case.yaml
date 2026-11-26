@@ -1,0 +1,6 @@
+schema_version: "1.1"
+name: cards-com-promessa-na-imagem
+expected_outcome: |
+  Os cards Postou vendeu e Se inventar promessa voltam como refazer; os outros recebem no máximo ajuste pequeno.
+context:
+  scaffold_script: place-files.sh
