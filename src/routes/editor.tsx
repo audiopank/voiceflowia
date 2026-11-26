@@ -588,7 +588,8 @@ function Editor() {
                   <label className="flex items-center gap-3 p-4 bg-[#1A1A1A] border border-dashed border-gray-700 rounded-lg cursor-pointer hover:border-[#8B5CF6] transition-colors">
                     <Upload className="w-5 h-5 text-gray-400 shrink-0" />
                     <span className="text-sm text-gray-300 truncate">
-                      {trackName || 'Ou suba a sua própria música (MP3, WAV, M4A)'}
+                      {/* 26/11: com trilha pronta escolhida, a caixa mostrava "🚀 Movimento" e parecia um arquivo subido */}
+                      {(!selectedPresetId && trackName) || 'Ou suba a sua própria música (MP3, WAV, M4A)'}
                     </span>
                     <input
                       type="file"

@@ -47,6 +47,9 @@ const conferir = (c, m) => (c ? ok : falha).push(m)
   conferir(await page.getByTestId('baixar-video').count() === 0, 'sem imagens: o botão do vídeo ainda não aparece')
 
   await page.getByRole('button', { name: /Business$/ }).first().click() // trilha real do /public → abertura de rádio
+  const caixaTrilha = page.locator('label').filter({ has: page.locator('input[accept="audio/*"]') })
+  await page.waitForTimeout(500)
+  conferir(/Ou suba a sua própria música/.test(await caixaTrilha.innerText()), `com trilha pronta, a caixa de upload não finge ser arquivo: "${(await caixaTrilha.innerText()).trim()}"`)
   const jpg = (n) => fs.readFileSync(path.join(CARDS, n))
   await page.getByTestId('input-imagens').setInputFiles([
     { name: '10.jpg', mimeType: 'image/jpeg', buffer: jpg('card-alo-alo.jpg') },

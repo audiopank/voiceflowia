@@ -11,7 +11,9 @@ $nome    = 'VoiceFlow Backup Diario'
 
 if (-not (Test-Path $script)) { Write-Error "nao achei $script"; exit 1 }
 
-$acao = New-ScheduledTaskAction -Execute $script -WorkingDirectory $projeto
+# 26/11/2026: roda pelo .vbs, SEM janela — a janela preta era fechada sem querer e matava o backup.
+$escondido = Join-Path $projeto 'backup-auto-escondido.vbs'
+$acao = New-ScheduledTaskAction -Execute 'wscript.exe' -Argument "`"$escondido`"" -WorkingDirectory $projeto
 # 12h00 todo dia. "StartWhenAvailable" faz a tarefa rodar assim que a maquina ligar,
 # caso ela estivesse desligada no horario — sem isso, PC desligado = dia sem backup.
 $gatilho = New-ScheduledTaskTrigger -Daily -At 12:00
