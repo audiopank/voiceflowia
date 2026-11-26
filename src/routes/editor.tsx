@@ -9,7 +9,8 @@ import { AtivarTrial } from '../components/AtivarTrial'
 import { ELEVENLABS_VOICES, GEMINI_VOICES_TEXTO_LONGO, type Voice, type Provider } from '../lib/voices'
 import { convertToWhatsAppOgg, convertMixToMp3 } from '../lib/audioConvert'
 import { blobToAudioBuffer, renderMix, audioBufferToWav, enhanceVoiceBuffer } from '../lib/audioMix'
-import { TRILHAS_PRONTAS } from '../lib/estudioCards'
+import { TRILHAS_PRONTAS, ABERTURA_TRILHA_SEGUNDOS } from '../lib/estudioCards'
+import { VideoComSuasImagens } from '../components/VideoComSuasImagens'
 import { LIMITE_TEXTO, LIMITE_AVISO } from '../lib/limites'
 
 export const Route = createFileRoute("/editor")({
@@ -236,10 +237,11 @@ function Editor() {
 
   // Renderiza a mixagem atual (voz + trilha, com os volumes escolhidos) num WAV.
   // Usado tanto pela prévia quanto pelo download.
-  async function buildMix(): Promise<Blob> {
+  // introSeconds: o vídeo com as suas imagens usa a abertura de rádio; prévia e download, não (igual antes).
+  async function buildMix(introSeconds = 0): Promise<Blob> {
     const voiceBuffer = await blobToAudioBuffer(effectiveVoiceBlob!)
     const trackBuffer = trackBlob ? await blobToAudioBuffer(trackBlob) : null
-    const mixed = await renderMix(voiceBuffer, trackBuffer, voiceVol / 100, trackVol / 100)
+    const mixed = await renderMix(voiceBuffer, trackBuffer, voiceVol / 100, trackVol / 100, introSeconds)
     return audioBufferToWav(mixed)
   }
 
@@ -675,6 +677,8 @@ function Editor() {
                     </Button>
                   </div>
                 </div>
+
+                <VideoComSuasImagens prepararAudio={() => { stopPreview(); return buildMix(ABERTURA_TRILHA_SEGUNDOS) }} />
 
                 <Button
                   onClick={() => {
